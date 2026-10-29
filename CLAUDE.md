@@ -83,18 +83,18 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…)
+- ✅ Automatisations HA (collecte horaire, récap 9 h / 21 h) actives ; connecteur MCP HA = URL avec chemin secret, sans OAuth
 - ✅ Design « cristal » (v1.1.0) déployé via `deployer-quartz.sh` ; jeton `quartz_github_token` dans `secrets.yaml`
 - ⬜ Voir la to-do ci-dessous
 
 ## To-do
 1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
-2. En cours : secrets `quartz_collecter_url` / `quartz_recap_url` présents dans
-   `secrets.yaml` (URL **internes** `http://local-quartz-forever:8080/...?token=`).
-   À vérifier : option `token` de l'app non vide (depuis 1.1.1, token vide = routes
-   protégées fermées), bloc `rest_command` dans `configuration.yaml`, `ha core check`
-   + redémarrage, automatisations (YAML prêt en commentaire dans `ha/configuration.yaml`).
-3. Créer le webhook Discord du salon de progression et le mettre dans les options
-   de l'app (après les tests, pour ne pas spammer).
+2. ~~Automatisations HA~~ ✅ fait (29/10) : `rest_command.quartz_collecter` / `quartz_recap`
+   chargés (secrets internes, token de l'app renseigné, appels testés → 200),
+   automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
+   `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) actives.
+3. ~~Webhook Discord~~ ✅ fait (29/10) : option `discord_webhook` de l'app renseignée,
+   app redémarrée. Les annonces et récaps partent désormais pour de vrai.
 4. Tester de bout en bout : envoi via /contribuer, classement, tableau d'honneur,
    `/export.json?token=…`.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
