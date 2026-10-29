@@ -2,7 +2,7 @@
 import os, re, json, sqlite3, datetime
 from pathlib import Path
 import requests
-from flask import Flask, render_template_string, request, abort, jsonify
+from flask import Flask, render_template_string, request, abort, jsonify, send_file
 
 # ---------- Configuration ----------
 DB = os.getenv("GUILDE_DB", "guilde.db")
@@ -17,7 +17,7 @@ COULEURS = {
     "Guerrier": "#C69B6D", "Mage": "#3FC7EB", "Prêtre": "#FFFFFF", "Prêtresse": "#FFFFFF",
     "Voleur": "#FFF468", "Voleuse": "#FFF468", "Druide": "#FF7C0A", "Druidesse": "#FF7C0A",
     "Chasseur": "#AAD372", "Chasseresse": "#AAD372", "Démoniste": "#8788EE",
-    "Paladin": "#F48CBA", "Chaman": "#0070DD", "Chamane": "#0070DD",
+    "Paladin": "#F48CBA", "Chaman": "#2E8FEF", "Chamane": "#2E8FEF",
 }
 
 
@@ -180,108 +180,190 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 Mo max par envoi
 
 STYLE = """
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
 <style>
-:root{--fond:#14100d;--carte:#1f1915;--bord:#3a2e24;--or:#d4a64a;--rouge:#b3261e;
---quartz:#c9a3e8;--texte:#ece2cf;--doux:#a8998a}
+:root{--nuit:#070b14;--nuit2:#0c1322;--verre:rgba(148,196,255,.05);--verre2:rgba(148,196,255,.09);
+--trait:rgba(148,196,255,.12);--trait2:rgba(148,196,255,.22);--texte:#e6eefb;--doux:#8a9ab5;--pale:#5d6b85;
+--cristal:#5fd8f5;--cristal2:#a7b8ff;--givre:#d9f6ff;--or:#f0c35a;--argent:#c9d3e3;--bronze:#d68f5c;
+--vert:#5ee3a6;--rouge:#ff8a7a;--alerte:#ffb454;
+--f-titre:"Sora","Manrope",system-ui,sans-serif;--f-corps:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--fond);color:var(--texte);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-.page{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
-header{border-bottom:2px solid var(--rouge);padding-bottom:12px;margin-bottom:24px}
-h1{font-family:Georgia,serif;color:var(--or);margin:0;font-size:2rem}
-h2{font-family:Georgia,serif;color:var(--or);font-size:1.3rem;margin:32px 0 12px}
-.sous{color:var(--doux);font-size:.9rem;margin-top:4px}
-a{color:var(--quartz)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.stat{background:var(--carte);border:1px solid var(--bord);border-radius:10px;padding:14px}
-.stat b{display:block;font-size:1.6rem;color:var(--or)}
-.stat span{color:var(--doux);font-size:.85rem}
-.honneur{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.palier{background:var(--carte);border:1px solid var(--bord);border-radius:10px;padding:12px}
-.palier.p60{border-color:var(--or);grid-column:1/-1}
-.palier h3{margin:0 0 8px;font-size:1rem;color:var(--quartz)}
-.palier div{font-size:.9rem;margin:3px 0}
-.palier small{color:var(--doux)}
+body{margin:0;background:var(--nuit);color:var(--texte);font-family:var(--f-corps);font-size:15px;line-height:1.5;
+background-image:radial-gradient(900px 480px at 15% -10%,rgba(95,216,245,.13),transparent 60%),
+radial-gradient(700px 420px at 95% 0%,rgba(167,184,255,.10),transparent 60%);background-repeat:no-repeat}
+.page{max-width:1080px;margin:0 auto;padding:28px 16px 56px;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--f-titre);margin:0}
+h2{font-size:1.15rem;font-weight:600;display:flex;align-items:baseline;gap:10px}
+h2 small{font-family:var(--f-corps);font-size:.8rem;color:var(--doux);font-weight:500}
+a{color:var(--cristal);text-decoration:none}
+.num{font-variant-numeric:tabular-nums}
+.sec{display:flex;flex-direction:column;gap:14px}
+.carte{background:var(--verre);border:1px solid var(--trait);border-radius:16px}
+header{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.logo{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;flex:0 0 auto;
+background:radial-gradient(circle at 50% 60%,rgba(95,216,245,.28),rgba(95,216,245,.04) 70%);
+border:1px solid var(--trait2);box-shadow:0 0 32px rgba(95,216,245,.25)}
+.logo img{width:40px;height:auto;border-radius:8px;filter:drop-shadow(0 0 8px rgba(95,216,245,.6))}
+.titre{flex:1 1 260px;min-width:0}
+h1{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em;
+background:linear-gradient(100deg,var(--givre),var(--cristal) 55%,var(--cristal2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tag{font-size:.75rem;font-weight:600;color:var(--doux);border:1px solid var(--trait);border-radius:999px;padding:3px 10px;background:var(--verre)}
+.tag.horde{color:var(--rouge);border-color:rgba(255,138,122,.3)}
+.tag.live{color:var(--vert);border-color:rgba(94,227,166,.3)}
+.tag.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--vert);margin-right:6px;vertical-align:1px;box-shadow:0 0 6px var(--vert)}
+.cta,button{font-family:var(--f-titre);font-weight:600;font-size:.88rem;color:var(--nuit);background:linear-gradient(135deg,var(--givre),var(--cristal));
+padding:10px 16px;border:0;border-radius:12px;box-shadow:0 6px 24px rgba(95,216,245,.25);white-space:nowrap;cursor:pointer}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cristal);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{padding:16px 18px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--f-titre);font-size:1.9rem;font-weight:600;letter-spacing:-.02em}
+.stat span{color:var(--doux);font-size:.8rem;font-weight:500}
+.stat em{font-style:normal;font-size:.75rem;color:var(--vert);font-weight:600}
+@media (max-width:680px){.stats{grid-template-columns:repeat(2,1fr)}}
+.p60{padding:18px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;
+background:linear-gradient(120deg,rgba(240,195,90,.12),rgba(240,195,90,.02) 60%),var(--verre);border-color:rgba(240,195,90,.3)}
+.p60 h3{font-size:1rem;color:var(--or);font-weight:600;line-height:1.25}
+.p60 h3 small{display:block;font-family:var(--f-corps);color:var(--doux);font-size:.75rem;font-weight:500}
+.p60 .liste{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.heros{display:flex;align-items:center;gap:10px;background:rgba(7,11,20,.45);border:1px solid var(--trait);border-radius:12px;padding:10px 12px;min-width:0}
+.heros .r{font-family:var(--f-titre);font-weight:700;color:var(--or);font-size:.9rem;min-width:22px}
+.heros div,.e div{display:flex;flex-direction:column;min-width:0}
+.heros b,.e b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.heros small{color:var(--doux);font-size:.74rem}
+@media (max-width:720px){.p60{grid-template-columns:1fr}.p60 .liste{grid-template-columns:1fr}}
+.paliers{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.palier{padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.palier h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--doux);font-family:var(--f-corps);font-weight:700}
+.palier h3 b{font-family:var(--f-titre);font-size:1.4rem;color:var(--texte);margin-left:4px}
+.e{display:grid;grid-template-columns:18px 1fr;gap:8px;align-items:start;font-size:.86rem}
+.e .m{width:18px;height:18px;border-radius:50%;margin-top:2px;display:grid;place-items:center;font:700 .62rem var(--f-titre);color:var(--nuit)}
+.m1{background:var(--or)}.m2{background:var(--argent)}.m3{background:var(--bronze)}
+.e small{color:var(--pale);font-size:.72rem}
+.vide{color:var(--pale);font-size:.82rem}
+@media (max-width:860px){.paliers{grid-template-columns:repeat(2,1fr)}}
+.barre-outils{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+select,input{background:var(--nuit2);color:var(--texte);border:1px solid var(--trait);border-radius:10px;padding:8px 10px;font:500 .88rem var(--f-corps)}
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;background:var(--carte);border-radius:10px;overflow:hidden}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--bord);font-size:.92rem}
-th{color:var(--doux);font-weight:600;background:#261e18}
-.barre{background:#2c241d;border-radius:4px;height:6px;width:90px}
-.barre i{display:block;height:6px;border-radius:4px;background:linear-gradient(90deg,var(--rouge),var(--or))}
-.gain{color:#7fd17f;font-size:.85rem}
-select,input,button{background:var(--carte);color:var(--texte);border:1px solid var(--bord);border-radius:6px;padding:8px}
-button{background:var(--rouge);border-color:var(--rouge);cursor:pointer;font-weight:600}
-ul.fil{list-style:none;padding:0;margin:0}
-ul.fil li{padding:6px 0;border-bottom:1px solid var(--bord);font-size:.9rem}
-ul.fil small{color:var(--doux)}
-.msg{padding:10px;border-radius:6px;margin:12px 0}
-.ok{background:#1d3b1d}.err{background:#4a1a17}
-form p{margin:12px 0}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:10px 12px;text-align:left;font-size:.88rem;white-space:nowrap}
+th{color:var(--pale);font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;border-bottom:1px solid var(--trait)}
+tbody tr+tr td{border-top:1px solid rgba(148,196,255,.06)}
+tbody tr:hover{background:var(--verre2)}
+td.rang{color:var(--pale);font-weight:700;width:36px}
+td.nom{font-weight:700}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.niv{display:inline-grid;place-items:center;min-width:36px;padding:3px 8px;border-radius:8px;font:700 .9rem var(--f-titre);background:var(--verre2);border:1px solid var(--trait)}
+.niv.max{color:var(--nuit);background:linear-gradient(135deg,#ffe29a,var(--or));border-color:transparent}
+.barre{background:rgba(148,196,255,.08);border-radius:99px;height:6px;width:110px;overflow:hidden}
+.barre i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cristal2),var(--cristal))}
+.barre i.max{background:linear-gradient(90deg,#ffe29a,var(--or))}
+.gain{color:var(--vert);font-weight:700;font-size:.82rem;background:rgba(94,227,166,.1);border-radius:6px;padding:2px 6px}
+.fil-carte{padding:18px}
+ul.fil{list-style:none;margin:0;padding:0}
+ul.fil li{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:8px 0;font-size:.88rem}
+ul.fil li+li{border-top:1px solid rgba(148,196,255,.06)}
+ul.fil .nv{font:700 .85rem var(--f-titre);text-align:center;border-radius:8px;padding:3px 0;background:var(--verre2)}
+ul.fil .nv.max{background:linear-gradient(135deg,#ffe29a,var(--or));color:var(--nuit)}
+ul.fil small{color:var(--pale);font-size:.75rem}
+footer{color:var(--pale);font-size:.78rem;display:flex;align-items:center;gap:10px}
+footer img{width:16px;opacity:.7}
+.formulaire{padding:22px;display:flex;flex-direction:column;gap:16px;max-width:560px}
+.formulaire label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.88rem}
+.formulaire small{color:var(--doux);font-weight:500;word-break:break-all}
+.msg{padding:10px 14px;border-radius:10px;font-size:.9rem;border:1px solid}
+.ok{color:var(--vert);background:rgba(94,227,166,.08);border-color:rgba(94,227,166,.3)}
+.err{color:var(--rouge);background:rgba(255,138,122,.08);border-color:rgba(255,138,122,.3)}
 </style>
 """
+
+ENTETE = """<header>
+<div class="logo"><img src="logo.png" alt="Logo {{ guilde }}"></div>
+<div class="titre"><h1>{{ "Envoyer mes données" if formulaire else guilde }}</h1>
+<div class="meta"><span class="tag horde">Horde</span><span class="tag">WoW Forever · PvE</span>
+{% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
+{% if formulaire %}<a class="cta" href="./">← Retour au classement</a>
+{% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
+</header>"""
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ guilde }} — Progression</title>""" + STYLE + """</head><body><div class="page">
-<header><h1>💎 {{ guilde }}</h1>
-<div class="sous">WoW Forever · Horde · Serveur PvE ·
-Dernière mise à jour : {{ maj or "—" }} · <a href="contribuer">📤 Envoyer mes données</a></div></header>
+""" + ENTETE + """
 
-<div class="stats">
- <div class="stat"><b>{{ persos|length }}</b><span>Membres suivis</span></div>
- <div class="stat"><b>{{ moyenne }}</b><span>Niveau moyen</span></div>
- <div class="stat"><b>{{ nb60 }}</b><span>Niveau 60</span></div>
- <div class="stat"><b>+{{ total24 }}</b><span>Niveaux gagnés en 24 h</span></div>
-</div>
+<section class="stats">
+ <div class="carte stat"><span>Membres suivis</span><b class="num">{{ persos|length }}</b><em>{{ actifs }} actifs en 24 h</em></div>
+ <div class="carte stat"><span>Niveau moyen</span><b class="num">{{ moyenne }}</b><em>&nbsp;</em></div>
+ <div class="carte stat"><span>Niveau 60</span><b class="num">{{ nb60 }}</b><em>&nbsp;</em></div>
+ <div class="carte stat"><span>Niveaux gagnés en 24 h</span><b class="num">+{{ total24 }}</b><em>&nbsp;</em></div>
+</section>
 
-<h2>🏆 Tableau d'honneur</h2>
-<div class="honneur">
-{% for p in paliers %}
- <div class="palier {{ 'p60' if p == 60 else '' }}">
-  <h3>{{ "Panthéon du niveau 60" if p == 60 else "Niveau " ~ p }}</h3>
-  {% for e in exploits.get(p, []) %}
-   <div>{{ medailles.get(e.rang, "🏆") }} <span style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</span>
-   <small>{{ e.date[:16].replace("T", " ") }}</small></div>
-  {% else %}<div><small>Personne pour l'instant…</small></div>{% endfor %}
+<section class="sec">
+<h2>Tableau d'honneur <small>les trois premiers à chaque palier</small></h2>
+<div class="carte p60"><h3>Panthéon du niveau 60<small>chaque membre qui atteint 60</small></h3><div class="liste">
+{% for e in exploits.get(60, []) %}
+ <div class="heros"><span class="r">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</b>
+ <small>{{ classes.get(e.nom, '') }} · {{ e.date[:16].replace("T", " ") }}</small></div></div>
+{% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
+</div></div>
+<div class="paliers">
+{% for p in paliers if p != 60 %}
+ <div class="carte palier"><h3>Niveau<b>{{ p }}</b></h3>
+ {% for e in exploits.get(p, []) %}
+  <div class="e"><span class="m m{{ e.rang }}">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</b>
+  <small>{{ e.date[:16].replace("T", " ") }}</small></div></div>
+ {% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
  </div>
 {% endfor %}
 </div>
+</section>
 
-<h2>📊 Classement</h2>
-<p><select id="filtre" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
-{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></p>
-<div class="table-wrap"><table><thead><tr><th>#</th><th>Nom</th><th>Race</th><th>Classe</th><th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
+<section class="sec">
+<div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
+<select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
+{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th><th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
-<tr data-classe="{{ p.classe }}"><td>{{ loop.index }}</td>
-<td style="color:{{ couleur(p.classe) }};font-weight:600">{{ "👑 " if p.niveau == 60 else "" }}{{ p.nom }}</td>
-<td>{{ p.race }}</td><td>{{ p.classe }}</td><td><b>{{ p.niveau }}</b></td>
-<td><div class="barre"><i style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
-<td>{% if g24.get(p.nom, 0) > 0 %}<span class="gain">+{{ g24[p.nom] }}</span>{% endif %}</td></tr>
+<tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
+<td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}</td>
+<td>{{ p.race }}</td><td>{{ p.classe }}</td>
+<td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
+<td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
+<td>{% if g24.get(p.nom, 0) > 0 %}<span class="gain num">+{{ g24[p.nom] }}</span>{% endif %}</td></tr>
 {% else %}<tr><td colspan="7">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
 </tbody></table></div>
+</section>
 
-<h2>⚡ Dernières montées de niveau</h2>
+<section class="carte fil-carte sec">
+<h2>Dernières montées de niveau</h2>
 <ul class="fil">
-{% for r in recents %}<li><b style="color:{{ couleur(classes.get(r.nom, '')) }}">{{ r.nom }}</b> passe niveau <b>{{ r.niveau }}</b>
-<small>· {{ r.date.replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
+{% for r in recents %}<li><span class="nv num{{ ' max' if r.niveau == 60 else '' }}">{{ r.niveau }}</span>
+<span><b style="color:{{ couleur(classes.get(r.nom, '')) }}">{{ r.nom }}</b>
+{{ "atteint le niveau max" if r.niveau == 60 else "passe niveau " ~ r.niveau }}</span>
+<small>{{ r.date.replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
 </ul>
+</section>
+
+<footer><img src="logo.png" alt="">{{ guilde }} · données collectées par l'addon GuildExport</footer>
 </div>
 <script>
-function filtrer(c){document.querySelectorAll("tbody tr[data-classe]").forEach(function(tr){
- tr.style.display=(!c||tr.dataset.classe===c)?"":"none";});}
+function filtrer(c){var n=0;document.querySelectorAll("tbody tr[data-classe]").forEach(function(tr){
+ var ok=!c||tr.dataset.classe===c;tr.style.display=ok?"":"none";if(ok)n++;});
+ document.getElementById("compte").textContent=n+" membre"+(n>1?"s":"");}
 </script></body></html>"""
 
 FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Envoyer mes données</title>""" + STYLE + """</head><body><div class="page">
-<header><h1>📤 Envoyer mes données</h1>
-<div class="sous"><a href="./">← Retour au classement</a></div></header>
+""" + ENTETE + """
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
-<form method="post" enctype="multipart/form-data">
-<p><label>Ta clé personnelle<br><input type="password" name="cle" required style="width:100%;max-width:400px"></label></p>
-<p><label>Ton fichier GuildExport.lua<br><input type="file" name="fichier" accept=".lua" required></label></p>
-<p><small style="color:var(--doux)">Il se trouve dans
-World of Warcraft\\_forever_\\WTF\\Account\\TON_COMPTE\\SavedVariables\\</small></p>
-<p><button type="submit">Envoyer</button></p>
+<form class="carte formulaire" method="post" enctype="multipart/form-data">
+<label for="cle">Ta clé personnelle<input id="cle" type="password" name="cle" required></label>
+<label for="fichier">Ton fichier GuildExport.lua<input id="fichier" type="file" name="fichier" accept=".lua" required>
+<small>Il se trouve dans World of Warcraft\\_forever_\\WTF\\Account\\TON_COMPTE\\SavedVariables\\</small></label>
+<div><button type="submit">Envoyer</button></div>
 </form></div></body></html>"""
 
 
@@ -304,12 +386,22 @@ def index():
         PAGE, guilde=NOM_GUILDE, persos=persos, paliers=PALIERS, exploits=exploits,
         medailles=MEDAILLES, recents=recents, g24=g24,
         total24=sum(v for v in g24.values() if v > 0),
+        actifs=sum(1 for v in g24.values() if v > 0),
         nb60=sum(1 for p in persos if p["niveau"] == 60),
         moyenne=f"{sum(p['niveau'] for p in persos) / len(persos):.1f}" if persos else "—",
         maj=max((p["maj"] for p in persos), default="").replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
         liste_classes=sorted({p["classe"] for p in persos}),
-        couleur=lambda c: COULEURS.get(c, "#ece2cf"))
+        couleur=lambda c: COULEURS.get(c, "#e6eefb"))
+
+
+def formulaire(**kw):
+    return render_template_string(FORMULAIRE, guilde=NOM_GUILDE, formulaire=True, **kw)
+
+
+@app.route("/logo.png")
+def route_logo():
+    return send_file(Path(__file__).with_name("logo.png"), max_age=86400)
 
 
 @app.route("/collecter", methods=["GET", "POST"])
@@ -339,17 +431,17 @@ def route_envoyer():
 @app.route("/contribuer", methods=["GET", "POST"])
 def route_contribuer():
     if request.method == "GET":
-        return render_template_string(FORMULAIRE)
+        return formulaire()
     pseudo = contributeur(request.form.get("cle"))
     if not pseudo:
-        return render_template_string(FORMULAIRE, message="Clé inconnue.", classe="err"), 403
+        return formulaire(message="Clé inconnue.", classe="err"), 403
     f = request.files.get("fichier")
     persos = analyser_export(f.read().decode("utf-8", errors="ignore")) if f else []
     if not persos:
-        return render_template_string(FORMULAIRE, message="Fichier vide ou invalide.", classe="err"), 400
+        return formulaire(message="Fichier vide ou invalide.", classe="err"), 400
     n = integrer(persos, pseudo)
-    return render_template_string(FORMULAIRE, classe="ok",
-                                  message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
+    return formulaire(classe="ok",
+                      message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
 
 
 @app.route("/export.json")
