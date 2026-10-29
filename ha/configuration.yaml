@@ -1,0 +1,16 @@
+# À ajouter dans /config/configuration.yaml de Home Assistant.
+# Le jeton est rangé dans /config/secrets.yaml :
+#   quartz_collecter_url: "http://local-quartz-forever:8080/collecter?token=LE_JETON"
+#   quartz_recap_url: "http://local-quartz-forever:8080/recap?token=LE_JETON"
+rest_command:
+  quartz_collecter:
+    url: !secret quartz_collecter_url
+    method: post
+  quartz_recap:
+    url: !secret quartz_recap_url
+    method: post
+
+# Automatisations à créer (UI ou automations.yaml) :
+# - Collecte toutes les heures : trigger time_pattern minutes: 0 -> rest_command.quartz_collecter
+# - Récap Discord à 09:00 et 21:00 : collecter puis rest_command.quartz_recap
+# - (plus tard) Sauvegarde nuitière de /export.json

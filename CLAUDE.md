@@ -1,0 +1,95 @@
+# Quartz Forever — suivi de progression de guilde WoW Forever
+
+Projet de Gaël. Réponds en **français**. Gaël est développeur : explications
+concises, pas de pédagogie de base.
+
+## Contexte
+- **WoW Forever** (Blizzard) : lancement mondial le **5 novembre 2026** (minuit,
+  heure de Paris). Niveau max 60, toutes les races de Classic, **paladin et chaman
+  disponibles des deux côtés**.
+- Guilde **Quartz Forever**, **Horde**, serveur **PvE**.
+- Objectif : site public qui suit la progression des membres (race, classe,
+  niveau), tableau d'honneur, annonces Discord.
+- **API Blizzard** : l'espace de noms Forever n'est pas (encore) publié. On
+  collecte donc via un **addon en jeu** dont les membres envoient le fichier
+  SavedVariables. `lire_api_blizzard()` dans `app.py` est le point de branchement
+  prévu pour l'API quand elle existera (Classic Era : `profile-classic1x-eu`).
+
+## Architecture
+```
+WoW (addon GuildExport) → GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
+   → envoi-guilde.ps1 (auto) ou formulaire /contribuer (manuel), clé perso par membre
+   → app Flask + SQLite dans une app locale Home Assistant (HAOS)
+   → https://quartz.gawel.be via Cloudflare Tunnel
+Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) → webhook Discord
+```
+
+## Arborescence
+- `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
+  Dockerfile, run.sh, app.py). **C'est le code du serveur.**
+- L'addon WoW **GuildExport** vit dans un **dépôt séparé**. Format qu'il exporte
+  (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
+  `["Nom"] = "Nom;Race;Classe;Niveau"`.
+- `client/` : script PowerShell d'envoi automatique + lanceur .bat pour les membres.
+- `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
+- `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
+- `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
+- `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
+
+## Serveur (app.py)
+- Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
+- Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
+  (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`.
+- Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
+  jamais écrasée par « ? ».
+- Exploits : **top 3** des paliers 10/20/30/40/50 (médailles or/argent/bronze),
+  et **chaque** joueur qui passe 60.
+- Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
+  (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
+  `/export.json` (ces trois protégées par `?token=`).
+- Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
+  `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
+  `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`. Webhook vide = messages
+  seulement dans le journal (mode test).
+
+## Déploiement Home Assistant — pièges déjà rencontrés
+- HAOS récent : les apps locales vivent dans **`/local_apps`** (plus `/addons`,
+  qui n'est plus scanné). Les configs d'apps sont dans **`/app_configs`**.
+  Le fichier des clés est donc `/app_configs/local_quartz_forever/cles.txt`
+  (format `Pseudo:clé`, une ligne par membre, relu à chaque envoi).
+- Slug : `local_quartz_forever` ; hostname interne : `local-quartz-forever`.
+- CLI dans Terminal & SSH : `ha apps install|start|restart|rebuild|logs local_quartz_forever`,
+  `ha store reload`. Le shell est **BusyBox** (pas de `ls -b`, `grep` limité).
+- Fichiers créés via File editor = fins de ligne **CRLF** → casser bash.
+  Toujours `sed -i 's/\r$//'` avant d'exécuter un script collé.
+- Après modification du code : copier dans `/local_apps/quartz_forever/`, puis
+  `ha apps rebuild local_quartz_forever` (ou bumper `version` + `ha store reload` + update).
+- Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
+  `mcp.gawel.be → http://homeassistant:9583` (connecteur MCP de Claude, **ne pas
+  supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
+  Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
+
+## État au 29 octobre 2026
+- ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
+- ✅ Route Cloudflared configurée
+- ⬜ Voir la to-do ci-dessous
+
+## To-do
+1. Créer `cles.txt` avec les clés des membres.
+2. Ajouter les `rest_command` (ha/configuration.yaml) + secrets, redémarrer HA,
+   créer les automatisations : collecte horaire, récap Discord 9 h et 21 h.
+3. Créer le webhook Discord du salon de progression et le mettre dans les options
+   de l'app (après les tests, pour ne pas spammer).
+4. Tester de bout en bout : envoi via /contribuer, classement, tableau d'honneur,
+   `/export.json?token=…`.
+5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
+   l'addon en jeu (race via cible/survol/groupe).
+6. Créer un client API sur develop.battle.net, lancer `tools/verifier_api_blizzard.py` sur un
+   perso Classic Era ; vérifier si l'endpoint de liste de guilde existe.
+7. Surveiller la publication de l'espace de noms API Forever ; brancher
+   `lire_api_blizzard()`.
+8. Distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`, clés en MP.
+9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.
+10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
+11. Idées en attente : graphiques de progression, fiche par personnage, maquette
+    artefact pour présenter le projet à la guilde.

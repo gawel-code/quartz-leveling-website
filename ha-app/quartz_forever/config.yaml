@@ -1,0 +1,20 @@
+name: Quartz Forever
+version: "1.0.0"
+slug: quartz_forever
+description: Suivi de progression de la guilde Quartz Forever
+arch: [aarch64, amd64]
+startup: application
+boot: auto
+init: false
+ports:
+  8080/tcp: null
+map:
+  - addon_config:rw
+options:
+  nom_guilde: "Quartz Forever"
+  token: ""
+  discord_webhook: ""
+schema:
+  nom_guilde: str
+  token: password
+  discord_webhook: "str?"
