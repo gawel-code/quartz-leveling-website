@@ -34,7 +34,14 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
   `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`).
-- `client/` : script PowerShell d'envoi automatique + lanceur .bat pour les membres.
+- `client/` : envoi automatique pour les membres. `lancer.bat` (double-clic) lance
+  `envoi-guilde.ps1` : au 1er lancement demande la clé (validée par un envoi vide → 400 = ok,
+  403 = refusée), cherche `_forever_\WTF\Account\*\SavedVariables\GuildExport.lua`
+  (sinon demande le chemin), retient tout dans `%APPDATA%\QuartzForever\config.json`,
+  journal `envoi.log` ; renvoie le fichier dès qu'il change (sondage 30 s) ; redemande la
+  clé si le site la refuse. `changer-cle.bat` = `-Reconfigurer`. Le .ps1 doit garder son
+  **BOM UTF-8** (sinon accents cassés sous Windows PowerShell 5.1). Variables de test :
+  `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).

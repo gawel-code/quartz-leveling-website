@@ -53,7 +53,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | Chemin | Rôle |
 |---|---|
 | `ha-app/quartz_forever/` | **le serveur** : app locale Home Assistant (`config.yaml`, `Dockerfile`, `run.sh`, `app.py`, images) |
-| `client/` | `envoi-guilde.ps1` + `lancer.bat` : envoi automatique pour les membres (Windows) |
+| `client/` | envoi automatique pour les membres (Windows) : `lancer.bat` (double-clic ; demande la clé au premier lancement, trouve le fichier, journal dans `%APPDATA%\QuartzForever\envoi.log`), `changer-cle.bat`, `envoi-guilde.ps1` |
 | `docs/README-guilde.md` | mode d'emploi non technique pour la guilde |
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `ha/deployer-quartz.sh` | déploiement de l'app depuis GitHub (à lancer dans Terminal & SSH) |
