@@ -93,13 +93,15 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 29 octobre 2026 (v1.2.1 déployée, v1.3.0 en cours)
+## État au 29 octobre 2026 (v1.3.0 déployée)
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
   pseudos sans espaces ni `|`, accents possibles : `Metam-Zap`, `Patéhenkrout`, `Finwë`…).
   Ligne de test `TestClaude` retirée (clé refusée → 403) ; copie dans `cles.txt.bak`.
-- ✅ Automatisations HA (collecte horaire, récap 9 h / 21 h) actives
+- ⏸️ Automatisations HA (collecte horaire, récap 9 h / 21 h) **coupées jusqu'au lancement** :
+  `automation.quartz_reactivation_au_lancement` les réactive à la date/heure de
+  `input_datetime.quartz_lancement_wow_forever` (5/11/2026 00:00, changer la date si besoin).
 - ✅ Webhook Discord du vrai salon de progression dans l'option `discord_webhook`
   (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
@@ -125,7 +127,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 2. ~~Automatisations HA~~ ✅ fait (29/10) : `rest_command.quartz_collecter` / `quartz_recap`
    chargés (secrets internes, token de l'app renseigné, appels testés → 200),
    automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
-   `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) actives.
+   `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
+   coupées jusqu'au 5/11, réactivation automatique (voir État).
 3. ~~Webhook Discord~~ ✅ fait (29/10) : webhook du vrai salon dans l'option
    `discord_webhook`. Les annonces et récaps partent pour de vrai.
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
