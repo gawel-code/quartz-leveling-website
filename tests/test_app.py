@@ -65,3 +65,12 @@ def test_pages_et_jeton(client):
     assert client.get("/contribuer").status_code == 200
     assert client.get("/export.json").status_code == 403
     assert client.get("/recap?token=tok").json["ok"]
+
+
+def test_page_remplie_et_logo(client):
+    envoyer(client, LUA1)
+    envoyer(client, LUA2)
+    r = client.get("/")
+    assert "Grommash" in r.text and "Panthéon du niveau 60" in r.text
+    logo = client.get("/logo.png")
+    assert logo.status_code == 200 and logo.mimetype == "image/png"
