@@ -80,3 +80,16 @@ def test_generer_cles(tmp_path):
     assert n3["Zuljin"] != n1["Zuljin"]
     lignes = [l for l in f.read_text(encoding="utf-8").splitlines() if not l.startswith("#")]
     assert lignes == [f"Gael:{n1['Gael']}", f"Zuljin:{n3['Zuljin']}", f"Mok:{lignes[2].split(':')[1]}"]
+
+
+
+def test_token_vide_ferme_les_routes_protegees(tmp_path, monkeypatch):
+    monkeypatch.setenv("GUILDE_DB", str(tmp_path / "g.db"))
+    monkeypatch.setenv("GUILDE_TOKEN", "")  # option « token » laissée vide dans HA
+    spec = importlib.util.spec_from_file_location("app", APP)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    c = mod.app.test_client()
+    for route in ("/export.json", "/collecter", "/recap"):
+        assert c.get(route + "?token=").status_code == 403
+        assert c.get(route).status_code == 403

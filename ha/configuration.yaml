@@ -10,7 +10,23 @@ rest_command:
     url: !secret quartz_recap_url
     method: post
 
-# Automatisations à créer (UI ou automations.yaml) :
-# - Collecte toutes les heures : trigger time_pattern minutes: 0 -> rest_command.quartz_collecter
-# - Récap Discord à 09:00 et 21:00 : collecter puis rest_command.quartz_recap
-# - (plus tard) Sauvegarde nuitière de /export.json
+# Automatisations : à coller dans automations.yaml (ou une par une via
+# Paramètres → Automatisations → Créer → ⋮ → Modifier en YAML, sans le tiret initial).
+# - id: quartz_collecte_horaire
+#   alias: Quartz – collecte horaire
+#   triggers:
+#     - trigger: time_pattern
+#       minutes: 0
+#   actions:
+#     - action: rest_command.quartz_collecter
+#
+# - id: quartz_recap_discord
+#   alias: Quartz – récap Discord 9 h / 21 h
+#   triggers:
+#     - trigger: time
+#       at: ["09:00:00", "21:00:00"]
+#   actions:
+#     - action: rest_command.quartz_collecter
+#     - action: rest_command.quartz_recap
+#
+# Plus tard : sauvegarde nuitière de /export.json
