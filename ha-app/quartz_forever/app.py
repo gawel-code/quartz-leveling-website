@@ -61,22 +61,34 @@ def ordinal(n):
     return "1ᵉʳ" if n == 1 else f"{n}ᵉ"
 
 
+def niveau_annonce(niveau):
+    """Niveaux annoncés sans classement : tous les 5 dès 20, chaque niveau dès 50."""
+    return niveau >= 50 or (niveau >= 20 and niveau % 5 == 0)
+
+
 def verifier_exploits(con, nom, classe, ancien, nouveau):
+    # Paliers de 10 : annoncés pour tout le monde, avec le rang (médaille pour le top 3).
+    dernier = None
     for palier in PALIERS:
         if not (ancien < palier <= nouveau):
             continue
+        dernier = palier
         if con.execute("SELECT 1 FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone():
             continue
-        deja = con.execute("SELECT COUNT(*) FROM exploits WHERE palier=?", (palier,)).fetchone()[0]
-        rang = deja + 1
+        rang = con.execute("SELECT COUNT(*) FROM exploits WHERE palier=?", (palier,)).fetchone()[0] + 1
+        con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, rang, maintenant()))
+        medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
         if palier == 60:
-            con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, rang, maintenant()))
-            discord(f"{MEDAILLES.get(rang, '🏆')} **{nom}** ({classe}) atteint le **niveau 60** ! "
+            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** ! "
                     f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
-        elif deja < 3:
-            con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, rang, maintenant()))
-            discord(f"{MEDAILLES[rang]} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
+        else:
+            discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
                     f"à atteindre le **niveau {palier}** !")
+    # Autres niveaux, sans classement : seulement le plus haut franchi, s'il dépasse le palier annoncé
+    # (un envoi qui saute plusieurs niveaux ne produit pas une rafale de messages).
+    autres = [n for n in range(ancien + 1, nouveau + 1) if n not in PALIERS and niveau_annonce(n)]
+    if autres and (dernier is None or autres[-1] > dernier):
+        discord(f"⬆️ **{nom}** ({classe}) passe **niveau {autres[-1]}** !")
 
 
 # ---------- Contributeurs ----------
@@ -311,7 +323,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="paliers">
 {% for p in paliers if p != 60 %}
  <div class="carte palier"><h3>Niveau<b>{{ p }}</b></h3>
- {% for e in exploits.get(p, []) %}
+ {% for e in exploits.get(p, [])[:3] %}
   <div class="e"><span class="m m{{ e.rang }}">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</b>
   <small>{{ e.date[:16].replace("T", " ") }}</small></div></div>
  {% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}

@@ -44,8 +44,12 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`.
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
-- Exploits : **top 3** des paliers 10/20/30/40/50 (médailles or/argent/bronze),
-  et **chaque** joueur qui passe 60.
+- Annonces Discord (`verifier_exploits`) : chaque palier de 10 pour **tout le monde**,
+  avec le rang (médaille pour le top 3, sinon ⭐ / 🏆 au 60) ; sans classement, tous
+  les 5 niveaux dès 20 (25, 35, 45) et chaque niveau dès 50. Un envoi qui saute
+  plusieurs niveaux n'annonce que les paliers de 10 franchis + le plus haut niveau
+  « simple » s'il dépasse le dernier palier. Seuls les paliers de 10 sont stockés
+  dans `exploits` ; le tableau d'honneur affiche le top 3 (10–50) et tous les 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
   `/export.json`, `POST /reinitialiser` (vide toute la base, copie dans
