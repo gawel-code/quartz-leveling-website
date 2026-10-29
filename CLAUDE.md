@@ -35,6 +35,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
 - `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
+- `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
 ## Serveur (app.py)
@@ -59,6 +60,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   Le fichier des clés est donc `/app_configs/local_quartz_forever/cles.txt`
   (format `Pseudo:clé`, une ligne par membre, relu à chaque envoi).
 - Slug : `local_quartz_forever` ; hostname interne : `local-quartz-forever`.
+- Dans Terminal & SSH, la config HA est sous **`/homeassistant`** (pas `/config`).
+  Le collage peut être déformé par le *bracketed paste* (1ʳᵉ lettre mangée, `~` final) :
+  taper à la main `printf '\e[?2004l'`.
 - CLI dans Terminal & SSH : `ha apps install|start|restart|rebuild|logs local_quartz_forever`,
   `ha store reload`. Le shell est **BusyBox** (pas de `ls -b`, `grep` limité).
 - Fichiers créés via File editor = fins de ligne **CRLF** → casser bash.
@@ -78,12 +82,17 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 ## État au 29 octobre 2026
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
+- ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…)
+- ✅ Design « cristal » (v1.1.0) déployé via `deployer-quartz.sh` ; jeton `quartz_github_token` dans `secrets.yaml`
 - ⬜ Voir la to-do ci-dessous
 
 ## To-do
-1. Créer `cles.txt` avec les clés des membres.
-2. Ajouter les `rest_command` (ha/configuration.yaml) + secrets, redémarrer HA,
-   créer les automatisations : collecte horaire, récap Discord 9 h et 21 h.
+1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
+2. En cours : secrets `quartz_collecter_url` / `quartz_recap_url` présents dans
+   `secrets.yaml` (URL **internes** `http://local-quartz-forever:8080/...?token=`).
+   À vérifier : option `token` de l'app non vide (depuis 1.1.1, token vide = routes
+   protégées fermées), bloc `rest_command` dans `configuration.yaml`, `ha core check`
+   + redémarrage, automatisations (YAML prêt en commentaire dans `ha/configuration.yaml`).
 3. Créer le webhook Discord du salon de progression et le mettre dans les options
    de l'app (après les tests, pour ne pas spammer).
 4. Tester de bout en bout : envoi via /contribuer, classement, tableau d'honneur,

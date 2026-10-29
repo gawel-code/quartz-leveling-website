@@ -1,5 +1,5 @@
 # Quartz Forever — suivi de progression de guilde (WoW Forever)
-import os, re, json, sqlite3, datetime
+import os, re, json, hmac, sqlite3, datetime
 from pathlib import Path
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file
@@ -368,7 +368,8 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 
 
 def verifier_token():
-    if request.args.get("token") != TOKEN:
+    # Token vide dans les options = routes protégées fermées (sinon ?token= suffirait).
+    if not TOKEN or not hmac.compare_digest(request.args.get("token", "").encode(), TOKEN.encode()):
         abort(403)
 
 
