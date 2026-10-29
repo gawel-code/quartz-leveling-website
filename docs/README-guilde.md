@@ -35,16 +35,20 @@ groupe** avec lui.
 
 ### Option A — Automatique (recommandé, à faire une seule fois)
 1. Demande ta **clé personnelle** à Gaël.
-2. Télécharge `envoi-guilde.ps1` et `lancer.bat`, mets-les dans le même dossier.
-3. Ouvre `envoi-guilde.ps1` avec le Bloc-notes et modifie les lignes du haut :
-   - `$Cle` : ta clé personnelle
-   - `$Fichier` : remplace `TON_COMPTE` par le nom de ton compte
-     (le nom du dossier dans `WTF\Account\`)
-4. Enregistre, puis double-clique sur `lancer.bat`.
+2. Télécharge `envoi-guilde.ps1`, `lancer.bat` et `changer-cle.bat`, mets-les dans le
+   même dossier.
+3. Double-clique sur `lancer.bat`. La première fois, il te demande ta clé (colle
+   uniquement la clé) et trouve tout seul le fichier de l'addon. S'il ne le trouve pas,
+   colle le chemin du dossier `SavedVariables` de ton compte WoW.
 
 Une fenêtre noire s'ouvre : laisse-la ouverte pendant que tu joues (tu peux la
-réduire). Pour qu'il démarre avec Windows : `Windows + R`, tape `shell:startup`,
-et place un **raccourci** vers `lancer.bat` dans le dossier qui s'ouvre.
+réduire). Elle envoie tes données à chaque fois que le jeu les enregistre. Pour qu'elle
+démarre avec Windows : `Windows + R`, tape `shell:startup`, et place un **raccourci**
+vers `lancer.bat` dans le dossier qui s'ouvre.
+
+Ta clé et l'emplacement du fichier sont retenus dans `%APPDATA%\QuartzForever\`, avec
+un journal des envois (`envoi.log`). Pour changer de clé ou de dossier, double-clique
+sur `changer-cle.bat`.
 
 ### Option B — À la main, sans rien installer
 1. Après ta session, va sur **https://quartz.gawel.be/contribuer**.

@@ -34,7 +34,14 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
   `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`).
-- `client/` : script PowerShell d'envoi automatique + lanceur .bat pour les membres.
+- `client/` : envoi automatique pour les membres. `lancer.bat` (double-clic) lance
+  `envoi-guilde.ps1` : au 1er lancement demande la clé (validée par un envoi vide → 400 = ok,
+  403 = refusée), cherche `_forever_\WTF\Account\*\SavedVariables\GuildExport.lua`
+  (sinon demande le chemin), retient tout dans `%APPDATA%\QuartzForever\config.json`,
+  journal `envoi.log` ; renvoie le fichier dès qu'il change (sondage 30 s) ; redemande la
+  clé si le site la refuse. `changer-cle.bat` = `-Reconfigurer`. Le .ps1 doit garder son
+  **BOM UTF-8** (sinon accents cassés sous Windows PowerShell 5.1). Variables de test :
+  `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
@@ -52,8 +59,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (`GuildExportNiveaux`), sinon par la date de réception. `dater()` garde la date la plus
   ancienne connue, la plafonne à maintenant et rend l'historique monotone (un niveau ne
   peut pas être plus récent qu'un niveau supérieur). Dates ISO à la seconde.
-- Classement des paliers **par date réelle** (`reclasser()`) : le rang annoncé sur Discord
-  est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
+- Classement des paliers **par date réelle** (`reclasser()`) : les annonces d'un envoi sont
+  préparées par `verifier_exploits()` puis envoyées par `annoncer()` une fois tout le fichier
+  intégré, triées par date (v1.3.1, corrige deux « 1ᵉʳ » dans un même envoi) ; entre deux
+  envois, le rang annoncé est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
   ancienne arrive ensuite (`corriger_exploits()`, sans nouvelle annonce).
 - Annonces Discord (`verifier_exploits`, avec la date réelle dans le message) : chaque palier de 10 pour **tout le monde**,
   avec le rang (médaille pour le top 3, sinon ⭐ / 🏆 au 60) ; sans classement, tous
@@ -104,8 +113,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ⏸️ Automatisations HA (collecte horaire, récap 9 h / 21 h) **coupées jusqu'au lancement** :
   `automation.quartz_reactivation_au_lancement` les réactive à la date/heure de
   `input_datetime.quartz_lancement_wow_forever` (5/11/2026 00:00, changer la date si besoin).
-- ✅ Webhook Discord du vrai salon de progression dans l'option `discord_webhook`
-  (l'URL n'est jamais commitée)
+- ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
+  à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
   `/export.json`), puis base remise à zéro : **la base est vide**, prête pour la guilde
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière

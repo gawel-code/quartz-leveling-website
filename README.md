@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.3.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.3.1
 
 ## Fonctionnement
 
@@ -45,7 +45,7 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
 
 Chaque annonce indique la date réelle du passage de niveau. Un envoi qui saute plusieurs
 niveaux annonce les paliers de 10 franchis et seulement le plus haut des autres niveaux.
-Une annonce de palier ne part qu'une fois. Le rang annoncé est celui connu à la réception ;
+Une annonce de palier ne part qu'une fois. Le rang annoncé tient compte de tous les personnages du même envoi ;
 le tableau d'honneur du site peut ensuite le corriger.
 
 ## Contenu du dépôt
@@ -53,7 +53,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | Chemin | Rôle |
 |---|---|
 | `ha-app/quartz_forever/` | **le serveur** : app locale Home Assistant (`config.yaml`, `Dockerfile`, `run.sh`, `app.py`, images) |
-| `client/` | `envoi-guilde.ps1` + `lancer.bat` : envoi automatique pour les membres (Windows) |
+| `client/` | envoi automatique pour les membres (Windows) : `lancer.bat` (double-clic ; demande la clé au premier lancement, trouve le fichier, journal dans `%APPDATA%\QuartzForever\envoi.log`), `changer-cle.bat`, `envoi-guilde.ps1` |
 | `docs/README-guilde.md` | mode d'emploi non technique pour la guilde |
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `ha/deployer-quartz.sh` | déploiement de l'app depuis GitHub (à lancer dans Terminal & SSH) |
@@ -125,6 +125,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.3.1 | annonces d'un même envoi faites après intégration de tout le fichier, dans l'ordre chronologique : plus de double « 1ᵉʳ » |
 | 1.3.0 | dates réelles de montée de niveau fournies par l'addon, classement des paliers par date |
 | 1.2.1 | cristal haute définition et bannière en en-tête |
 | 1.2.0 | annonces pour tous les joueurs : paliers de 10 classés, 25/35/45, chaque niveau dès 50 |

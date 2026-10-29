@@ -203,3 +203,21 @@ def test_dates_ignorees_par_analyser_export(client):
     g = client.application.view_functions["index"].__globals__
     assert g["analyser_export"](texte) == [("A", "Orc", "Guerrier", 12)]
     assert list(g["analyser_dates"](texte)) == ["A"]
+
+
+def test_rangs_annonces_dans_un_meme_envoi(client, monkeypatch):
+    """Deux joueurs franchissent le même palier dans un même envoi : le rang annoncé suit la
+    date réelle, pas l'ordre du fichier (bug : deux « 1ᵉʳ » au niveau 10)."""
+    import datetime
+    messages = []
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "discord", messages.append)
+    now = datetime.datetime.now().replace(microsecond=0)
+    ts = lambda h: int((now - datetime.timedelta(hours=h)).timestamp())
+    envoyer(client, lua_dates([("Grommash", 23), ("Zuljin", 12)],
+                              {"Grommash": f"20@{ts(5)},23@{ts(1)}", "Zuljin": f"10@{ts(6)},12@{ts(2)}"}))
+    paliers10 = [m for m in messages if "niveau 10**" in m]
+    assert len(paliers10) == 2
+    assert "**Zuljin**" in paliers10[0] and "1ᵉʳ" in paliers10[0]
+    assert "**Grommash**" in paliers10[1] and "2ᵉ" in paliers10[1] and "🥈" in paliers10[1]
+    assert sum("1ᵉʳ" in m for m in paliers10) == 1
