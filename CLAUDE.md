@@ -26,7 +26,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 
 ## Arborescence
 - `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
-  Dockerfile, run.sh, app.py, logo.png = cristal du Discord). **C'est le code du serveur.**
+  Dockerfile, run.sh, app.py, logo.png = cristal détouré 256 px,
+  banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`.

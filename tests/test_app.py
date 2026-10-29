@@ -75,6 +75,9 @@ def test_page_remplie_et_logo(client):
     assert "Grommash" in r.text and "Panthéon du niveau 60" in r.text
     logo = client.get("/logo.png")
     assert logo.status_code == 200 and logo.mimetype == "image/png"
+    banniere = client.get("/banniere.jpg")
+    assert banniere.status_code == 200 and banniere.mimetype == "image/jpeg"
+    assert client.get("/app.py").status_code == 404
 
 
 def test_generer_cles(tmp_path):

@@ -213,11 +213,16 @@ a{color:var(--cristal);text-decoration:none}
 .num{font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:14px}
 .carte{background:var(--verre);border:1px solid var(--trait);border-radius:16px}
-header{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.logo{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;flex:0 0 auto;
-background:radial-gradient(circle at 50% 60%,rgba(95,216,245,.28),rgba(95,216,245,.04) 70%);
-border:1px solid var(--trait2);box-shadow:0 0 32px rgba(95,216,245,.25)}
-.logo img{width:40px;height:auto;border-radius:8px;filter:drop-shadow(0 0 8px rgba(95,216,245,.6))}
+header{display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:relative;overflow:hidden;
+padding:clamp(22px,4vw,40px);min-height:220px;border-radius:20px;border:1px solid var(--trait2);
+background:linear-gradient(90deg,rgba(7,11,20,.92) 0%,rgba(7,11,20,.7) 45%,rgba(7,11,20,.15) 100%),
+linear-gradient(0deg,rgba(7,11,20,.55),transparent 40%),url(banniere.jpg) center 40%/cover no-repeat,var(--nuit2);
+box-shadow:0 18px 60px rgba(0,0,0,.45),0 0 60px rgba(95,216,245,.08)}
+@media (min-width:861px){header{min-height:260px;
+background:linear-gradient(90deg,rgba(7,11,20,1) 0%,rgba(7,11,20,.96) 30%,rgba(7,11,20,.55) 55%,rgba(7,11,20,.05) 100%),
+linear-gradient(0deg,rgba(7,11,20,.5),transparent 35%),url(banniere.jpg) right 58%/72% auto no-repeat,var(--nuit)}}
+.logo{flex:0 0 auto;width:clamp(64px,10vw,96px)}
+.logo img{display:block;width:100%;height:auto;filter:drop-shadow(0 0 18px rgba(95,216,245,.55))}
 .titre{flex:1 1 260px;min-width:0}
 h1{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em;
 background:linear-gradient(100deg,var(--givre),var(--cristal) 55%,var(--cristal2));-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -412,9 +417,9 @@ def formulaire(**kw):
     return render_template_string(FORMULAIRE, guilde=NOM_GUILDE, formulaire=True, **kw)
 
 
-@app.route("/logo.png")
-def route_logo():
-    return send_file(Path(__file__).with_name("logo.png"), max_age=86400)
+@app.route("/<any('logo.png', 'banniere.jpg'):fichier>")
+def route_image(fichier):
+    return send_file(Path(__file__).with_name(fichier), max_age=86400)
 
 
 @app.route("/collecter", methods=["GET", "POST"])
