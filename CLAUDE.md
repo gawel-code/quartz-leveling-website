@@ -33,6 +33,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `client/` : script PowerShell d'envoi automatique + lanceur .bat pour les membres.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
+- `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
 - `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
@@ -62,8 +63,12 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   `ha store reload`. Le shell est **BusyBox** (pas de `ls -b`, `grep` limité).
 - Fichiers créés via File editor = fins de ligne **CRLF** → casser bash.
   Toujours `sed -i 's/\r$//'` avant d'exécuter un script collé.
-- Après modification du code : copier dans `/local_apps/quartz_forever/`, puis
-  `ha apps rebuild local_quartz_forever` (ou bumper `version` + `ha store reload` + update).
+- Déploiement : l'app locale n'est pas liée à GitHub (dépôt privé). Lancer
+  `/homeassistant/deployer-quartz.sh [réf]` (copie de `ha/deployer-quartz.sh`) dans
+  Terminal & SSH : télécharge `ha-app/quartz_forever` de `main` (ou de la réf donnée)
+  avec le jeton lecture seule `/homeassistant/.quartz_token`, copie dans
+  `/local_apps/quartz_forever/`, puis `ha store reload` + update (ou rebuild).
+  Bumper `version` dans `config.yaml` à chaque changement. `/data` et `cles.txt` ne bougent pas.
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
   `mcp.gawel.be → http://homeassistant:9583` (connecteur MCP de Claude, **ne pas
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
