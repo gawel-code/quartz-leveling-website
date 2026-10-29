@@ -93,8 +93,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
    chargés (secrets internes, token de l'app renseigné, appels testés → 200),
    automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) actives.
-3. Créer le webhook Discord du salon de progression et le mettre dans les options
-   de l'app (après les tests, pour ne pas spammer).
+3. ~~Webhook Discord~~ ✅ fait (29/10) : option `discord_webhook` de l'app renseignée,
+   app redémarrée. Les annonces et récaps partent désormais pour de vrai.
 4. Tester de bout en bout : envoi via /contribuer, classement, tableau d'honneur,
    `/export.json?token=…`.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
