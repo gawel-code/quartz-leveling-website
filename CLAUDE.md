@@ -88,8 +88,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 ## État au 29 octobre 2026 (v1.2.1 déployée)
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
-- ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…).
-  Une ligne de test `TestClaude:…` a été ajoutée pendant les tests : à retirer.
+- ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
+  pseudos sans espaces ni `|`, accents possibles : `Metam-Zap`, `Patéhenkrout`, `Finwë`…).
+  Ligne de test `TestClaude` retirée (clé refusée → 403) ; copie dans `cles.txt.bak`.
 - ✅ Automatisations HA (collecte horaire, récap 9 h / 21 h) actives
 - ✅ Webhook Discord du vrai salon de progression dans l'option `discord_webhook`
   (l'URL n'est jamais commitée)
@@ -127,7 +128,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 7. Surveiller la publication de l'espace de noms API Forever ; brancher
    `lire_api_blizzard()`.
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
-   clés en MP (après avoir retiré `TestClaude` de `cles.txt`).
+   clés en MP.
 9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.
 10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
 11. Idées en attente : graphiques de progression, fiche par personnage, maquette
