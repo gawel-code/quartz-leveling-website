@@ -85,13 +85,31 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 29 octobre 2026
+## État au 29 octobre 2026 (v1.2.1 déployée)
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
-- ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…)
-- ✅ Automatisations HA (collecte horaire, récap 9 h / 21 h) actives ; connecteur MCP HA = URL avec chemin secret, sans OAuth
-- ✅ Design « cristal » (v1.1.0) déployé via `deployer-quartz.sh` ; jeton `quartz_github_token` dans `secrets.yaml`
-- ⬜ Voir la to-do ci-dessous
+- ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…).
+  Une ligne de test `TestClaude:…` a été ajoutée pendant les tests : à retirer.
+- ✅ Automatisations HA (collecte horaire, récap 9 h / 21 h) actives
+- ✅ Webhook Discord du vrai salon de progression dans l'option `discord_webhook`
+  (l'URL n'est jamais commitée)
+- ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
+  `/export.json`), puis base remise à zéro : **la base est vide**, prête pour la guilde
+- ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
+- ✅ Connecteur MCP Home Assistant de Claude : URL avec chemin secret, **sans OAuth**
+  (si « needs_reconnect » → supprimer et recréer le connecteur avec l'URL complète)
+
+## Outils utiles pour Claude (via le connecteur HA)
+- Appeler l'app directement : `ha_manage_app(slug="local_quartz_forever", port=8080,
+  path=..., method=...)` — permet `/export.json?token=…`, `POST /reinitialiser?token=…`,
+  `POST /envoyer` (header `X-Cle`) sans passer par Cloudflare (bloqué par le proxy de session).
+- `rest_command.quartz_collecter` / `quartz_recap` : `ha_call_service(..., return_response=True)`.
+  `rest_command.quartz_reinitialiser` (voir `ha/configuration.yaml`) **n'est pas** configuré côté HA.
+- Logs de l'app : `ha_get_logs(source="supervisor", slug="local_quartz_forever")`.
+- Le connecteur ne lit pas les fichiers (`cles.txt`, `configuration.yaml`) : passer par Terminal & SSH.
+- « Clé inconnue » sur `/contribuer` alors que `cles.txt` est bon = clé mal saisie
+  (ligne entière collée, autoremplissage du navigateur) ; l'app lit bien
+  `/app_configs/local_quartz_forever/cles.txt`.
 
 ## To-do
 1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
@@ -99,17 +117,17 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
    chargés (secrets internes, token de l'app renseigné, appels testés → 200),
    automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) actives.
-3. ~~Webhook Discord~~ ✅ fait (29/10) : option `discord_webhook` de l'app renseignée,
-   app redémarrée. Les annonces et récaps partent désormais pour de vrai.
-4. Tester de bout en bout : envoi via /contribuer, classement, tableau d'honneur,
-   `/export.json?token=…`.
+3. ~~Webhook Discord~~ ✅ fait (29/10) : webhook du vrai salon dans l'option
+   `discord_webhook`. Les annonces et récaps partent pour de vrai.
+4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
 6. Créer un client API sur develop.battle.net, lancer `tools/verifier_api_blizzard.py` sur un
    perso Classic Era ; vérifier si l'endpoint de liste de guilde existe.
 7. Surveiller la publication de l'espace de noms API Forever ; brancher
    `lire_api_blizzard()`.
-8. Distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`, clés en MP.
+8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
+   clés en MP (après avoir retiré `TestClaude` de `cles.txt`).
 9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.
 10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
 11. Idées en attente : graphiques de progression, fiche par personnage, maquette
