@@ -2,12 +2,17 @@
 # Le jeton est rangé dans /config/secrets.yaml :
 #   quartz_collecter_url: "http://local-quartz-forever:8080/collecter?token=LE_JETON"
 #   quartz_recap_url: "http://local-quartz-forever:8080/recap?token=LE_JETON"
+#   quartz_reinitialiser_url: "http://local-quartz-forever:8080/reinitialiser?token=LE_JETON"
 rest_command:
   quartz_collecter:
     url: !secret quartz_collecter_url
     method: post
   quartz_recap:
     url: !secret quartz_recap_url
+    method: post
+  # Vide toute la base (tests) ; copie de sauvegarde dans /data/guilde.db.avant-reset.
+  quartz_reinitialiser:
+    url: !secret quartz_reinitialiser_url
     method: post
 
 # Automatisations : à coller dans automations.yaml (ou une par une via
