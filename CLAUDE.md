@@ -104,8 +104,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ⏸️ Automatisations HA (collecte horaire, récap 9 h / 21 h) **coupées jusqu'au lancement** :
   `automation.quartz_reactivation_au_lancement` les réactive à la date/heure de
   `input_datetime.quartz_lancement_wow_forever` (5/11/2026 00:00, changer la date si besoin).
-- ✅ Webhook Discord du vrai salon de progression dans l'option `discord_webhook`
-  (l'URL n'est jamais commitée)
+- ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
+  à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
   `/export.json`), puis base remise à zéro : **la base est vide**, prête pour la guilde
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
