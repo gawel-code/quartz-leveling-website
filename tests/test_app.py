@@ -221,3 +221,18 @@ def test_rangs_annonces_dans_un_meme_envoi(client, monkeypatch):
     assert "**Zuljin**" in paliers10[0] and "1ᵉʳ" in paliers10[0]
     assert "**Grommash**" in paliers10[1] and "2ᵉ" in paliers10[1] and "🥈" in paliers10[1]
     assert sum("1ᵉʳ" in m for m in paliers10) == 1
+
+
+def test_annonce_cite_l_auteur_de_l_envoi(client, monkeypatch):
+    messages = []
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "discord", messages.append)
+    envoyer(client, LUA1)  # clé de « Gael »
+    assert messages and all(m.endswith(" _— via Gael_") for m in messages)
+    # Pseudo avec caractères Markdown échappés ; collecte serveur sans mention
+    messages.clear()
+    g["integrer"]([("Thrall", "Orc", "Chaman", 10)], "Ma_x*")
+    assert messages[-1].endswith(" _— via Ma\\_x\\*_")
+    messages.clear()
+    g["integrer"]([("Rexxar", "Orc", "Chasseur", 10)], "serveur")
+    assert "via" not in messages[-1]

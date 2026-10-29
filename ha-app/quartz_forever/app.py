@@ -108,24 +108,26 @@ def verifier_exploits(con, nom, classe, ancien, nouveau, annonces):
         annonces.append({"date": date_atteinte(con, nom, n), "nom": nom, "classe": classe, "niveau": n})
 
 
-def annoncer(con, annonces):
+def annoncer(con, annonces, source="serveur"):
     """Envoie les annonces d'un envoi, dans l'ordre chronologique, une fois tout le fichier
     intégré : les rangs annoncés tiennent compte de tous les personnages du même envoi.
-    (Entre deux envois, un rang déjà annoncé peut encore être corrigé sur le tableau d'honneur.)"""
+    (Entre deux envois, un rang déjà annoncé peut encore être corrigé sur le tableau d'honneur.)
+    Chaque message cite le membre dont l'envoi l'a déclenché (sauf collecte serveur)."""
+    via = "" if source == "serveur" else " _— via " + re.sub(r"([\\*_~`|>])", r"\\\1", source) + "_"
     for a in sorted(annonces, key=lambda a: a["date"]):  # tri stable : ordre du fichier à date égale
         nom, classe, quand = a["nom"], a["classe"], date_lisible(a["date"])
         if "niveau" in a:
-            discord(f"⬆️ **{nom}** ({classe}) passe **niveau {a['niveau']}** ({quand}) !")
+            discord(f"⬆️ **{nom}** ({classe}) passe **niveau {a['niveau']}** ({quand}) !{via}")
             continue
         palier = a["palier"]
         rang = con.execute("SELECT rang FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone()[0]
         medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
         if palier == 60:
             discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {quand} ! "
-                    f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
+                    f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !{via}")
         else:
             discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
-                    f"à atteindre le **niveau {palier}** ({quand}) !")
+                    f"à atteindre le **niveau {palier}** ({quand}) !{via}")
 
 
 def corriger_exploits(con, nom):
@@ -230,7 +232,7 @@ def integrer(persos, source="serveur", dates=None):
                 niveau=excluded.niveau, maj=excluded.maj""",
                         (nom, race, classe, niveau, maintenant()))
         con.execute("INSERT INTO envois VALUES(?,?,?,?)", (source, maintenant(), len(persos), nouveaux))
-        annoncer(con, annonces)
+        annoncer(con, annonces, source)
     return nouveaux
 
 
