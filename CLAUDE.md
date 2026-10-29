@@ -34,6 +34,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
+- `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
 ## Serveur (app.py)

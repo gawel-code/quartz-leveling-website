@@ -65,3 +65,18 @@ def test_pages_et_jeton(client):
     assert client.get("/contribuer").status_code == 200
     assert client.get("/export.json").status_code == 403
     assert client.get("/recap?token=tok").json["ok"]
+
+
+def test_generer_cles(tmp_path):
+    spec = importlib.util.spec_from_file_location(
+        "generer_cles", APP.parent.parent.parent / "tools" / "generer_cles.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    f = tmp_path / "cles.txt"
+    n1 = gen.generer(f, ["Gael", "Zuljin", "gael"])
+    assert set(n1) == {"Gael", "Zuljin"}
+    assert gen.generer(f, ["Gael", "Mok"]).keys() == {"Mok"}  # pseudo existant ignoré
+    n3 = gen.generer(f, ["Zuljin"], renouveler=True)
+    assert n3["Zuljin"] != n1["Zuljin"]
+    lignes = [l for l in f.read_text(encoding="utf-8").splitlines() if not l.startswith("#")]
+    assert lignes == [f"Gael:{n1['Gael']}", f"Zuljin:{n3['Zuljin']}", f"Mok:{lignes[2].split(':')[1]}"]
