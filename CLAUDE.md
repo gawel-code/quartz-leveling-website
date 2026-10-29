@@ -78,10 +78,12 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 ## État au 29 octobre 2026
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
+- ✅ `cles.txt` créé (30 membres, pseudos sans espaces ni `|` : `Metam-Zap`, `Tryal-Inelah`…)
+- ✅ Design « cristal » (v1.1.0) déployé via `deployer-quartz.sh` ; jeton `quartz_github_token` dans `secrets.yaml`
 - ⬜ Voir la to-do ci-dessous
 
 ## To-do
-1. Créer `cles.txt` avec les clés des membres.
+1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
 2. Ajouter les `rest_command` (ha/configuration.yaml) + secrets, redémarrer HA,
    créer les automatisations : collecte horaire, récap Discord 9 h et 21 h.
 3. Créer le webhook Discord du salon de progression et le mettre dans les options
