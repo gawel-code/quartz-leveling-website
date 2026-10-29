@@ -25,6 +25,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 ```
 
 ## Arborescence
+- `README.md` : présentation du projet, routes, déploiement, historique des versions
+  (à compléter à chaque bump de `version`).
 - `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
   Dockerfile, run.sh, app.py, logo.png = cristal détouré 256 px,
   banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
