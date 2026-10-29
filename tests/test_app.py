@@ -134,7 +134,7 @@ def test_annonces_paliers_et_niveaux(client, monkeypatch):
     messages.clear()
     # 24 → 25 : annonce sans classement
     envoyer(client, lua(("A", 25)))
-    assert messages == ["⬆️ **A** (Guerrier) passe **niveau 25** !"]
+    assert len(messages) == 1 and messages[0].startswith("⬆️ **A** (Guerrier) passe **niveau 25** (le ")
     messages.clear()
     # 25 → 27 : rien
     envoyer(client, lua(("A", 27)))
@@ -145,7 +145,7 @@ def test_annonces_paliers_et_niveaux(client, monkeypatch):
     messages.clear()
     # 53 → 54 puis 59 → 60
     envoyer(client, lua(("A", 54)))
-    assert messages == ["⬆️ **A** (Guerrier) passe **niveau 54** !"]
+    assert len(messages) == 1 and "passe **niveau 54**" in messages[0]
     messages.clear()
     envoyer(client, lua(("A", 59)))
     envoyer(client, lua(("A", 60)))
@@ -153,3 +153,53 @@ def test_annonces_paliers_et_niveaux(client, monkeypatch):
     # le tableau d'honneur n'affiche que le top 3 du palier 10
     page = client.get("/").text
     assert 'class="m m3"' in page and 'class="m m4"' not in page
+
+
+def lua_dates(persos, niveaux):
+    """Fichier tel que l'écrit l'addon, avec la table GuildExportNiveaux (niveau@horodatage)."""
+    db = "".join(f'["{n}"] = "{n};Orc;Guerrier;{l}",\n' for n, l in persos)
+    nv = "".join(f'["{n}"] = "{v}",\n' for n, v in niveaux.items())
+    return f"GuildExportDB = {{\n{db}}}\nGuildExportNiveaux = {{\n{nv}}}\n"
+
+
+def test_dates_de_l_addon(client, monkeypatch):
+    import datetime
+    messages = []
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "discord", messages.append)
+    base = datetime.datetime.now().replace(minute=0, second=0, microsecond=0) - datetime.timedelta(days=3)
+    ts = lambda h: int((base + datetime.timedelta(hours=h)).timestamp())
+    iso = lambda h: (base + datetime.timedelta(hours=h)).isoformat(timespec="seconds")
+
+    # B envoie en premier, sans dates : il prend la date de réception (aujourd'hui) → 1ᵉʳ annoncé
+    envoyer(client, lua_dates([("B", 10)], {}))
+    assert "1ᵉʳ" in messages[-1]
+    # A envoie ensuite, mais a atteint 10 avant (date de l'addon) : annoncé 1ᵉʳ, B recule au 2ᵉ rang
+    envoyer(client, lua_dates([("A", 12)], {"A": f"10@{ts(8)},12@{ts(9)}"}))
+    assert "1ᵉʳ" in messages[-1] and (base + datetime.timedelta(hours=8)).strftime("le %d/%m à %H h %M") in messages[-1]
+    d = client.get("/export.json?token=tok").json
+    rangs = {e["nom"]: e["rang"] for e in d["exploits"] if e["palier"] == 10}
+    assert rangs == {"A": 1, "B": 2}
+    hist = {(h["nom"], h["niveau"]): h["date"] for h in d["historique"]}
+    assert hist[("A", 10)] == iso(8) and hist[("A", 12)] == iso(9)
+
+    # Un autre membre envoie une date plus ancienne pour B : la plus ancienne gagne, B repasse 1ᵉʳ
+    n = len(messages)
+    envoyer(client, lua_dates([("B", 10)], {"B": f"10@{ts(7)}"}))
+    assert len(messages) == n  # pas de nouvelle annonce
+    d = client.get("/export.json?token=tok").json
+    assert {e["nom"]: e["rang"] for e in d["exploits"] if e["palier"] == 10} == {"B": 1, "A": 2}
+
+    # Une date future est ramenée à maintenant ; un niveau inférieur ne peut pas être plus récent
+    envoyer(client, lua_dates([("C", 11)], {"C": f"10@{ts(24 * 365)},11@{ts(6)}"}))
+    d = client.get("/export.json?token=tok").json
+    hist = {(h["nom"], h["niveau"]): h["date"] for h in d["historique"]}
+    assert hist[("C", 10)] <= hist[("C", 11)] == iso(6)
+
+
+def test_dates_ignorees_par_analyser_export(client):
+    """La table GuildExportNiveaux ne doit pas être prise pour des personnages."""
+    texte = lua_dates([("A", 12)], {"A": "10@1793500000"})
+    g = client.application.view_functions["index"].__globals__
+    assert g["analyser_export"](texte) == [("A", "Orc", "Guerrier", 12)]
+    assert list(g["analyser_dates"](texte)) == ["A"]
