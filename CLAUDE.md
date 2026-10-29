@@ -64,8 +64,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   intégré, triées par date (v1.3.1, corrige deux « 1ᵉʳ » dans un même envoi) ; entre deux
   envois, le rang annoncé est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
   ancienne arrive ensuite (`corriger_exploits()`, sans nouvelle annonce).
-- Annonces Discord (`verifier_exploits`, avec la date réelle et « — via Pseudo » = membre
-  dont l'envoi a déclenché l'annonce, pseudo de `cles.txt` ; rien pour la collecte serveur) : chaque palier de 10 pour **tout le monde**,
+- Annonces Discord (`verifier_exploits` prépare, `annoncer()` envoie **un message par envoi**,
+  une ligne par annonce avec la date réelle, puis « _— via Pseudo_ » une fois à la fin (pseudo
+  de `cles.txt` ; rien pour la collecte serveur) ; découpé par lignes au-delà de ~1900 caractères) : chaque palier de 10 pour **tout le monde**,
   avec le rang (médaille pour le top 3, sinon ⭐ / 🏆 au 60) ; sans classement, tous
   les 5 niveaux dès 20 (25, 35, 45) et chaque niveau dès 50. Un envoi qui saute
   plusieurs niveaux n'annonce que les paliers de 10 franchis + le plus haut niveau

@@ -109,25 +109,38 @@ def verifier_exploits(con, nom, classe, ancien, nouveau, annonces):
 
 
 def annoncer(con, annonces, source="serveur"):
-    """Envoie les annonces d'un envoi, dans l'ordre chronologique, une fois tout le fichier
-    intégré : les rangs annoncés tiennent compte de tous les personnages du même envoi.
-    (Entre deux envois, un rang déjà annoncé peut encore être corrigé sur le tableau d'honneur.)
-    Chaque message cite le membre dont l'envoi l'a déclenché (sauf collecte serveur)."""
-    via = "" if source == "serveur" else " _— via " + re.sub(r"([\\*_~`|>])", r"\\\1", source) + "_"
+    """Annonces d'un envoi, en un seul message Discord (une ligne par annonce, dans l'ordre
+    chronologique), une fois tout le fichier intégré : les rangs tiennent compte de tous les
+    personnages du même envoi. (Entre deux envois, un rang déjà annoncé peut encore être
+    corrigé sur le tableau d'honneur.) Le membre qui a envoyé les données est cité une fois
+    à la fin (sauf collecte serveur)."""
+    lignes = []
     for a in sorted(annonces, key=lambda a: a["date"]):  # tri stable : ordre du fichier à date égale
         nom, classe, quand = a["nom"], a["classe"], date_lisible(a["date"])
         if "niveau" in a:
-            discord(f"⬆️ **{nom}** ({classe}) passe **niveau {a['niveau']}** ({quand}) !{via}")
+            lignes.append(f"⬆️ **{nom}** ({classe}) passe **niveau {a['niveau']}** ({quand}) !")
             continue
         palier = a["palier"]
         rang = con.execute("SELECT rang FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone()[0]
         medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
         if palier == 60:
-            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {quand} ! "
-                    f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !{via}")
+            lignes.append(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {quand} ! "
+                          f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
         else:
-            discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
-                    f"à atteindre le **niveau {palier}** ({quand}) !{via}")
+            lignes.append(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
+                          f"à atteindre le **niveau {palier}** ({quand}) !")
+    if not lignes:
+        return
+    if source != "serveur":
+        lignes.append("_— via " + re.sub(r"([\\*_~`|>])", r"\\\1", source) + "_")
+    # Discord limite un message à 2000 caractères : découpe par lignes si besoin.
+    bloc = ""
+    for ligne in lignes:
+        if bloc and len(bloc) + 1 + len(ligne) > 1900:
+            discord(bloc)
+            bloc = ""
+        bloc = f"{bloc}\n{ligne}" if bloc else ligne
+    discord(bloc)
 
 
 def corriger_exploits(con, nom):

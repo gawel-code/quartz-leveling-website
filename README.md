@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.3.2
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.3.3
 
 ## Fonctionnement
 
@@ -43,8 +43,9 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
 | 51 à 59 | chaque niveau, sans classement |
 | récap | 9 h et 21 h : classement, gains sur 12 h, plus grosse progression |
 
-Chaque annonce indique la date réelle du passage de niveau et le membre dont l'envoi
-l'a déclenchée (« — via Pseudo », pseudo de `cles.txt`). Un envoi qui saute plusieurs
+Les annonces d'un même envoi partent en **un seul message** (une ligne par annonce, découpé
+au-delà de 2000 caractères), chacune avec la date réelle du passage de niveau, et se
+terminent une fois par le membre qui a envoyé les données (« — via Pseudo », pseudo de `cles.txt`). Un envoi qui saute plusieurs
 niveaux annonce les paliers de 10 franchis et seulement le plus haut des autres niveaux.
 Une annonce de palier ne part qu'une fois. Le rang annoncé tient compte de tous les personnages du même envoi ;
 le tableau d'honneur du site peut ensuite le corriger.
@@ -126,6 +127,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.3.3 | un seul message Discord par envoi (une ligne par annonce), « — via Pseudo » une fois à la fin |
 | 1.3.2 | chaque annonce cite le membre dont l'envoi l'a déclenchée (« — via Pseudo ») |
 | 1.3.1 | annonces d'un même envoi faites après intégration de tout le fichier, dans l'ordre chronologique : plus de double « 1ᵉʳ » |
 | 1.3.0 | dates réelles de montée de niveau fournies par l'addon, classement des paliers par date |
