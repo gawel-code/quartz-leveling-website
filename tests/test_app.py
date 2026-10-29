@@ -112,3 +112,41 @@ def test_reinitialiser(client):
     assert r.status_code == 200 and r.json["supprimes"]["personnages"] == 3
     d = client.get("/export.json?token=tok").json
     assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == []
+
+
+def test_annonces_paliers_et_niveaux(client, monkeypatch):
+    messages = []
+    monkeypatch.setitem(client.application.view_functions["index"].__globals__, "discord", messages.append)
+
+    def lua(*persos):
+        return "GuildExportDB = {\n" + "".join(f'["{n}"] = "{n};Orc;Guerrier;{l}",\n' for n, l in persos) + "}"
+
+    # 4 joueurs au palier 10 : tous annoncés, le 4ᵉ sans médaille
+    envoyer(client, lua(("A", 10), ("B", 10), ("C", 10), ("D", 10)))
+    assert len(messages) == 4 and "4ᵉ" in messages[3] and "⭐" in messages[3]
+    messages.clear()
+    # 10 → 24 : palier 20 seulement (21-24 ne s'annoncent pas)
+    envoyer(client, lua(("A", 24)))
+    assert len(messages) == 1 and "niveau 20" in messages[0]
+    messages.clear()
+    # 24 → 25 : annonce sans classement
+    envoyer(client, lua(("A", 25)))
+    assert messages == ["⬆️ **A** (Guerrier) passe **niveau 25** !"]
+    messages.clear()
+    # 25 → 27 : rien
+    envoyer(client, lua(("A", 27)))
+    assert messages == []
+    # 27 → 53 : paliers 30, 40, 50 + niveau 53 (pas de rafale 35, 45, 51, 52)
+    envoyer(client, lua(("A", 53)))
+    assert len(messages) == 4 and "niveau 53" in messages[-1]
+    messages.clear()
+    # 53 → 54 puis 59 → 60
+    envoyer(client, lua(("A", 54)))
+    assert messages == ["⬆️ **A** (Guerrier) passe **niveau 54** !"]
+    messages.clear()
+    envoyer(client, lua(("A", 59)))
+    envoyer(client, lua(("A", 60)))
+    assert "niveau 59" in messages[0] and "niveau 60" in messages[1] and len(messages) == 2
+    # le tableau d'honneur n'affiche que le top 3 du palier 10
+    page = client.get("/").text
+    assert 'class="m m3"' in page and 'class="m m4"' not in page

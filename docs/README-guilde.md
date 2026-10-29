@@ -70,7 +70,10 @@ nouvelle.
 
 ## Les récompenses 🏆
 - 🥇🥈🥉 Les **trois premiers** à atteindre les niveaux 10, 20, 30, 40 et 50
-  reçoivent une médaille et une annonce sur Discord.
+  reçoivent une médaille au tableau d'honneur.
+- 📣 **Chaque joueur** est annoncé sur Discord à chaque dizaine (10, 20… 60),
+  avec son rang d'arrivée ; puis tous les 5 niveaux à partir de 20 (25, 35, 45)
+  et à **chaque niveau** à partir de 50.
 - 🎉 **Chaque joueur** qui atteint le **niveau 60** est félicité sur Discord.
 - 📜 Un récapitulatif est publié **à 9 h et à 21 h**.
 
