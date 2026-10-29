@@ -30,7 +30,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
-  `["Nom"] = "Nom;Race;Classe;Niveau"`.
+  `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
+  `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`).
 - `client/` : script PowerShell d'envoi automatique + lanceur .bat pour les membres.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
@@ -45,7 +46,14 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`.
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
-- Annonces Discord (`verifier_exploits`) : chaque palier de 10 pour **tout le monde**,
+- Dates (v1.3.0) : une montée de niveau est datée par l'addon quand il l'a vue
+  (`GuildExportNiveaux`), sinon par la date de réception. `dater()` garde la date la plus
+  ancienne connue, la plafonne à maintenant et rend l'historique monotone (un niveau ne
+  peut pas être plus récent qu'un niveau supérieur). Dates ISO à la seconde.
+- Classement des paliers **par date réelle** (`reclasser()`) : le rang annoncé sur Discord
+  est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
+  ancienne arrive ensuite (`corriger_exploits()`, sans nouvelle annonce).
+- Annonces Discord (`verifier_exploits`, avec la date réelle dans le message) : chaque palier de 10 pour **tout le monde**,
   avec le rang (médaille pour le top 3, sinon ⭐ / 🏆 au 60) ; sans classement, tous
   les 5 niveaux dès 20 (25, 35, 45) et chaque niveau dès 50. Un envoi qui saute
   plusieurs niveaux n'annonce que les paliers de 10 franchis + le plus haut niveau
@@ -85,7 +93,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 29 octobre 2026 (v1.2.1 déployée)
+## État au 29 octobre 2026 (v1.2.1 déployée, v1.3.0 en cours)
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

@@ -68,6 +68,13 @@ l'addon. Ça se complète tout seul.
 **Ma clé est perdue ou quelqu'un l'a vue.** Préviens Gaël, il t'en donnera une
 nouvelle.
 
+## Et si j'envoie mon fichier en retard ?
+Pas de souci : l'addon **note l'heure de chaque montée de niveau** (la tienne à la
+seconde près, celles des autres quand il les voit passer dans la liste de guilde).
+C'est cette heure-là qui compte pour le tableau d'honneur, pas l'heure de l'envoi.
+Le message Discord part à l'envoi, mais le tableau d'honneur se remet dans l'ordre
+si quelqu'un d'autre était en fait arrivé avant.
+
 ## Les récompenses 🏆
 - 🥇🥈🥉 Les **trois premiers** à atteindre les niveaux 10, 20, 30, 40 et 50
   reçoivent une médaille au tableau d'honneur.

@@ -22,7 +22,15 @@ COULEURS = {
 
 
 def maintenant():
-    return datetime.datetime.now().isoformat(timespec="minutes")
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def depuis_epoch(ts):
+    return datetime.datetime.fromtimestamp(ts).isoformat(timespec="seconds")
+
+
+def date_lisible(iso):
+    return datetime.datetime.fromisoformat(iso).strftime("le %d/%m à %H h %M")
 
 
 def db():
@@ -66,8 +74,21 @@ def niveau_annonce(niveau):
     return niveau >= 50 or (niveau >= 20 and niveau % 5 == 0)
 
 
+def date_atteinte(con, nom, niveau):
+    """Date à laquelle un personnage a atteint un niveau : la plus ancienne connue à ce niveau ou au-delà."""
+    return con.execute("SELECT MIN(date) FROM historique WHERE nom=? AND niveau>=?", (nom, niveau)).fetchone()[0]
+
+
+def reclasser(con, palier):
+    """Rangs d'un palier selon la date réelle d'atteinte (et non l'ordre de réception)."""
+    rows = con.execute("SELECT rowid FROM exploits WHERE palier=? ORDER BY date, nom", (palier,)).fetchall()
+    for rang, r in enumerate(rows, 1):
+        con.execute("UPDATE exploits SET rang=? WHERE rowid=?", (rang, r[0]))
+
+
 def verifier_exploits(con, nom, classe, ancien, nouveau):
     # Paliers de 10 : annoncés pour tout le monde, avec le rang (médaille pour le top 3).
+    # Le rang annoncé est celui connu à la réception ; le tableau d'honneur se corrige ensuite.
     dernier = None
     for palier in PALIERS:
         if not (ancien < palier <= nouveau):
@@ -75,20 +96,32 @@ def verifier_exploits(con, nom, classe, ancien, nouveau):
         dernier = palier
         if con.execute("SELECT 1 FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone():
             continue
-        rang = con.execute("SELECT COUNT(*) FROM exploits WHERE palier=?", (palier,)).fetchone()[0] + 1
-        con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, rang, maintenant()))
+        date = date_atteinte(con, nom, palier)
+        con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, 0, date))
+        reclasser(con, palier)
+        rang = con.execute("SELECT rang FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone()[0]
         medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
         if palier == 60:
-            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** ! "
+            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {date_lisible(date)} ! "
                     f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
         else:
             discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
-                    f"à atteindre le **niveau {palier}** !")
+                    f"à atteindre le **niveau {palier}** ({date_lisible(date)}) !")
     # Autres niveaux, sans classement : seulement le plus haut franchi, s'il dépasse le palier annoncé
     # (un envoi qui saute plusieurs niveaux ne produit pas une rafale de messages).
     autres = [n for n in range(ancien + 1, nouveau + 1) if n not in PALIERS and niveau_annonce(n)]
     if autres and (dernier is None or autres[-1] > dernier):
-        discord(f"⬆️ **{nom}** ({classe}) passe **niveau {autres[-1]}** !")
+        n = autres[-1]
+        discord(f"⬆️ **{nom}** ({classe}) passe **niveau {n}** ({date_lisible(date_atteinte(con, nom, n))}) !")
+
+
+def corriger_exploits(con, nom):
+    """Avance la date d'un palier déjà enregistré si une date plus ancienne est connue, puis reclasse."""
+    for e in con.execute("SELECT palier, date FROM exploits WHERE nom=?", (nom,)).fetchall():
+        date = date_atteinte(con, nom, e["palier"])
+        if date and date < e["date"]:
+            con.execute("UPDATE exploits SET date=? WHERE palier=? AND nom=?", (date, e["palier"], nom))
+            reclasser(con, e["palier"])
 
 
 # ---------- Contributeurs ----------
@@ -117,8 +150,48 @@ def analyser_export(texte):
     return persos
 
 
-def integrer(persos, source="serveur"):
-    """Fusionne des données : garde toujours le niveau le plus haut et complète les races."""
+def analyser_dates(texte):
+    """Extrait {nom: {niveau: date ISO}} de la table GuildExportNiveaux ("10@horodatage,11@…",
+    horodatages en secondes de l'horloge du serveur WoW)."""
+    dates = {}
+    for nom, valeur in re.findall(r'\["([^"]+)"\]\s*=\s*"(\d+@\d+(?:,\d+@\d+)*)"', texte):
+        for paire in valeur.split(","):
+            niveau, ts = map(int, paire.split("@"))
+            if 1 <= niveau <= 60 and 0 < ts < 4102444800:  # avant 2100
+                dates.setdefault(nom, {})[niveau] = depuis_epoch(ts)
+    return dates
+
+
+def dater(con, nom, connues, plafond, nouveau=None):
+    """Enregistre les dates de passage de niveau dans l'historique : la plus ancienne connue gagne,
+    jamais dans le futur ; sans date fournie, le nouveau niveau prend la date de réception."""
+    limite = maintenant()
+    for niveau, date in connues.items():
+        if niveau > plafond:
+            continue
+        date = min(date, limite)
+        row = con.execute("SELECT date FROM historique WHERE nom=? AND niveau=?", (nom, niveau)).fetchone()
+        if row is None:
+            con.execute("INSERT INTO historique VALUES(?,?,?)", (nom, niveau, date))
+        elif date < row["date"]:
+            con.execute("UPDATE historique SET date=? WHERE nom=? AND niveau=?", (date, nom, niveau))
+    if nouveau is not None and not con.execute(
+            "SELECT 1 FROM historique WHERE nom=? AND niveau=?", (nom, nouveau)).fetchone():
+        con.execute("INSERT INTO historique VALUES(?,?,?)", (nom, nouveau, limite))
+    # Un niveau ne peut pas avoir été atteint après un niveau supérieur.
+    plus_tot = None
+    for r in con.execute("SELECT rowid, date FROM historique WHERE nom=? ORDER BY niveau DESC",
+                         (nom,)).fetchall():
+        if plus_tot is not None and r["date"] > plus_tot:
+            con.execute("UPDATE historique SET date=? WHERE rowid=?", (plus_tot, r["rowid"]))
+        else:
+            plus_tot = r["date"]
+
+
+def integrer(persos, source="serveur", dates=None):
+    """Fusionne des données : garde toujours le niveau le plus haut, complète les races
+    et date les montées de niveau (dates de l'addon si fournies, sinon date de réception)."""
+    dates = dates or {}
     nouveaux = 0
     with db() as con:
         for nom, race, classe, niveau in persos:
@@ -127,12 +200,16 @@ def integrer(persos, source="serveur"):
             if row and niveau < row["niveau"]:
                 if race_connue and row["race"] in (None, "?"):
                     con.execute("UPDATE personnages SET race=? WHERE nom=?", (race, nom))
+                dater(con, nom, dates.get(nom, {}), row["niveau"])
+                corriger_exploits(con, nom)
                 continue
             if row and not race_connue:
                 race = row["race"]
             ancien = row["niveau"] if row else 1
-            if row is None or niveau > row["niveau"]:
-                con.execute("INSERT INTO historique VALUES(?,?,?)", (nom, niveau, maintenant()))
+            monte = row is None or niveau > row["niveau"]
+            dater(con, nom, dates.get(nom, {}), niveau, niveau if monte else None)
+            corriger_exploits(con, nom)
+            if monte:
                 verifier_exploits(con, nom, classe, ancien, niveau)
                 nouveaux += 1
             con.execute("""INSERT INTO personnages VALUES(?,?,?,?,?)
@@ -150,14 +227,16 @@ def lire_api_blizzard():
 
 def collecter():
     persos = lire_api_blizzard()
+    dates = {}
     if not persos and EXPORT.exists():
-        persos = analyser_export(EXPORT.read_text(encoding="utf-8"))
-    return integrer(persos, "serveur") if persos else 0
+        texte = EXPORT.read_text(encoding="utf-8")
+        persos, dates = analyser_export(texte), analyser_dates(texte)
+    return integrer(persos, "serveur", dates) if persos else 0
 
 
 # ---------- Récapitulatif ----------
 def gains(con, heures):
-    limite = (datetime.datetime.now() - datetime.timedelta(hours=heures)).isoformat(timespec="minutes")
+    limite = (datetime.datetime.now() - datetime.timedelta(hours=heures)).isoformat(timespec="seconds")
     res = {}
     for p in con.execute("SELECT nom, niveau FROM personnages").fetchall():
         avant = con.execute("""SELECT niveau FROM historique WHERE nom=? AND date<=?
@@ -359,7 +438,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 {% for r in recents %}<li><span class="nv num{{ ' max' if r.niveau == 60 else '' }}">{{ r.niveau }}</span>
 <span><b style="color:{{ couleur(classes.get(r.nom, '')) }}">{{ r.nom }}</b>
 {{ "atteint le niveau max" if r.niveau == 60 else "passe niveau " ~ r.niveau }}</span>
-<small>{{ r.date.replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
+<small>{{ r.date[:16].replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
 </ul>
 </section>
 
@@ -407,7 +486,7 @@ def index():
         actifs=sum(1 for v in g24.values() if v > 0),
         nb60=sum(1 for p in persos if p["niveau"] == 60),
         moyenne=f"{sum(p['niveau'] for p in persos) / len(persos):.1f}" if persos else "—",
-        maj=max((p["maj"] for p in persos), default="").replace("T", " "),
+        maj=max((p["maj"] for p in persos), default="")[:16].replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
         liste_classes=sorted({p["classe"] for p in persos}),
         couleur=lambda c: COULEURS.get(c, "#e6eefb"))
@@ -451,10 +530,12 @@ def route_envoyer():
     pseudo = contributeur(request.headers.get("X-Cle"))
     if not pseudo:
         abort(403)
-    persos = analyser_export(request.get_data(as_text=True))
+    texte = request.get_data(as_text=True)
+    persos = analyser_export(texte)
     if not persos:
         return jsonify(ok=False, erreur="Fichier vide ou invalide"), 400
-    return jsonify(ok=True, personnages=len(persos), nouveautes=integrer(persos, pseudo))
+    return jsonify(ok=True, personnages=len(persos),
+                   nouveautes=integrer(persos, pseudo, analyser_dates(texte)))
 
 
 @app.route("/contribuer", methods=["GET", "POST"])
@@ -465,10 +546,11 @@ def route_contribuer():
     if not pseudo:
         return formulaire(message="Clé inconnue.", classe="err"), 403
     f = request.files.get("fichier")
-    persos = analyser_export(f.read().decode("utf-8", errors="ignore")) if f else []
+    texte = f.read().decode("utf-8", errors="ignore") if f else ""
+    persos = analyser_export(texte)
     if not persos:
         return formulaire(message="Fichier vide ou invalide.", classe="err"), 400
-    n = integrer(persos, pseudo)
+    n = integrer(persos, pseudo, analyser_dates(texte))
     return formulaire(classe="ok",
                       message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
 
