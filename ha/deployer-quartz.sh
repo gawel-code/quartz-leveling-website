@@ -3,24 +3,34 @@
 # puis met à jour (ou reconstruit) l'app locale. À lancer dans Terminal & SSH.
 #
 # Installation (une fois) :
-#   printf '%s' 'github_pat_XXXX' > /homeassistant/.quartz_token && chmod 600 /homeassistant/.quartz_token
+#   ajouter dans /homeassistant/secrets.yaml :  quartz_github_token: github_pat_XXXX
+#   (à défaut, le jeton brut seul dans /homeassistant/.quartz_token)
 #   (jeton « fine-grained », dépôt quartz-leveling-website seul, Contents : Read-only)
 #   copier ce script dans /homeassistant/, puis : sed -i 's/\r$//' deployer-quartz.sh && chmod +x deployer-quartz.sh
 #
 # Usage : /homeassistant/deployer-quartz.sh [branche|tag|commit]   (défaut : main)
 set -e
 REF="${1:-main}"
-JETON=/homeassistant/.quartz_token
+SECRETS=/homeassistant/secrets.yaml
+CLE_SECRET=quartz_github_token
+FICHIER_JETON=/homeassistant/.quartz_token
 CIBLE=/local_apps/quartz_forever
 SLUG=local_quartz_forever
 
-[ -s "$JETON" ] || { echo "Jeton GitHub absent : $JETON"; exit 1; }
+JETON=""
+if [ -f "$SECRETS" ]; then
+  JETON=$(sed -n "s/^$CLE_SECRET:[[:space:]]*//p" "$SECRETS" | head -n 1 | tr -d "\r\"' ")
+fi
+if [ -z "$JETON" ] && [ -s "$FICHIER_JETON" ]; then
+  JETON=$(tr -d '\r\n ' < "$FICHIER_JETON")
+fi
+[ -n "$JETON" ] || { echo "Jeton GitHub absent : clé $CLE_SECRET dans $SECRETS (ou $FICHIER_JETON)"; exit 1; }
 [ -d "$CIBLE" ] || { echo "Dossier de l'app absent : $CIBLE"; exit 1; }
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 echo "Téléchargement de $REF…"
-curl -fsSL -H "Authorization: Bearer $(cat "$JETON")" \
+curl -fsSL -H "Authorization: Bearer $JETON" \
   "https://api.github.com/repos/gawel-code/quartz-leveling-website/tarball/$REF" -o "$TMP/src.tgz"
 tar -xzf "$TMP/src.tgz" -C "$TMP"
 SRC=$(echo "$TMP"/gawel-code-quartz-leveling-website-*/ha-app/quartz_forever)
