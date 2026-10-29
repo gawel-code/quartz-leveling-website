@@ -40,4 +40,6 @@ cp -r "$SRC"/. "$CIBLE"/
 echo "Code copié ($(grep '^version' "$CIBLE/config.yaml"))."
 ha store reload
 ha apps update "$SLUG" || ha apps rebuild "$SLUG"
+echo "Démarrage de l'app…"
+sleep 10
 ha apps logs "$SLUG" | tail -5
