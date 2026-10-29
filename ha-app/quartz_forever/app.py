@@ -418,6 +418,17 @@ def route_recap():
     return jsonify(ok=True)
 
 
+@app.route("/reinitialiser", methods=["POST"])
+def route_reinitialiser():
+    """Vide toutes les tables (tests). Copie de sauvegarde dans <DB>.avant-reset."""
+    verifier_token()
+    with db() as con, sqlite3.connect(DB + ".avant-reset") as copie:
+        con.backup(copie)
+        vides = {t: con.execute(f"DELETE FROM {t}").rowcount
+                 for t in ("personnages", "historique", "exploits", "envois")}
+    return jsonify(ok=True, supprimes=vides)
+
+
 @app.route("/envoyer", methods=["POST"])
 def route_envoyer():
     pseudo = contributeur(request.headers.get("X-Cle"))

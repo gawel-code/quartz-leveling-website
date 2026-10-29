@@ -48,7 +48,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   et **chaque** joueur qui passe 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
-  `/export.json` (ces trois protégées par `?token=`).
+  `/export.json`, `POST /reinitialiser` (vide toute la base, copie dans
+  `<DB>.avant-reset`) — ces quatre protégées par `?token=`.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`. Webhook vide = messages

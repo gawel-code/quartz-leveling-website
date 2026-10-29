@@ -102,3 +102,13 @@ def test_token_vide_ferme_les_routes_protegees(tmp_path, monkeypatch):
     for route in ("/export.json", "/collecter", "/recap"):
         assert c.get(route + "?token=").status_code == 403
         assert c.get(route).status_code == 403
+
+
+def test_reinitialiser(client):
+    envoyer(client, LUA2)
+    assert client.get("/reinitialiser?token=tok").status_code == 405
+    assert client.post("/reinitialiser?token=faux").status_code == 403
+    r = client.post("/reinitialiser?token=tok")
+    assert r.status_code == 200 and r.json["supprimes"]["personnages"] == 3
+    d = client.get("/export.json?token=tok").json
+    assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == []
