@@ -93,3 +93,18 @@ def test_token_vide_ferme_les_routes_protegees(tmp_path, monkeypatch):
     for route in ("/export.json", "/collecter", "/recap"):
         assert c.get(route + "?token=").status_code == 403
         assert c.get(route).status_code == 403
+
+
+def test_jeux_de_test_puis_reinitialiser(client):
+    d = APP.parent.parent.parent / "tools" / "jeux_de_test"
+    for j in (1, 2, 3, 1):  # le jour 1 renvoyé à la fin ne doit rien faire baisser
+        assert envoyer(client, (d / f"GuildExport-jour{j}.lua").read_text(encoding="utf-8")).status_code == 200
+    data = client.get("/export.json?token=tok").json
+    assert len(data["personnages"]) == 8 and data["personnages"][0]["niveau"] == 60
+    assert all(p["race"] != "?" for p in data["personnages"])
+    assert client.post("/reinitialiser?token=tok").status_code == 400  # confirmation exigée
+    assert client.post("/reinitialiser?token=mauvais&confirmer=oui").status_code == 403
+    r = client.post("/reinitialiser?token=tok&confirmer=oui")
+    assert r.status_code == 200 and Path(r.json["sauvegarde"]).exists()
+    vide = client.get("/export.json?token=tok").json
+    assert not any(vide[t] for t in ("personnages", "historique", "exploits", "envois"))

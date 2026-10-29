@@ -353,6 +353,20 @@ def route_contribuer():
                                   message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
 
 
+@app.route("/reinitialiser", methods=["POST"])
+def route_reinitialiser():
+    """Vide la base (après des tests). Copie de sauvegarde guilde.db.<date>.bak avant."""
+    verifier_token()
+    if request.args.get("confirmer") != "oui":
+        return jsonify(ok=False, erreur="Ajouter &confirmer=oui"), 400
+    sauvegarde = f"{DB}.{datetime.datetime.now():%Y%m%d-%H%M%S}.bak"
+    with db() as con, sqlite3.connect(sauvegarde) as dest:
+        con.backup(dest)
+        con.executescript("DELETE FROM personnages; DELETE FROM historique;"
+                          "DELETE FROM exploits; DELETE FROM envois;")
+    return jsonify(ok=True, sauvegarde=sauvegarde)
+
+
 @app.route("/export.json")
 def route_export():
     verifier_token()

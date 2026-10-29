@@ -35,6 +35,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
 - `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
+- `tools/jeux_de_test/` : 3 exports GuildExport.lua fictifs (persos `Test…`, 3 jours de progression).
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
 ## Serveur (app.py)
@@ -47,7 +48,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   et **chaque** joueur qui passe 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
-  `/export.json` (ces trois protégées par `?token=`).
+  `/export.json`, `POST /reinitialiser?confirmer=oui` (protégées par `?token=` ;
+  la remise à zéro garde une copie `guilde.db.<date>.bak` dans `/data`).
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`. Webhook vide = messages
