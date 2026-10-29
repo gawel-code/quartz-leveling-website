@@ -59,8 +59,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (`GuildExportNiveaux`), sinon par la date de réception. `dater()` garde la date la plus
   ancienne connue, la plafonne à maintenant et rend l'historique monotone (un niveau ne
   peut pas être plus récent qu'un niveau supérieur). Dates ISO à la seconde.
-- Classement des paliers **par date réelle** (`reclasser()`) : le rang annoncé sur Discord
-  est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
+- Classement des paliers **par date réelle** (`reclasser()`) : les annonces d'un envoi sont
+  préparées par `verifier_exploits()` puis envoyées par `annoncer()` une fois tout le fichier
+  intégré, triées par date (v1.3.1, corrige deux « 1ᵉʳ » dans un même envoi) ; entre deux
+  envois, le rang annoncé est celui connu à la réception ; le tableau d'honneur se corrige si une date plus
   ancienne arrive ensuite (`corriger_exploits()`, sans nouvelle annonce).
 - Annonces Discord (`verifier_exploits`, avec la date réelle dans le message) : chaque palier de 10 pour **tout le monde**,
   avec le rang (médaille pour le top 3, sinon ⭐ / 🏆 au 60) ; sans classement, tous

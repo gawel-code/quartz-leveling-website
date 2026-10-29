@@ -86,9 +86,9 @@ def reclasser(con, palier):
         con.execute("UPDATE exploits SET rang=? WHERE rowid=?", (rang, r[0]))
 
 
-def verifier_exploits(con, nom, classe, ancien, nouveau):
+def verifier_exploits(con, nom, classe, ancien, nouveau, annonces):
+    """Enregistre les paliers franchis et prépare les annonces (envoyées par annoncer())."""
     # Paliers de 10 : annoncés pour tout le monde, avec le rang (médaille pour le top 3).
-    # Le rang annoncé est celui connu à la réception ; le tableau d'honneur se corrige ensuite.
     dernier = None
     for palier in PALIERS:
         if not (ancien < palier <= nouveau):
@@ -99,20 +99,33 @@ def verifier_exploits(con, nom, classe, ancien, nouveau):
         date = date_atteinte(con, nom, palier)
         con.execute("INSERT INTO exploits VALUES(?,?,?,?)", (palier, nom, 0, date))
         reclasser(con, palier)
-        rang = con.execute("SELECT rang FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone()[0]
-        medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
-        if palier == 60:
-            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {date_lisible(date)} ! "
-                    f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
-        else:
-            discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
-                    f"à atteindre le **niveau {palier}** ({date_lisible(date)}) !")
+        annonces.append({"date": date, "nom": nom, "classe": classe, "palier": palier})
     # Autres niveaux, sans classement : seulement le plus haut franchi, s'il dépasse le palier annoncé
     # (un envoi qui saute plusieurs niveaux ne produit pas une rafale de messages).
     autres = [n for n in range(ancien + 1, nouveau + 1) if n not in PALIERS and niveau_annonce(n)]
     if autres and (dernier is None or autres[-1] > dernier):
         n = autres[-1]
-        discord(f"⬆️ **{nom}** ({classe}) passe **niveau {n}** ({date_lisible(date_atteinte(con, nom, n))}) !")
+        annonces.append({"date": date_atteinte(con, nom, n), "nom": nom, "classe": classe, "niveau": n})
+
+
+def annoncer(con, annonces):
+    """Envoie les annonces d'un envoi, dans l'ordre chronologique, une fois tout le fichier
+    intégré : les rangs annoncés tiennent compte de tous les personnages du même envoi.
+    (Entre deux envois, un rang déjà annoncé peut encore être corrigé sur le tableau d'honneur.)"""
+    for a in sorted(annonces, key=lambda a: a["date"]):  # tri stable : ordre du fichier à date égale
+        nom, classe, quand = a["nom"], a["classe"], date_lisible(a["date"])
+        if "niveau" in a:
+            discord(f"⬆️ **{nom}** ({classe}) passe **niveau {a['niveau']}** ({quand}) !")
+            continue
+        palier = a["palier"]
+        rang = con.execute("SELECT rang FROM exploits WHERE palier=? AND nom=?", (palier, nom)).fetchone()[0]
+        medaille = MEDAILLES.get(rang, "🏆" if palier == 60 else "⭐")
+        if palier == 60:
+            discord(f"{medaille} **{nom}** ({classe}) atteint le **niveau 60** {quand} ! "
+                    f"{ordinal(rang)} de la guilde à toucher le sommet. Félicitations !")
+        else:
+            discord(f"{medaille} **{nom}** ({classe}) est le {ordinal(rang)} de la guilde "
+                    f"à atteindre le **niveau {palier}** ({quand}) !")
 
 
 def corriger_exploits(con, nom):
@@ -192,7 +205,7 @@ def integrer(persos, source="serveur", dates=None):
     """Fusionne des données : garde toujours le niveau le plus haut, complète les races
     et date les montées de niveau (dates de l'addon si fournies, sinon date de réception)."""
     dates = dates or {}
-    nouveaux = 0
+    nouveaux, annonces = 0, []
     with db() as con:
         for nom, race, classe, niveau in persos:
             row = con.execute("SELECT niveau, race FROM personnages WHERE nom=?", (nom,)).fetchone()
@@ -210,13 +223,14 @@ def integrer(persos, source="serveur", dates=None):
             dater(con, nom, dates.get(nom, {}), niveau, niveau if monte else None)
             corriger_exploits(con, nom)
             if monte:
-                verifier_exploits(con, nom, classe, ancien, niveau)
+                verifier_exploits(con, nom, classe, ancien, niveau, annonces)
                 nouveaux += 1
             con.execute("""INSERT INTO personnages VALUES(?,?,?,?,?)
                 ON CONFLICT(nom) DO UPDATE SET race=excluded.race, classe=excluded.classe,
                 niveau=excluded.niveau, maj=excluded.maj""",
                         (nom, race, classe, niveau, maintenant()))
         con.execute("INSERT INTO envois VALUES(?,?,?,?)", (source, maintenant(), len(persos), nouveaux))
+        annoncer(con, annonces)
     return nouveaux
 
 
