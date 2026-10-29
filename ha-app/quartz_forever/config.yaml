@@ -1,5 +1,5 @@
 name: Quartz Forever
-version: "1.3.2"
+version: "1.3.3"
 slug: quartz_forever
 description: Suivi de progression de la guilde Quartz Forever
 arch: [aarch64, amd64]

@@ -25,6 +25,18 @@ def client(tmp_path, monkeypatch):
     return mod.app.test_client()
 
 
+def capturer(monkeypatch, client):
+    """Remplace discord() : renvoie (lignes d'annonce, messages bruts). La ligne « — via » est
+    exclue des lignes."""
+    lignes, bruts = [], []
+
+    def discord(message):
+        bruts.append(message)
+        lignes.extend(l for l in message.split("\n") if not l.startswith("_— via"))
+    monkeypatch.setitem(client.application.view_functions["index"].__globals__, "discord", discord)
+    return lignes, bruts
+
+
 def envoyer(c, lua, cle="abc123"):
     return c.post("/envoyer", data=lua, headers={"X-Cle": cle})
 
@@ -118,8 +130,7 @@ def test_reinitialiser(client):
 
 
 def test_annonces_paliers_et_niveaux(client, monkeypatch):
-    messages = []
-    monkeypatch.setitem(client.application.view_functions["index"].__globals__, "discord", messages.append)
+    messages, _ = capturer(monkeypatch, client)
 
     def lua(*persos):
         return "GuildExportDB = {\n" + "".join(f'["{n}"] = "{n};Orc;Guerrier;{l}",\n' for n, l in persos) + "}"
@@ -164,9 +175,8 @@ def lua_dates(persos, niveaux):
 
 def test_dates_de_l_addon(client, monkeypatch):
     import datetime
-    messages = []
+    messages, _ = capturer(monkeypatch, client)
     g = client.application.view_functions["index"].__globals__
-    monkeypatch.setitem(g, "discord", messages.append)
     base = datetime.datetime.now().replace(minute=0, second=0, microsecond=0) - datetime.timedelta(days=3)
     ts = lambda h: int((base + datetime.timedelta(hours=h)).timestamp())
     iso = lambda h: (base + datetime.timedelta(hours=h)).isoformat(timespec="seconds")
@@ -209,9 +219,8 @@ def test_rangs_annonces_dans_un_meme_envoi(client, monkeypatch):
     """Deux joueurs franchissent le même palier dans un même envoi : le rang annoncé suit la
     date réelle, pas l'ordre du fichier (bug : deux « 1ᵉʳ » au niveau 10)."""
     import datetime
-    messages = []
+    messages, _ = capturer(monkeypatch, client)
     g = client.application.view_functions["index"].__globals__
-    monkeypatch.setitem(g, "discord", messages.append)
     now = datetime.datetime.now().replace(microsecond=0)
     ts = lambda h: int((now - datetime.timedelta(hours=h)).timestamp())
     envoyer(client, lua_dates([("Grommash", 23), ("Zuljin", 12)],
@@ -223,16 +232,28 @@ def test_rangs_annonces_dans_un_meme_envoi(client, monkeypatch):
     assert sum("1ᵉʳ" in m for m in paliers10) == 1
 
 
-def test_annonce_cite_l_auteur_de_l_envoi(client, monkeypatch):
-    messages = []
-    g = client.application.view_functions["index"].__globals__
-    monkeypatch.setitem(g, "discord", messages.append)
-    envoyer(client, LUA1)  # clé de « Gael »
-    assert messages and all(m.endswith(" _— via Gael_") for m in messages)
+def test_un_message_par_envoi_avec_auteur_a_la_fin(client, monkeypatch):
+    lignes, bruts = capturer(monkeypatch, client)
+    envoyer(client, LUA1)  # clé de « Gael » ; Grommash passe le palier 10
+    assert len(bruts) == 1
+    assert bruts[0].endswith("\n_— via Gael_") and bruts[0].count("via") == 1
+    assert len(lignes) == bruts[0].count("\n")
     # Pseudo avec caractères Markdown échappés ; collecte serveur sans mention
-    messages.clear()
+    g = client.application.view_functions["index"].__globals__
     g["integrer"]([("Thrall", "Orc", "Chaman", 10)], "Ma_x*")
-    assert messages[-1].endswith(" _— via Ma\\_x\\*_")
-    messages.clear()
+    assert bruts[-1].endswith("\n_— via Ma\\_x\\*_")
     g["integrer"]([("Rexxar", "Orc", "Chasseur", 10)], "serveur")
-    assert "via" not in messages[-1]
+    assert "via" not in bruts[-1]
+    # Envoi sans annonce : aucun message
+    n = len(bruts)
+    envoyer(client, LUA1)
+    assert len(bruts) == n
+
+
+def test_message_decoupe_au_dela_de_2000_caracteres(client, monkeypatch):
+    lignes, bruts = capturer(monkeypatch, client)
+    persos = "".join(f'["Perso{i:02d}"] = "Perso{i:02d};Orc;Guerrier;10",\n' for i in range(40))
+    envoyer(client, "GuildExportDB = {\n" + persos + "}")
+    assert len(lignes) == 40 and len(bruts) > 1
+    assert all(len(b) <= 2000 for b in bruts)
+    assert bruts[-1].endswith("_— via Gael_") and sum("via" in b for b in bruts) == 1
