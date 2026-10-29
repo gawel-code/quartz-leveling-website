@@ -66,7 +66,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - Déploiement : l'app locale n'est pas liée à GitHub (dépôt privé). Lancer
   `/homeassistant/deployer-quartz.sh [réf]` (copie de `ha/deployer-quartz.sh`) dans
   Terminal & SSH : télécharge `ha-app/quartz_forever` de `main` (ou de la réf donnée)
-  avec le jeton lecture seule `/homeassistant/.quartz_token`, copie dans
+  avec le jeton lecture seule `quartz_github_token` de `/homeassistant/secrets.yaml`
+  (repli : `/homeassistant/.quartz_token`), copie dans
   `/local_apps/quartz_forever/`, puis `ha store reload` + update (ou rebuild).
   Bumper `version` dans `config.yaml` à chaque changement. `/data` et `cles.txt` ne bougent pas.
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
