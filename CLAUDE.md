@@ -71,7 +71,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 - Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
-  (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0).
+  (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0), `inactifs`
+  (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0). `personnages.rang` (n° de rang,
+  v1.10.0) : les `INSERT` dans `personnages` nomment leurs colonnes (ne plus écrire `VALUES(?,?,?,?,?)`).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
 - Dates (v1.3.0) : une montée de niveau est datée par l'addon quand il l'a vue
@@ -93,7 +95,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   dans `exploits` ; le tableau d'honneur affiche le top 3 (10–50) et tous les 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
-  `/export.json`, `POST /reinitialiser` (vide progression, envois, associations et exclusions — pas `comptes` —, copie dans
+  `/export.json`, `POST /reinitialiser` (vide progression, envois, associations et exclusions — pas `comptes` ni `rangs` —, copie dans
   `<DB>.avant-reset`) — ces quatre protégées par `?token=`.
 - Connexion Discord (v1.4.0, OAuth2 code, scopes `identify guilds.members.read connections`) : `/connexion`
   → Discord → `/auth/discord/callback` (vérifie `state`, être sur le serveur `discord_serveur_id`
@@ -168,6 +170,14 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   vue à l'ancien niveau ; sinon heure de connexion d'une session en cours) ; sinon `dater()` prend
   l'heure de collecte. `collecter()` → `(mises_a_jour, source)` (`blizzard` / `fichier` / None),
   source d'envoi `serveur` (pas de « via », hors contributeurs). Erreur réseau → `([], {})` → repli fichier.
+- Rangs (v1.10.0) : `lire_api_blizzard()` → `(persos, dates, rangs)`, `rangs = {nom: rank}` du roster
+  (entier, 0 = maître de guilde) ; `integrer(..., rangs)` met à jour `personnages.rang` (sans
+  `rangs`, ex. envoi d'addon, le rang connu est gardé). Table `rangs(id PK, nom)` = référentiel
+  saisi dans `/admin` (action `rangs` : champs `rang_<id>`, vide = supprimer, + `nouveau_id` /
+  `nouveau_nom`), **non vidée** par `reinitialiser()`, dans `/export.json`. `noms_rangs(con)`.
+  Bloc admin « Rangs de la guilde » : n° connus (`rangs` ∪ `personnages.rang`) + effectifs.
+  Accueil : colonne « Rang » seulement si un perso a un rang (`avec_rangs`), nom ou « Rang N ».
+  L'API ne fournit pas les noms des rangs ni les rôles (tank/soigneur/DPS).
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
@@ -204,7 +214,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.9.0 déployée)
+## État au 30 octobre 2026 (v1.9.0 déployée, v1.10.0 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -228,6 +238,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   le connecteur). Essai réel avec `bnet_royaume = Firemaw`, `bnet_guilde = Progress` :
   `/collecter` → `source: "blizzard"`, 6 persos (race, classe, niveau corrects), Kwindu daté par sa
   dernière connexion (27/10 18:06), annonces parties sur le canal de test.
+- 🔜 v1.10.0 (PR ouverte) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
+  l'accueil). Les rangs n'apparaîtront qu'après une collecte par l'API (pas par l'addon).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
   Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
   redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,
