@@ -219,14 +219,19 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   Terminal & SSH : télécharge `ha-app/quartz_forever` de `main` (ou de la réf donnée)
   avec le jeton lecture seule `quartz_github_token` de `/homeassistant/secrets.yaml`
   (repli : `/homeassistant/.quartz_token`), copie dans
-  `/local_apps/quartz_forever/`, puis `ha store reload` + update (ou rebuild).
+  `/local_apps/quartz_forever/`, puis `ha store reload` et **attend** (6 × 5 s) que `ha apps info`
+  donne `version_latest` = version copiée ; update si la version installée diffère, rebuild sinon ;
+  vérifie ensuite `version` installée et sort en « ÉCHEC » sinon. Avant (30/10, v1.10.1) : `ha apps
+  update` lancé trop tôt échouait, le repli `rebuild` laissait la 1.10.0 installée sans erreur
+  visible ; corrigé par Claude via `ha_manage_app(action="update")`. La copie
+  `/homeassistant/deployer-quartz.sh` est à remplacer à la main après chaque changement du script.
   Bumper `version` dans `config.yaml` à chaque changement. `/data` et `cles.txt` ne bougent pas.
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
   `mcp.gawel.be → http://homeassistant:9583` (connecteur MCP de Claude, **ne pas
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.10.0 déployée, v1.10.1 mergée)
+## État au 30 octobre 2026 (v1.10.1 déployée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -252,10 +257,13 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   dernière connexion (27/10 18:06), annonces parties sur le canal de test.
 - ✅ v1.10.0 (déployée, pied « v1.10.0 » vérifié le 30/10 ; noms de rangs saisis : Grand Chef, Petit Chef, Péon) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
   l'accueil), lus par l'API et par l'addon 1.3.0 (mergé, à tester en jeu).
-- ✅ v1.10.1 (mergée ; déploiement non confirmé) : connexion Discord par lien direct (app mobile) et `state` signé sans
-  cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin. À tester sur téléphone (app installée, iOS et Android).
-- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
-  Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
+- ✅ v1.10.1 (déployée, vérifiée le 30/10 : pied « v1.10.1 », colonne « Progression », liens
+  `discord.com/oauth2/authorize` avec `state` signé, `/connexion` → même URL) : connexion Discord par lien direct (app mobile) et `state` signé sans
+  cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin (non vérifiée :
+  session admin nécessaire). À tester sur téléphone (app installée, iOS et Android).
+- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointaient sur
+  Firemaw / Progress ; probablement vidées depuis (collecte du 30/10 au soir → `source: null`, aucun
+  appel API ; options non relues) — sinon les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
   redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be

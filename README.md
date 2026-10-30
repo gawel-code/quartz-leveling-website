@@ -167,7 +167,11 @@ Cloudflare Tunnel sur `quartz.gawel.be`. Dans Terminal & SSH :
 ```
 
 Le script télécharge `ha-app/quartz_forever` depuis `main` (ou la référence passée en
-argument), le copie dans `/local_apps/quartz_forever/` et met l'app à jour. Il faut
+argument), le copie dans `/local_apps/quartz_forever/` et met l'app à jour : il attend que le
+Supervisor voie la nouvelle version (jusqu'à 30 s), lance la mise à jour (ou une reconstruction
+si la version est déjà installée) et s'arrête sur « ÉCHEC » si la version installée n'est pas
+celle du code copié. Après une mise à jour du script dans le dépôt, recopier
+`ha/deployer-quartz.sh` dans `/homeassistant/` (puis `sed -i 's/\r$//'` et `chmod +x`). Il faut
 augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement : elle
 s'affiche en pied de page et suffixe les URL des images (`logo.png?v=…`), ce qui contourne
 le cache de Cloudflare et des navigateurs.

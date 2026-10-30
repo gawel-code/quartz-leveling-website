@@ -37,9 +37,32 @@ SRC=$(echo "$TMP"/gawel-code-quartz-leveling-website-*/ha-app/quartz_forever)
 [ -f "$SRC/config.yaml" ] || { echo "Archive inattendue : ha-app/quartz_forever introuvable"; exit 1; }
 
 cp -r "$SRC"/. "$CIBLE"/
-echo "Code copié ($(grep '^version' "$CIBLE/config.yaml"))."
+VERSION=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$CIBLE/config.yaml")
+echo "Code copié (version $VERSION)."
+
+# Champ « version » ou « version_latest » de `ha apps info` (sortie YAML, guillemets éventuels).
+info() { ha apps info "$SLUG" | sed -n "s/^$1:[[:space:]]*//p" | tr -d "\"' "; }
+
+# Le Supervisor ne voit pas toujours la nouvelle version juste après `ha store reload` : sans
+# attente, `ha apps update` ne trouve rien et un rebuild laisse l'ancienne version installée.
 ha store reload
-ha apps update "$SLUG" || ha apps rebuild "$SLUG"
-echo "Démarrage de l'app…"
+for i in 1 2 3 4 5 6; do
+  [ "$(info version_latest)" = "$VERSION" ] && break
+  sleep 5
+  ha store reload
+done
+[ "$(info version_latest)" = "$VERSION" ] || {
+  echo "ÉCHEC : le Supervisor ne voit pas la version $VERSION (version_latest = $(info version_latest))."; exit 1; }
+
+if [ "$(info version)" = "$VERSION" ]; then
+  echo "Version $VERSION déjà installée : reconstruction de l'image."
+  ha apps rebuild "$SLUG"
+else
+  echo "Mise à jour $(info version) → $VERSION…"
+  ha apps update "$SLUG"
+fi
+INSTALLEE=$(info version)
+[ "$INSTALLEE" = "$VERSION" ] || { echo "ÉCHEC : version installée $INSTALLEE au lieu de $VERSION."; exit 1; }
+echo "Version $VERSION installée. Démarrage de l'app…"
 sleep 10
 ha apps logs "$SLUG" | tail -5
