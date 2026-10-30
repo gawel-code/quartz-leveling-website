@@ -4,12 +4,15 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.8.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.9.0
 
 ## Fonctionnement
 
 L'API Blizzard n'expose pas (encore) les données de WoW Forever. Les données viennent
 donc d'un addon en jeu, dont les membres envoient le fichier de sauvegarde au site.
+Depuis la v1.9.0, le site sait aussi lire lui-même le roster de la guilde sur l'API Blizzard
+à chaque collecte (options `bnet_*`, testé sur Classic Era) : il suffira de renseigner
+l'espace de noms de Forever quand il sera publié.
 
 ```
 WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
@@ -101,7 +104,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `GET /` | public | classement, tableau d'honneur, fil d'activité |
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
-| `GET/POST /collecter` | `?token=` | intègre le fichier déposé côté serveur (et plus tard l'API Blizzard) |
+| `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour` et `source` (`blizzard`, `fichier` ou `null`) |
 | `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
 | `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) |
 | `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
@@ -132,6 +135,17 @@ BattleTags) ni les sessions. Les sessions sont signées par `/data/secret.key` (
 | `discord_serveur_id` | serveur Discord de la guilde |
 | `discord_role_id` | rôle exigé ; vide = tout membre du serveur |
 | `discord_admins` | IDs Discord admins, séparés par des virgules (toujours acceptés, accès à `/admin`) |
+| `bnet_client_id` / `bnet_client_secret` | client API créé sur develop.battle.net ; vide = API Blizzard désactivée |
+| `bnet_region` | région de l'API (`eu`) |
+| `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; à changer pour Forever |
+| `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; vides = API désactivée |
+
+**API Blizzard** (v1.9.0) : à chaque `/collecter`, le roster de la guilde (nom, race, classe,
+niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces normales, sans
+« via »). Une montée de niveau est datée par la dernière connexion du personnage (profil), si
+elle est postérieure à la collecte précédente, sinon par l'heure de collecte ; l'addon, plus
+précis, l'emporte s'il donne une date plus ancienne. Homonymes sur des royaumes connectés : le
+plus haut niveau l'emporte. API en panne → repli sur le fichier déposé côté serveur.
 
 Les clés des membres sont dans `/app_configs/local_quartz_forever/cles.txt`
 (une ligne `Pseudo:clé` par membre, relu à chaque envoi, sans redémarrage).
@@ -166,6 +180,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.9.0 | collecte automatique par l'API Blizzard (roster de guilde, races et classes en français, montées datées par la dernière connexion) ; options `bnet_*` ; `/collecter` indique la source lue ; script `tools/verifier_api_blizzard.py` enrichi (royaumes, roster, profil) |
 | 1.8.0 | courbe de progression sur l'accueil (moyenne, Q1–Q3, plus haut niveau, persos du membre connecté) ; exclusion des mules et banques dans l'admin ; icône du cristal pour l'app dans Home Assistant (`icon.png`) |
 | 1.7.0 | meilleurs contributeurs : top 3 sur la page d'accueil, liste complète dans l'admin ; la remise à zéro vide aussi les associations personnage ↔ joueur |
 | 1.6.1 | « Mon compte » en blocs (profil, clé, personnages) ; personnages en cartes aux couleurs de classe avec emblème, ajout en un clic avec recherche ; admin en blocs pleine largeur, tableau de tous les persos avec choix du joueur sur chaque ligne et filtres |

@@ -1,5 +1,5 @@
 name: Quartz Forever
-version: "1.8.0"
+version: "1.9.0"
 slug: quartz_forever
 description: Suivi de progression de la guilde Quartz Forever
 arch: [aarch64, amd64]
@@ -19,6 +19,12 @@ options:
   discord_serveur_id: "801395490372583426"
   discord_role_id: "1549720665844613130"
   discord_admins: "161139977328132107"
+  bnet_client_id: ""
+  bnet_client_secret: ""
+  bnet_region: "eu"
+  bnet_espace: "classic1x"
+  bnet_royaume: ""
+  bnet_guilde: ""
 schema:
   nom_guilde: str
   token: password
@@ -28,3 +34,9 @@ schema:
   discord_serveur_id: "str?"
   discord_role_id: "str?"
   discord_admins: "str?"
+  bnet_client_id: "str?"
+  bnet_client_secret: "password?"
+  bnet_region: "str?"
+  bnet_espace: "str?"
+  bnet_royaume: "str?"
+  bnet_guilde: "str?"
