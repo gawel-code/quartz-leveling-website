@@ -70,6 +70,8 @@ def init_db():
             discord_id TEXT PRIMARY KEY, pseudo TEXT UNIQUE COLLATE NOCASE,
             cle TEXT UNIQUE, discord_nom TEXT, lie_le TEXT);
         """)
+        con.execute("""CREATE TABLE IF NOT EXISTS proprietaires(
+            nom TEXT PRIMARY KEY, pseudo TEXT, source TEXT, date TEXT)""")  # v1.6.0 : perso → joueur
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(comptes)")}
         if "battletag" not in colonnes:
             con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0 : lu sur Discord
@@ -251,6 +253,50 @@ def analyser_export(texte):
             nom, race, classe, niveau = morceaux
             persos.append((nom, race, classe, int(niveau)))
     return persos
+
+
+def analyser_mes_persos(texte):
+    """Personnages du compte WoW qui a écrit le fichier (table GuildExportMesPersos, addon ≥ 1.2.0) :
+    SavedVariables est commun à tous les personnages d'un compte."""
+    bloc = re.search(r"GuildExportMesPersos\s*=\s*\{(.*?)\}", texte, re.S)
+    return re.findall(r'\["([^"]+)"\]', bloc.group(1)) if bloc else []
+
+
+# Sources d'association personnage → joueur, de la plus fiable à la moins fiable.
+# « blizzard » est réservée à une future connexion Battle.net (liste des persos du compte).
+SOURCES = {"blizzard": "vérifié par Battle.net", "addon": "détecté par l'addon",
+           "manuel": "ajouté à la main", "nom": "même nom que le pseudo"}
+
+
+def associer(con, pseudo, noms, source):
+    """Associe des personnages à un joueur. Une source fiable remplace une moins fiable ;
+    rien ne remplace « blizzard » et une saisie manuelle ne prend pas le perso d'un autre."""
+    for nom in noms:
+        con.execute("""INSERT INTO proprietaires VALUES(?,?,?,?) ON CONFLICT(nom) DO UPDATE SET
+            pseudo=excluded.pseudo, source=excluded.source, date=excluded.date
+            WHERE proprietaires.source != 'blizzard'
+              AND (excluded.source != 'manuel' OR proprietaires.source = 'manuel' AND proprietaires.pseudo = excluded.pseudo)""",
+                    (nom, pseudo, source, maintenant()))
+
+
+def proprietaires(con, noms):
+    """{nom du perso: {pseudo, discord, source}} : table proprietaires, sinon perso du même nom qu'un pseudo."""
+    pseudos = {p.casefold(): p for p in cles_fichier()}
+    discord_de = {}
+    for c in con.execute("SELECT pseudo, discord_id FROM comptes"):
+        pseudos[c["pseudo"].casefold()] = c["pseudo"]
+        discord_de[c["pseudo"].casefold()] = c["discord_id"]
+    lignes = {r["nom"]: r for r in con.execute("SELECT * FROM proprietaires")}
+    res = {}
+    for nom in noms:
+        if nom in lignes:
+            pseudo, source = lignes[nom]["pseudo"], lignes[nom]["source"]
+        elif nom.casefold() in pseudos:
+            pseudo, source = pseudos[nom.casefold()], "nom"
+        else:
+            continue
+        res[nom] = {"pseudo": pseudo, "discord": discord_de.get(pseudo.casefold()), "source": source}
+    return res
 
 
 def analyser_dates(texte):
@@ -469,6 +515,8 @@ tbody tr+tr td{border-top:1px solid rgba(148,196,255,.06)}
 tbody tr:hover{background:var(--verre2)}
 td.rang{color:var(--pale);font-weight:700;width:36px}
 td.nom{font-weight:700}
+.joueur{font:500 .78rem var(--f-corps);color:var(--doux);margin-left:6px;text-decoration:none;white-space:nowrap}
+a.joueur:hover{color:var(--cristal);text-decoration:underline}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
 .niv{display:inline-grid;place-items:center;min-width:36px;padding:3px 8px;border-radius:8px;font:700 .9rem var(--f-titre);background:var(--verre2);border:1px solid var(--trait)}
 .niv.max{color:var(--nuit);background:linear-gradient(135deg,#ffe29a,var(--or));border-color:transparent}
@@ -487,7 +535,7 @@ footer{color:var(--pale);font-size:.78rem;display:flex;align-items:center;gap:10
 footer img{width:16px;opacity:.7}
 .formulaire{padding:22px;display:flex;flex-direction:column;gap:16px;max-width:560px}
 .formulaire label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.88rem}
-.formulaire small{color:var(--doux);font-weight:500;word-break:break-all}
+.formulaire small{color:var(--doux);font-weight:500;overflow-wrap:anywhere}
 .msg{padding:10px 14px;border-radius:10px;font-size:.9rem;border:1px solid}
 .ok{color:var(--vert);background:rgba(94,227,166,.08);border-color:rgba(94,227,166,.3)}
 .err{color:var(--rouge);background:rgba(255,138,122,.08);border-color:rgba(255,138,122,.3)}
@@ -552,7 +600,8 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th><th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
 <tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
-<td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}</td>
+<td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}
+{%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
 <td>{{ p.race }}</td><td>{{ p.classe }}</td>
 <td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
 <td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
@@ -621,6 +670,16 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <a class="cta sec" href="contribuer">Envoyer mes données</a></div>
  <form method="post" onsubmit="return confirm('L\\'ancienne clé ne fonctionnera plus : relance changer-cle.bat sur ton PC. Continuer ?')">
  <input type="hidden" name="action" value="regenerer"><div><button class="sec" type="submit">Générer une nouvelle clé</button></div></form>
+ <h2>Mes personnages</h2>
+ {% for m in mes_persos %}<div class="boutons"><b>{{ m.nom }}</b><small>{{ sources[m.source] }}</small>
+ {% if m.source == "manuel" %}<form method="post"><input type="hidden" name="action" value="retirer">
+ <input type="hidden" name="nom" value="{{ m.nom }}"><button class="sec" type="submit">Retirer</button></form>{% endif %}</div>
+ {% else %}<p>Aucun personnage associé pour l'instant.</p>{% endfor %}
+ <small>Les personnages de ton compte WoW sont ajoutés automatiquement à chaque envoi de ton fichier
+ (addon GuildExport 1.2.0 ou plus). Ils sont reliés à ton profil Discord dans le classement.</small>
+ {% if libres %}<form method="post"><input type="hidden" name="action" value="reclamer">
+ <label for="perso">Ajouter un personnage<select id="perso" name="nom">{% for n in libres %}<option>{{ n }}</option>{% endfor %}</select></label>
+ <div><button class="sec" type="submit">C'est mon personnage</button></div></form>{% endif %}
  {% else %}
  <h2>Première connexion</h2>
  <p>Relie ton compte Discord à ton pseudo de guilde.</p>
@@ -649,6 +708,13 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
 <button class="sec" type="submit">Délier</button></form></td></tr>
 {% else %}<tr><td colspan="6">Aucun compte relié.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="sec"><h2>Personnages associés <small>{{ associations|length }}</small></h2>
+<div class="carte table-wrap"><table><thead><tr><th>Personnage</th><th>Joueur</th><th>Source</th><th></th></tr></thead><tbody>
+{% for a in associations %}<tr><td class="nom">{{ a.nom }}</td><td>{{ a.pseudo }}</td><td>{{ sources[a.source] }}</td>
+<td><form method="post"><input type="hidden" name="action" value="dissocier"><input type="hidden" name="nom" value="{{ a.nom }}">
+<button class="sec" type="submit">Dissocier</button></form></td></tr>
+{% else %}<tr><td colspan="4">Aucune association enregistrée (les persos au nom d'un pseudo sont reliés d'office).</td></tr>{% endfor %}
 </tbody></table></div></section>
 <section class="carte formulaire sec"><h2>Clés de cles.txt sans compte Discord</h2>
 <p>{{ sans_compte|join(", ") if sans_compte else "aucune" }}</p></section>
@@ -686,12 +752,13 @@ def index():
         rows = con.execute("SELECT * FROM exploits ORDER BY palier, rang").fetchall()
         recents = con.execute("SELECT * FROM historique ORDER BY date DESC LIMIT 15").fetchall()
         g24 = gains(con, 24)
+        proprios = proprietaires(con, [p["nom"] for p in persos])
     exploits = {}
     for e in rows:
         exploits.setdefault(e["palier"], []).append(e)
     return render_template_string(
         PAGE, guilde=NOM_GUILDE, persos=persos, paliers=PALIERS, exploits=exploits,
-        medailles=MEDAILLES, recents=recents, g24=g24,
+        medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios,
         total24=sum(v for v in g24.values() if v > 0),
         actifs=sum(1 for v in g24.values() if v > 0),
         nb60=sum(1 for p in persos if p["niveau"] == 60),
@@ -752,8 +819,10 @@ def route_envoyer():
     persos = analyser_export(texte)
     if not persos:
         return jsonify(ok=False, erreur="Fichier vide ou invalide"), 400
-    return jsonify(ok=True, personnages=len(persos),
-                   nouveautes=integrer(persos, pseudo, analyser_dates(texte)))
+    n = integrer(persos, pseudo, analyser_dates(texte))
+    with db() as con:
+        associer(con, pseudo, analyser_mes_persos(texte), "addon")
+    return jsonify(ok=True, personnages=len(persos), nouveautes=n)
 
 
 @app.route("/contribuer", methods=["GET", "POST"])
@@ -772,6 +841,8 @@ def route_contribuer():
     if not persos:
         return formulaire(message="Fichier vide ou invalide.", classe="err", pseudo=connecte), 400
     n = integrer(persos, pseudo, analyser_dates(texte))
+    with db() as con:
+        associer(con, pseudo, analyser_mes_persos(texte), "addon")
     return formulaire(classe="ok", pseudo=connecte,
                       message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
 
@@ -886,11 +957,33 @@ def route_moi():
             else:
                 con.execute("UPDATE comptes SET battletag_saisi=? WHERE discord_id=?", (saisi or None, d["id"]))
                 message = f"BattleTag enregistré : {saisi}." if saisi else "BattleTag effacé."
+        elif action == "reclamer" and compte:
+            nom = request.form.get("nom", "")
+            deja = proprietaires(con, [nom]).get(nom)
+            if not con.execute("SELECT 1 FROM personnages WHERE nom=?", (nom,)).fetchone():
+                message, classe = "Personnage inconnu.", "err"
+            elif deja and deja["pseudo"].casefold() != compte["pseudo"].casefold():
+                message, classe = f"{nom} est déjà associé à {deja['pseudo']} : contacte un officier.", "err"
+            else:
+                associer(con, compte["pseudo"], [nom], "manuel")
+                message = f"{nom} est associé à ton compte."
+        elif action == "retirer" and compte:
+            con.execute("DELETE FROM proprietaires WHERE nom=? AND pseudo=? AND source='manuel'",
+                        (request.form.get("nom", ""), compte["pseudo"]))
+            message = "Personnage retiré."
         elif action == "regenerer" and compte:
             con.execute("UPDATE comptes SET cle=? WHERE discord_id=?", (nouvelle_cle(con), d["id"]))
             message = "Nouvelle clé créée. L'ancienne ne fonctionne plus."
         compte = compte_connecte(con)
-    return page_compte(compte=compte, cle=cle_du_compte(compte) if compte else None,
+        mes_persos, libres = [], []
+        if compte:
+            noms = [r["nom"] for r in con.execute("SELECT nom FROM personnages ORDER BY nom")]
+            proprios = proprietaires(con, set(noms) | {r["nom"] for r in con.execute("SELECT nom FROM proprietaires")})
+            mes_persos = [{"nom": n, **p} for n, p in sorted(proprios.items())
+                          if p["pseudo"].casefold() == compte["pseudo"].casefold()]
+            libres = [n for n in noms if n not in proprios]
+    return page_compte(compte=compte, cle=cle_du_compte(compte) if compte else None, sources=SOURCES,
+                       mes_persos=mes_persos, libres=libres,
                        message=message, classe=classe), 400 if classe == "err" else 200
 
 
@@ -904,14 +997,20 @@ def route_admin():
         with db() as con:
             con.execute("DELETE FROM comptes WHERE discord_id=?", (request.form.get("discord_id"),))
         message = "Compte délié."
+    elif action == "dissocier":
+        with db() as con:
+            con.execute("DELETE FROM proprietaires WHERE nom=?", (request.form.get("nom"),))
+        message = "Personnage dissocié."
     elif action == "reinitialiser":
         vides = reinitialiser()
         message = f"Base de progression vidée ({vides['personnages']} personnages). Copie dans guilde.db.avant-reset."
     with db() as con:
         comptes = con.execute("SELECT * FROM comptes ORDER BY pseudo").fetchall()
+        associations = con.execute("SELECT * FROM proprietaires ORDER BY pseudo, nom").fetchall()
     lies = {c["pseudo"].casefold() for c in comptes}
     return render_template_string(
         ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe="ok",
+        associations=associations, sources=SOURCES,
         sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 
@@ -926,6 +1025,7 @@ def route_export():
             "historique": [dict(r) for r in con.execute("SELECT * FROM historique ORDER BY date")],
             "exploits": [dict(r) for r in con.execute("SELECT * FROM exploits ORDER BY palier, rang")],
             "envois": [dict(r) for r in con.execute("SELECT * FROM envois ORDER BY date")],
+            "proprietaires": [dict(r) for r in con.execute("SELECT * FROM proprietaires ORDER BY nom")],
         }
     return app.response_class(
         json.dumps(donnees, ensure_ascii=False, indent=2), mimetype="application/json",

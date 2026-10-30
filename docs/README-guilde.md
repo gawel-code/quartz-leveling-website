@@ -47,6 +47,10 @@ officiers). Sinon, tu peux le saisir toi-même sur cette page (format `Nom#1234`
 Ta clé reste affichée sur cette page (bouton **Copier la clé**). Tu peux aussi en
 générer une nouvelle si elle a fuité.
 
+Sur cette même page, **Mes personnages** liste tes personnages : ceux de ton compte WoW sont
+ajoutés tout seuls à chaque envoi de ton fichier, et tu peux en ajouter à la main (« C'est mon
+personnage »). Dans le classement, ils affichent ton pseudo avec un lien vers ton profil Discord.
+
 ## Étape 3 — Envoyer tes données (choisis UNE des deux options)
 
 ### Option A — Automatique (recommandé, à faire une seule fois)
