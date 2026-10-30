@@ -262,21 +262,29 @@ def analyser_mes_persos(texte):
     return re.findall(r'\["([^"]+)"\]', bloc.group(1)) if bloc else []
 
 
-# Sources d'association personnage → joueur, de la plus fiable à la moins fiable.
+# Sources d'association personnage → joueur. « admin » (choix d'un officier) l'emporte sur tout ;
 # « blizzard » est réservée à une future connexion Battle.net (liste des persos du compte).
-SOURCES = {"blizzard": "vérifié par Battle.net", "addon": "détecté par l'addon",
-           "manuel": "ajouté à la main", "nom": "même nom que le pseudo"}
+SOURCES = {"admin": "attribué par un officier", "blizzard": "vérifié par Battle.net",
+           "addon": "détecté par l'addon", "manuel": "ajouté à la main", "nom": "même nom que le pseudo"}
 
 
 def associer(con, pseudo, noms, source):
-    """Associe des personnages à un joueur. Une source fiable remplace une moins fiable ;
-    rien ne remplace « blizzard » et une saisie manuelle ne prend pas le perso d'un autre."""
+    """Associe des personnages à un joueur. « admin » remplace tout et n'est remplacé que par un
+    autre choix d'officier ; « blizzard » remplace l'addon et les saisies ; l'addon remplace les
+    saisies ; une saisie manuelle ne prend jamais le perso d'un autre."""
     for nom in noms:
-        con.execute("""INSERT INTO proprietaires VALUES(?,?,?,?) ON CONFLICT(nom) DO UPDATE SET
-            pseudo=excluded.pseudo, source=excluded.source, date=excluded.date
-            WHERE proprietaires.source != 'blizzard'
-              AND (excluded.source != 'manuel' OR proprietaires.source = 'manuel' AND proprietaires.pseudo = excluded.pseudo)""",
-                    (nom, pseudo, source, maintenant()))
+        r = con.execute("SELECT pseudo, source FROM proprietaires WHERE nom=?", (nom,)).fetchone()
+        if r and source != "admin" and (
+                r["source"] == "admin"
+                or r["source"] == "blizzard" and source != "blizzard"
+                or source == "manuel" and (r["source"] != "manuel" or r["pseudo"] != pseudo)):
+            continue
+        con.execute("INSERT OR REPLACE INTO proprietaires VALUES(?,?,?,?)", (nom, pseudo, source, maintenant()))
+
+
+def joueurs(con):
+    """Pseudos connus (cles.txt et comptes reliés), triés."""
+    return sorted(set(cles_fichier()) | {r[0] for r in con.execute("SELECT pseudo FROM comptes")}, key=str.casefold)
 
 
 def proprietaires(con, noms):
@@ -709,12 +717,17 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <button class="sec" type="submit">Délier</button></form></td></tr>
 {% else %}<tr><td colspan="6">Aucun compte relié.</td></tr>{% endfor %}
 </tbody></table></div></section>
-<section class="sec"><h2>Personnages associés <small>{{ associations|length }}</small></h2>
+<section class="sec"><h2>Personnages ↔ joueurs <small>{{ associations|length }} associés</small></h2>
+<form class="carte formulaire" method="post"><input type="hidden" name="action" value="associer">
+<div class="boutons"><label for="a-nom">Personnage<select id="a-nom" name="nom">{% for n in tous_persos %}<option>{{ n }}</option>{% endfor %}</select></label>
+<label for="a-pseudo">Joueur<select id="a-pseudo" name="pseudo">{% for j in joueurs %}<option>{{ j }}</option>{% endfor %}</select></label></div>
+<div><button type="submit">Associer</button></div>
+<small>Un choix d'officier l'emporte sur l'addon et les ajouts des joueurs, et n'est jamais remplacé automatiquement.</small></form>
 <div class="carte table-wrap"><table><thead><tr><th>Personnage</th><th>Joueur</th><th>Source</th><th></th></tr></thead><tbody>
 {% for a in associations %}<tr><td class="nom">{{ a.nom }}</td><td>{{ a.pseudo }}</td><td>{{ sources[a.source] }}</td>
-<td><form method="post"><input type="hidden" name="action" value="dissocier"><input type="hidden" name="nom" value="{{ a.nom }}">
-<button class="sec" type="submit">Dissocier</button></form></td></tr>
-{% else %}<tr><td colspan="4">Aucune association enregistrée (les persos au nom d'un pseudo sont reliés d'office).</td></tr>{% endfor %}
+<td>{% if a.source != "nom" %}<form method="post"><input type="hidden" name="action" value="dissocier"><input type="hidden" name="nom" value="{{ a.nom }}">
+<button class="sec" type="submit">Dissocier</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="4">Aucun personnage associé.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <section class="carte formulaire sec"><h2>Clés de cles.txt sans compte Discord</h2>
 <p>{{ sans_compte|join(", ") if sans_compte else "aucune" }}</p></section>
@@ -991,12 +1004,21 @@ def route_moi():
 def route_admin():
     if not est_admin():
         abort(403)
-    message = None
+    message, classe = None, "ok"
     action = request.form.get("action") if request.method == "POST" else None
     if action == "delier":
         with db() as con:
             con.execute("DELETE FROM comptes WHERE discord_id=?", (request.form.get("discord_id"),))
         message = "Compte délié."
+    elif action == "associer":
+        nom, pseudo = request.form.get("nom", ""), request.form.get("pseudo", "")
+        with db() as con:
+            connus = {r[0] for r in con.execute("SELECT nom FROM personnages UNION SELECT nom FROM proprietaires")}
+            if nom in connus and pseudo in joueurs(con):
+                associer(con, pseudo, [nom], "admin")
+                message = f"{nom} est associé à {pseudo}."
+            else:
+                message, classe = "Personnage ou joueur inconnu.", "err"
     elif action == "dissocier":
         with db() as con:
             con.execute("DELETE FROM proprietaires WHERE nom=?", (request.form.get("nom"),))
@@ -1006,11 +1028,15 @@ def route_admin():
         message = f"Base de progression vidée ({vides['personnages']} personnages). Copie dans guilde.db.avant-reset."
     with db() as con:
         comptes = con.execute("SELECT * FROM comptes ORDER BY pseudo").fetchall()
-        associations = con.execute("SELECT * FROM proprietaires ORDER BY pseudo, nom").fetchall()
+        tous_persos = sorted({r[0] for r in con.execute(
+            "SELECT nom FROM personnages UNION SELECT nom FROM proprietaires")}, key=str.casefold)
+        associations = sorted(({"nom": n, **a} for n, a in proprietaires(con, tous_persos).items()),
+                              key=lambda a: (a["pseudo"].casefold(), a["nom"].casefold()))
+        liste_joueurs = joueurs(con)
     lies = {c["pseudo"].casefold() for c in comptes}
     return render_template_string(
-        ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe="ok",
-        associations=associations, sources=SOURCES,
+        ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe=classe,
+        associations=associations, sources=SOURCES, tous_persos=tous_persos, joueurs=liste_joueurs,
         sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 

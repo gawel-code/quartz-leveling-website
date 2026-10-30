@@ -38,7 +38,9 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   par ordre de fiabilité : de l'addon (≥ 1.2.0, table `GuildExportMesPersos` : les persos du compte
   WoW qui a écrit le fichier sont associés au pseudo de la clé qui l'envoie), d'un ajout à la main
   sur `/moi` (« C'est mon personnage »), ou d'un perso qui porte le nom du pseudo. Une future
-  connexion Battle.net (armurerie) pourra fournir une source vérifiée « blizzard », prioritaire.
+  connexion Battle.net (armurerie) pourra fournir une source vérifiée « blizzard ». Dans `/admin`,
+  un officier associe n'importe quel perso à n'importe quel joueur ou le dissocie : son choix
+  l'emporte sur tout et n'est jamais remplacé automatiquement.
 - **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
 - **Fusion** : on garde toujours le niveau le plus haut ; une race connue n'est jamais
@@ -152,7 +154,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
-| 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; gestion dans l'admin |
+| 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; dans l'admin, associer / dissocier n'importe quel perso (choix prioritaire) |
 | 1.5.1 | BattleTag saisi à la main sur « Mon compte » quand Battle.net n'est pas lié à Discord ; boutons « Mon compte » et « Déconnexion » (ou « Connexion Discord ») dans l'en-tête de toutes les pages |
 | 1.5.0 | BattleTag récupéré via les connexions Discord (scope `connections`), affiché sur « Mon compte » et dans l'admin |
 | 1.4.3 | numéro de version en pied de page ; URL des images suffixées `?v=version` (Cloudflare servait encore l'ancien logo) |

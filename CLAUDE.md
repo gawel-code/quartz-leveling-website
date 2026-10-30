@@ -112,14 +112,17 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   `BATTLETAG_VALIDE` = `Nom#1234`, vide = effacer) → colonne `comptes.battletag_saisi` (non vérifiée,
   marquée « saisi » dans `/admin`). Le BattleTag Discord prime à l'affichage ; la saisie est gardée en réserve.
 - Personnages ↔ joueurs (v1.6.0) : table `proprietaires(nom PK, pseudo, source, date)`.
-  `associer()` : sources `blizzard` > `addon` > `manuel` (une saisie manuelle ne prend jamais le
-  perso d'un autre ; rien ne remplace `blizzard`). `addon` = table `GuildExportMesPersos` du fichier
+  `associer()` : sources `admin` (choix d'officier, remplace tout, remplacé seulement par un autre
+  choix d'officier) > `blizzard` > `addon` > `manuel` (une saisie manuelle ne prend jamais le perso
+  d'un autre). `addon` = table `GuildExportMesPersos` du fichier
   (`analyser_mes_persos()`, addon ≥ 1.2.0) associée au pseudo de la clé à chaque `/envoyer` et
   `/contribuer`. `proprietaires()` ajoute d'office (source `nom`, non stockée) un perso qui porte le
   nom d'un pseudo (`cles.txt` ou `comptes`). Classement : `@Pseudo` après le nom, lien
   `https://discord.com/users/<discord_id>` si le pseudo a un compte relié. `/moi` : « Mes
   personnages » (retirer les ajouts manuels, « C'est mon personnage » parmi les persos sans joueur).
-  `/admin` : liste + « Dissocier ». Conservé par la remise à zéro, inclus dans `/export.json`.
+  `/admin` : formulaire « Associer » (tout perso connu × tout pseudo de `joueurs()` = `cles.txt` +
+  `comptes`, source `admin`), tableau de toutes les associations (y compris `nom`, non dissociable :
+  l'écraser par un choix d'officier) + « Dissocier ». Conservé par la remise à zéro, inclus dans `/export.json`.
   Source `blizzard` prévue pour une connexion Battle.net (scope `wow.profile`) quand l'API Forever existera.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,

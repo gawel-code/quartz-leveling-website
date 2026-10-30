@@ -558,7 +558,28 @@ def test_perso_au_nom_du_pseudo_et_admin(discord_client, tmp_path):
     r = c.get("/admin")
     assert "Reroll" in r.text and "détecté par l&#39;addon" in r.text
     c.post("/admin", data={"action": "dissocier", "nom": "Grommash"})
-    assert "Grommash" not in c.get("/admin").text.split("Personnages associés")[1].split("</table>")[0]
+    tableau = c.get("/admin").text.split("Personnages ↔ joueurs")[1].split("</table>")[0]
+    assert '<td class="nom">Grommash</td>' not in tableau and "même nom que le pseudo" in tableau  # Mok
     # La remise à zéro de la progression garde les associations
     c.post("/admin", data={"action": "reinitialiser"})
     assert len(c.get("/export.json?token=tok").json["proprietaires"]) == 1
+
+
+def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA_MES_PERSOS)  # Grommash → Gael (addon)
+    connecter(ADMIN_ID, nick="Admin")
+    r = c.get("/admin")
+    assert '<option>Grommash</option>' in r.text and '<option>Gael</option>' in r.text
+    assert c.post("/admin", data={"action": "associer", "nom": "Inconnu", "pseudo": "Gael"}).status_code == 200
+    assert "Personnage ou joueur inconnu" in c.post(
+        "/admin", data={"action": "associer", "nom": "Grommash", "pseudo": "Personne"}).text
+    c.post("/moi", data={"action": "creer", "pseudo": "Thrall"})  # l'admin se crée un joueur
+    r = c.post("/admin", data={"action": "associer", "nom": "Grommash", "pseudo": "Thrall"})
+    assert "Grommash est associé à Thrall" in r.text and "attribué par un officier" in r.text
+    envoyer(c, LUA_MES_PERSOS)  # l'addon ne remplace pas un choix d'officier
+    d = {p["nom"]: p for p in c.get("/export.json?token=tok").json["proprietaires"]}
+    assert (d["Grommash"]["pseudo"], d["Grommash"]["source"]) == ("Thrall", "admin")
+    assert d["Reroll"]["pseudo"] == "Gael"
+    r = c.get("/moi")  # côté joueur : pas de bouton Retirer sur un choix d'officier
+    assert "<b>Grommash</b><small>attribué par un officier</small>\n </div>" in r.text
