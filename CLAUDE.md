@@ -192,7 +192,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.7.0 mergée, v1.8.0 en PR)
+## État au 30 octobre 2026 (v1.8.0 mergée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -209,7 +209,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
 - ✅ v1.7.0 (mergée ; déploiement non confirmé) : meilleurs contributeurs (top 3 sur l'accueil, liste
   complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
-- 🔜 v1.8.0 (PR ouverte, pas encore mergée) : courbe de progression sur l'accueil, exclusion des
+- ✅ v1.8.0 (mergée ; déploiement non confirmé) : courbe de progression sur l'accueil, exclusion des
   mules/banques dans l'admin, et `icon.png` de l'app HA (ex-PR v1.7.1, regroupée ici).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
@@ -227,6 +227,27 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
 - ✅ Connecteur MCP Home Assistant de Claude : URL avec chemin secret, **sans OAuth**
   (si « needs_reconnect » → supprimer et recréer le connecteur avec l'URL complète)
+
+## API Blizzard — essais sur Classic du 30/10/2026 (`tools/verifier_api_blizzard.py`)
+- Client API créé par Gaël sur develop.battle.net (identifiants chez lui, jamais commités) ;
+  flux `client_credentials` OK.
+- L'espace `classic1x` (EU) regroupe Classic Era, Season of Discovery, Anniversary et Season
+  (`--royaumes`) ; aucun royaume Forever pour l'instant. Forever arrivera peut-être là plutôt
+  que dans un nouvel espace : relancer `--royaumes` à l'approche du lancement.
+- **Roster de guilde** `/data/wow/guild/{royaume}/{guilde}/roster` (`profile-…`) : marche et donne
+  nom, niveau, `playable_race.id`, `playable_class.id`, rang, et le **royaume de chaque membre**
+  (royaumes connectés : un membre de `<Progress>`/Firemaw est sur `gandling`). Index
+  `playable-race` / `playable-class` (`static-…`, `fr_FR`) → libellés FR masculins, mêmes que le
+  client (OK pour `CLASSES`, `couleur()`, `embleme()`).
+- À vérifier : roster complet ? (6 membres seulement pour `<Progress>`, guilde pourtant active :
+  dernière connexion d'un membre le 27/10/2026).
+- Profil `/profile/wow/character/{royaume}/{nom}` : race, classe, niveau, guilde,
+  `last_login_timestamp` (ms). Aucune date de montée de niveau dans l'API.
+- Pistes pour `lire_api_blizzard()` (déjà appelée par `collecter()`, donc par l'automatisation
+  horaire) : options `bnet_client_id`, `bnet_client_secret`, `bnet_espace`, `bnet_royaume`,
+  `bnet_guilde` (vides = désactivé) ; jeton gardé 24 h ; index en cache ; homonymes sur
+  royaumes connectés (le serveur indexe par nom seul) ; une montée vue par l'API pourrait être
+  datée par `last_login_timestamp` plutôt que par l'heure de collecte (un appel profil par perso).
 
 ## Outils utiles pour Claude (via le connecteur HA)
 - Appeler l'app directement : `ha_manage_app(slug="local_quartz_forever", port=8080,
