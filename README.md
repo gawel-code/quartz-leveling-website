@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.7.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.7.1
 
 ## Fonctionnement
 
@@ -73,7 +73,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 
 | Chemin | Rôle |
 |---|---|
-| `ha-app/quartz_forever/` | **le serveur** : app locale Home Assistant (`config.yaml`, `Dockerfile`, `run.sh`, `app.py`, images) |
+| `ha-app/quartz_forever/` | **le serveur** : app locale Home Assistant (`config.yaml`, `Dockerfile`, `run.sh`, `app.py`, images ; `icon.png` = icône de l'app dans Home Assistant) |
 | `client/` | envoi automatique pour les membres (Windows) : `lancer.bat` (double-clic ; demande la clé au premier lancement, trouve le fichier, journal dans `%APPDATA%\QuartzForever\envoi.log`), `changer-cle.bat`, `envoi-guilde.ps1` |
 | `docs/README-guilde.md` | mode d'emploi non technique pour la guilde |
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
@@ -158,6 +158,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.7.1 | icône du cristal pour l'app dans Home Assistant (`icon.png`, 128×128) |
 | 1.7.0 | meilleurs contributeurs : top 3 sur la page d'accueil, liste complète dans l'admin ; la remise à zéro vide aussi les associations personnage ↔ joueur |
 | 1.6.1 | « Mon compte » en blocs (profil, clé, personnages) ; personnages en cartes aux couleurs de classe avec emblème, ajout en un clic avec recherche ; admin en blocs pleine largeur, tableau de tous les persos avec choix du joueur sur chaque ligne et filtres |
 | 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; dans l'admin, associer / dissocier n'importe quel perso (choix prioritaire) |

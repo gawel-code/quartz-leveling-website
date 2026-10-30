@@ -40,7 +40,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (à compléter à chaque bump de `version`).
 - `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
   Dockerfile, run.sh, app.py, logo.png = cristal détouré 204×256 (bord érodé de 3 px et adouci en v1.4.2 pour retirer le liseré clair),
-  banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
+  banniere.jpg = grotte de cristaux en fond d'en-tête, icon.png = cristal 128×128 transparent : icône
+  de l'app dans la liste des apps de Home Assistant, lue par le Supervisor dans le dossier de l'app,
+  pas dans l'image ; `logo.png` sert aussi de logo sur la fiche de l'app). **C'est le code du serveur.**
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
@@ -173,7 +175,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.6.1 mergée, v1.7.0 en PR)
+## État au 30 octobre 2026 (v1.7.0 mergée, v1.7.1 en PR en attente)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -188,8 +190,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   « Déconnexion » (ou « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
 - ✅ v1.6.0 (mergée ; déploiement non confirmé) : personnages ↔ joueurs (+ addon 1.2.0 : `GuildExportMesPersos`, mergé).
 - ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
-- 🔜 v1.7.0 : meilleurs contributeurs (top 3 sur l'accueil, liste complète dans l'admin) ; la remise à
-  zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
+- ✅ v1.7.0 (mergée ; déploiement non confirmé) : meilleurs contributeurs (top 3 sur l'accueil, liste
+  complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
+- 🔜 v1.7.1 (PR **à ne pas merger tout de suite**, déploiement plus tard à la demande de Gaël) :
+  `icon.png` pour l'app dans Home Assistant.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
