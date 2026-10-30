@@ -42,7 +42,7 @@ Va sur **https://quartz.gawel.be/moi** et clique sur **Connexion Discord** (il f
 
 Discord te demande aussi l'accès à tes connexions : si ton compte Battle.net est lié à Discord
 (*Paramètres → Connexions*), ton **BattleTag** est enregistré (visible seulement par toi et les
-officiers).
+officiers). Sinon, tu peux le saisir toi-même sur cette page (format `Nom#1234`).
 
 Ta clé reste affichée sur cette page (bouton **Copier la clé**). Tu peux aussi en
 générer une nouvelle si elle a fuité.

@@ -97,7 +97,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   sur le serveur, le nom affiché ou le nom d'utilisateur Discord est un pseudo de `cles.txt` encore
   libre (casse ignorée), le compte y est relié ; « choisir son pseudo » relie aussi un pseudo de
   `cles.txt` s'il correspond à un de ces noms. Risque assumé : un membre qui prend le surnom d'un
-  autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le, battletag)` : `cle` NULL =
+  autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le, battletag, battletag_saisi)` : `cle` NULL =
   clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
   (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
   délier un compte, voir les clés de `cles.txt` sans compte, vider la progression (pas les comptes).
@@ -108,6 +108,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (colonne ajoutée par `init_db()` sur les anciennes bases), remis à jour (ou effacé) à chaque
   connexion ; un échec de lecture ne bloque pas la connexion. Visible sur `/moi` et `/admin`
   seulement (pas sur la page publique). Le jeton OAuth n'est pas conservé : aucune lecture hors connexion.
+  Saisie manuelle (v1.5.1) : sans BattleTag Discord, `/moi` propose un champ (action `battletag`,
+  `BATTLETAG_VALIDE` = `Nom#1234`, vide = effacer) → colonne `comptes.battletag_saisi` (non vérifiée,
+  marquée « saisi » dans `/admin`). Le BattleTag Discord prime à l'affichage ; la saisie est gardée en réserve.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
@@ -143,7 +146,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.4.3 déployée, v1.5.0 en PR)
+## État au 30 octobre 2026 (v1.5.0 déployée, v1.5.1 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -152,8 +155,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   Compte de Gaël relié au pseudo `Gael`.
 - ✅ v1.4.1 : liaison automatique par nom Discord ; v1.4.2 : logo redétouré, halo dans l'en-tête.
 - ✅ v1.4.3 : version en pied de page, images en `?v=version` (vérifié en ligne : pied « v1.4.3 »).
-- 🔜 v1.5.0 : BattleTag via les connexions Discord. Après déploiement, chacun doit se **reconnecter**
-  (nouvelle autorisation demandée par Discord) pour que son BattleTag soit lu.
+- ✅ v1.5.0 : BattleTag via les connexions Discord (déployée, vérifiée : scope `connections`,
+  migration sans erreur). Chacun doit se **reconnecter** (nouvelle autorisation) pour qu'il soit lu.
+- 🔜 v1.5.1 : saisie manuelle du BattleTag sur `/moi`.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

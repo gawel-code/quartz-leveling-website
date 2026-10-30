@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.5.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.5.1
 
 ## Fonctionnement
 
@@ -30,7 +30,8 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   ou en choisissant un pseudo : une clé est alors créée) et y retrouve sa clé. Si son surnom sur
   le serveur, son nom affiché ou son nom d'utilisateur Discord est un pseudo libre de `cles.txt`,
   le compte est relié automatiquement dès la connexion. Si le membre a lié Battle.net à Discord
-  (*Paramètres → Connexions*), son **BattleTag** est récupéré et affiché sur `/moi` et `/admin`. Connecté, il
+  (*Paramètres → Connexions*), son **BattleTag** est récupéré et affiché sur `/moi` et `/admin` ;
+  sinon il peut le saisir lui-même sur `/moi` (marqué « saisi » dans l'admin, non vérifié). Connecté, il
   envoie son fichier sans saisir de clé. Les admins (IDs Discord) passent toujours et ont `/admin`.
 - **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
@@ -96,7 +97,7 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois), `comptes` (Discord ↔ pseudo et BattleTag ; clé créée sur le site, sinon
+`envois` (journal des envois), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` ne touche
 pas aux comptes. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
@@ -145,6 +146,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.5.1 | BattleTag saisi à la main sur « Mon compte » quand Battle.net n'est pas lié à Discord |
 | 1.5.0 | BattleTag récupéré via les connexions Discord (scope `connections`), affiché sur « Mon compte » et dans l'admin |
 | 1.4.3 | numéro de version en pied de page ; URL des images suffixées `?v=version` (Cloudflare servait encore l'ancien logo) |
 | 1.4.2 | cristal redétouré (plus de liseré clair), plus grand dans l'en-tête avec un halo diffus |
