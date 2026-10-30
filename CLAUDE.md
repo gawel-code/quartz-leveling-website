@@ -28,7 +28,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `README.md` : présentation du projet, routes, déploiement, historique des versions
   (à compléter à chaque bump de `version`).
 - `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
-  Dockerfile, run.sh, app.py, logo.png = cristal détouré 256 px,
+  Dockerfile, run.sh, app.py, logo.png = cristal détouré 204×256 (bord érodé de 3 px et adouci en v1.4.2 pour retirer le liseré clair),
   banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
@@ -127,7 +127,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
   défaut des options). **Secret client** renseigné dans l'option `discord_client_secret` (jamais
   commité ; le connecteur HA renvoie les options en clair, ne jamais le recopier).
-- 🔜 v1.4.1 : liaison automatique par nom Discord.
+- ✅ v1.4.1 : liaison automatique par nom Discord (déployée).
+- 🔜 v1.4.2 : logo redétouré, halo dans l'en-tête.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
