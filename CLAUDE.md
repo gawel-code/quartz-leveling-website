@@ -10,7 +10,8 @@ concises, pas de pédagogie de base.
     touchés, to-do. Relire les deux pour retirer ce qui est devenu faux.
 - Bumper `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement de l'app
   (sinon pas de mise à jour côté HA, et les images restent en cache).
-- Flux habituel : PR → « oui merge » → Gaël déploie → vérification par Claude via le connecteur HA.
+- Flux habituel : PR → « oui merge » → déploiement (mise à jour de l'app HA, automatique ou lancée
+  par Claude via le connecteur depuis la v1.11.0) → vérification par Claude via le connecteur HA.
 - Jamais de secret commité (webhook Discord, token de l'app, secret client Discord, clés).
 
 ## Contexte
@@ -31,7 +32,7 @@ concises, pas de pédagogie de base.
 WoW (addon GuildExport) → GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
    → envoi-guilde.ps1 (auto) ou formulaire /contribuer (manuel), clé perso par membre
      (clé affichée sur /moi après connexion Discord ; connecté, /contribuer n'en demande pas)
-   → app Flask + SQLite dans une app locale Home Assistant (HAOS)
+   → app Flask + SQLite, app Home Assistant (HAOS) installée depuis ce dépôt (dépôt d'apps)
    → https://quartz.gawel.be via Cloudflare Tunnel
 Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 h / 21 h) → webhook Discord
 /collecter → API Blizzard (roster de guilde, si options bnet_*) sinon fichier déposé côté serveur
@@ -60,8 +61,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
-- `ha/deployer-quartz.sh` : déploiement de l'app locale depuis GitHub (voir plus bas ; obsolète
-  après la migration vers le dépôt d'apps).
+- `ha/deployer-quartz.sh` : **obsolète** (déploiement de l'ancienne app locale) ; à supprimer une
+  fois `local_quartz_forever` désinstallée.
 - `repository.yaml` (v1.11.0) : fait du dépôt un dépôt d'apps HA (le Supervisor trouve
   `ha-app/quartz_forever/config.yaml` en parcourant le dépôt).
 - `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
@@ -209,43 +210,39 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   (`max-age=86400`) ; sans ce suffixe, l'ancien logo à fond gris de la v1.1.0 restait affiché.
 
 ## Déploiement Home Assistant — pièges déjà rencontrés
-- HAOS récent : les apps locales vivent dans **`/local_apps`** (plus `/addons`,
-  qui n'est plus scanné). Les configs d'apps sont dans **`/app_configs`**.
-  Le fichier des clés est donc `/app_configs/local_quartz_forever/cles.txt`
-  (format `Pseudo:clé`, une ligne par membre, relu à chaque envoi).
-- Slug : `local_quartz_forever` ; hostname interne : `local-quartz-forever`.
+- **App installée depuis le dépôt d'apps** (depuis le 30/10/2026) : dépôt store `ee5b467c`
+  = `https://github.com/gawel-code/quartz-leveling-website` (public, sans jeton), slug
+  **`ee5b467c_quartz_forever`**, hostname interne **`ee5b467c-quartz-forever`**. Options, watchdog
+  et mise à jour automatique activés. Configs d'apps dans **`/app_configs`** : clés, base et clé de
+  session dans `/app_configs/ee5b467c_quartz_forever/` (`cles.txt` au format `Pseudo:clé`, relu à
+  chaque envoi ; `guilde.db`, `guilde.db.avant-reset`, `secret.key`).
+- **Déployer** (après « oui merge », `version` bumpée) : `ha_manage_app(action="check_updates")`
+  puis `ha_manage_app(slug="ee5b467c_quartz_forever", action="update")`, puis vérifier le pied de
+  page ; ou attendre la mise à jour automatique (le Supervisor relit le store périodiquement).
+- Ancienne app locale `local_quartz_forever` (`/local_apps/quartz_forever`, hôte
+  `local-quartz-forever`) : arrêtée le 30/10, démarrage manuel, watchdog et mise à jour auto coupés ;
+  à désinstaller après une sauvegarde HA.
 - Dans Terminal & SSH, la config HA est sous **`/homeassistant`** (pas `/config`).
   Le collage peut être déformé par le *bracketed paste* (1ʳᵉ lettre mangée, `~` final) :
   taper à la main `printf '\e[?2004l'`.
-- CLI dans Terminal & SSH : `ha apps install|start|restart|rebuild|logs local_quartz_forever`,
+- CLI dans Terminal & SSH : `ha apps install|start|restart|rebuild|logs ee5b467c_quartz_forever`,
   `ha store reload`. Le shell est **BusyBox** (pas de `ls -b`, `grep` limité).
 - Fichiers créés via File editor = fins de ligne **CRLF** → casser bash.
   Toujours `sed -i 's/\r$//'` avant d'exécuter un script collé.
-- Déploiement : l'app locale n'est pas liée à GitHub (dépôt privé). Lancer
-  `/homeassistant/deployer-quartz.sh [réf]` (copie de `ha/deployer-quartz.sh`) dans
-  Terminal & SSH : télécharge `ha-app/quartz_forever` de `main` (ou de la réf donnée)
-  avec le jeton lecture seule `quartz_github_token` de `/homeassistant/secrets.yaml`
-  (repli : `/homeassistant/.quartz_token`), copie dans
-  `/local_apps/quartz_forever/`, puis `ha store reload` et **attend** (6 × 5 s) que `ha apps info`
-  donne `version_latest` = version copiée ; update si la version installée diffère, rebuild sinon ;
-  vérifie ensuite `version` installée et sort en « ÉCHEC » sinon. Avant (30/10, v1.10.1) : `ha apps
-  update` lancé trop tôt échouait, le repli `rebuild` laissait la 1.10.0 installée sans erreur
-  visible ; corrigé par Claude via `ha_manage_app(action="update")`. La copie
-  `/homeassistant/deployer-quartz.sh` est à remplacer à la main après chaque changement du script.
-  Bumper `version` dans `config.yaml` à chaque changement. `/data` et `cles.txt` ne bougent pas.
-- **Dépôt d'apps (v1.11.0, migration à faire)** : objectif = plus de console. Ajouter le dépôt dans
-  le store (public : URL simple ; privé : `https://x-access-token:<jeton>@github.com/…` — le slug
-  `<hash>_quartz_forever` est le SHA-1[:8] de l'URL **complète**, jeton compris : changer de jeton =
-  nouveau slug). Étapes dans README « Migration de l'app locale vers le dépôt ». Après migration :
-  déploiement = `ha_manage_app(action="check_updates")` puis `ha_manage_app(slug=…, action="update")`
-  par Claude, ou mise à jour auto (`auto_update`) ; mettre à jour ce fichier (slug, hôte
-  `<hash>-quartz-forever`, chemins `/app_configs/<slug>/`) et `ha/configuration.yaml`.
+- Ancien déploiement (app locale, jusqu'à la v1.11.0) : `/homeassistant/deployer-quartz.sh [réf]`
+  dans Terminal & SSH (archive de `main` via l'API GitHub avec le jeton `quartz_github_token` de
+  `/homeassistant/secrets.yaml`, copie dans `/local_apps/quartz_forever/`, `ha store reload`, attente
+  de `version_latest`, update ou rebuild). Piège vu le 30/10 : `ha apps update` lancé trop tôt,
+  repli `rebuild` → ancienne version restée installée sans erreur. Le jeton ne sert plus.
+- Slug d'une app de dépôt = `<SHA-1[:8] de l'URL du dépôt>_<slug>` : l'URL ne doit pas changer
+  (sinon nouveau slug, nouvelle migration).
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
   `mcp.gawel.be → http://homeassistant:9583` (connecteur MCP de Claude, **ne pas
-  supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
-  Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
+  supprimer**) et `quartz.gawel.be → http://ee5b467c-quartz-forever:8080` (depuis le 30/10 ;
+  `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
+  **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 30 octobre 2026 (v1.10.1 déployée, v1.11.0 mergée)
+## État au 30 octobre 2026 (v1.11.0 déployée, app migrée vers le dépôt d'apps)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -275,15 +272,15 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `discord.com/oauth2/authorize` avec `state` signé, `/connexion` → même URL) : connexion Discord par lien direct (app mobile) et `state` signé sans
   cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin (non vérifiée :
   session admin nécessaire). À tester sur téléphone (app installée, iOS et Android).
-- ✅ v1.11.0 (mergée ; à déployer une dernière fois par le script) : `repository.yaml` + base dans
-  `/config`. Puis migration vers le dépôt d'apps (README), de préférence avant le 5/11. Choix de Gaël
-  (30/10) : **dépôt public** → URL du store `https://github.com/gawel-code/quartz-leveling-website`,
-  sans jeton (slug stable). Ne jamais commiter de secret (déjà la règle) ; le jeton lecture seule
-  `quartz_github_token` du script ne servira plus après la migration.
-- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointaient sur
-  Firemaw / Progress ; probablement vidées depuis (collecte du 30/10 au soir → `source: null`, aucun
-  appel API ; options non relues) — sinon les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
-  redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,
+- ✅ v1.11.0 (déployée le 30/10) : `repository.yaml` + base dans `/config`. Dernier déploiement par le
+  script sur l'app locale (migration `/data` → `/config` vue dans le journal), dépôt passé en
+  **public** (historique git vérifié : aucun secret), ajouté au store, app `ee5b467c_quartz_forever`
+  installée, options reportées, base copiée par Gaël, démarrée (9 persos, 3 noms de rangs, comptes
+  OK), Cloudflared basculé. Reste : URL `quartz_*_url` de `secrets.yaml` →
+  `ee5b467c-quartz-forever` + recharger les `rest_command` ; vérifier le site dans un navigateur
+  (le proxy de session Claude bloque `quartz.gawel.be`) ; désinstaller l'ancienne app.
+- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
+  30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
@@ -324,16 +321,16 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   roster, sens exact de `last_login_timestamp` (connexion ou dernière sauvegarde ?).
 
 ## Outils utiles pour Claude (via le connecteur HA)
-- Appeler l'app directement : `ha_manage_app(slug="local_quartz_forever", port=8080,
+- Appeler l'app directement : `ha_manage_app(slug="ee5b467c_quartz_forever", port=8080,
   path=..., method=...)` — permet `/export.json?token=…`, `POST /reinitialiser?token=…`,
   `POST /envoyer` (header `X-Cle`) sans passer par Cloudflare (bloqué par le proxy de session).
 - `rest_command.quartz_collecter` / `quartz_recap` : `ha_call_service(..., return_response=True)`.
   `rest_command.quartz_reinitialiser` (voir `ha/configuration.yaml`) **n'est pas** configuré côté HA.
-- Logs de l'app : `ha_get_logs(source="supervisor", slug="local_quartz_forever")`.
+- Logs de l'app : `ha_get_logs(source="supervisor", slug="ee5b467c_quartz_forever")`.
 - Le connecteur ne lit pas les fichiers (`cles.txt`, `configuration.yaml`) : passer par Terminal & SSH.
 - « Clé inconnue » sur `/contribuer` alors que `cles.txt` est bon = clé mal saisie
   (ligne entière collée, autoremplissage du navigateur) ; l'app lit bien
-  `/app_configs/local_quartz_forever/cles.txt`.
+  `/app_configs/ee5b467c_quartz_forever/cles.txt`.
 
 ## To-do
 1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
@@ -344,8 +341,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
    coupées jusqu'au 5/11, réactivation automatique (voir État).
 3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
-   (actuellement canal de test) ; vider `bnet_royaume` / `bnet_guilde` (Progress) ; remettre la
-   base à zéro (persos de Progress et de test).
+   (actuellement canal de test) ; remettre la base à zéro (persos de Progress et de test) ;
+   finir la migration (secrets.yaml, désinstaller l'app locale, supprimer `ha/deployer-quartz.sh`).
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).

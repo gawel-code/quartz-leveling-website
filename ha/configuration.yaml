@@ -1,10 +1,10 @@
 # À ajouter dans /config/configuration.yaml de Home Assistant.
 # Le jeton est rangé dans /config/secrets.yaml. Hôte interne = slug de l'app avec « - » au lieu de
-# « _ » : local-quartz-forever pour l'app locale, <hash>-quartz-forever une fois l'app installée
-# depuis le dépôt d'apps (v1.11.0, voir README) :
-#   quartz_collecter_url: "http://local-quartz-forever:8080/collecter?token=LE_JETON"
-#   quartz_recap_url: "http://local-quartz-forever:8080/recap?token=LE_JETON"
-#   quartz_reinitialiser_url: "http://local-quartz-forever:8080/reinitialiser?token=LE_JETON"
+# « _ » : ee5b467c-quartz-forever (app installée depuis le dépôt d'apps ; l'ancienne app locale
+# était local-quartz-forever) :
+#   quartz_collecter_url: "http://ee5b467c-quartz-forever:8080/collecter?token=LE_JETON"
+#   quartz_recap_url: "http://ee5b467c-quartz-forever:8080/recap?token=LE_JETON"
+#   quartz_reinitialiser_url: "http://ee5b467c-quartz-forever:8080/reinitialiser?token=LE_JETON"
 rest_command:
   quartz_collecter:
     url: !secret quartz_collecter_url
