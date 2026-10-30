@@ -51,6 +51,9 @@ Sur cette même page, **Mes personnages** liste tes personnages : ceux de ton co
 ajoutés tout seuls à chaque envoi de ton fichier, et tu peux en ajouter à la main (« C'est mon
 personnage »). Dans le classement, ils affichent ton pseudo avec un lien vers ton profil Discord.
 
+Une fois connecté, tes personnages apparaissent aussi sur la **courbe de progression** de la page
+d'accueil, à côté de la moyenne de la guilde.
+
 ## Étape 3 — Envoyer tes données (choisis UNE des deux options)
 
 ### Option A — Automatique (recommandé, à faire une seule fois)

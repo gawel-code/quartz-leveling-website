@@ -619,3 +619,83 @@ def test_meilleurs_contributeurs(discord_client, tmp_path):
     connecter(ADMIN_ID, nick="Admin")
     admin = c.get("/admin").text.split("Contributeurs")[1].split("</table>")[0]
     assert all(n in admin for n in ("Thrall", "Gael", "Jaina", "Mok")) and "serveur" not in admin
+
+
+# ---------- Courbe de progression ----------
+def test_courbe_avant_le_lancement(client):
+    envoyer(client, LUA2)
+    html = client.get("/").text
+    assert 'id="donnees-courbe"' in html and "La courbe démarre le 4 novembre" in html
+
+
+def test_courbe_series_quotidiennes(discord_client, monkeypatch):
+    import datetime as dt, json
+    c, connecter = discord_client
+    g = c.application.view_functions["index"].__globals__
+    with g["db"]() as con:  # historique fabriqué : Grommash monte, Zuljin arrive le 6/11
+        con.executemany("INSERT INTO historique VALUES(?,?,?)", [
+            ("Grommash", 5, "2026-11-04T10:00:00"), ("Grommash", 12, "2026-11-05T22:00:00"),
+            ("Grommash", 20, "2026-11-07T08:00:00"), ("Zuljin", 8, "2026-11-06T12:00:00")])
+        con.executemany("INSERT INTO personnages VALUES(?,?,?,?,?)", [
+            ("Grommash", "Orc", "Guerrier", 20, "2026-11-07T08:00:00"), ("Zuljin", "Troll", "Chaman", 8, "2026-11-06T12:00:00")])
+        monkeypatch.setitem(g, "aujourdhui", lambda: dt.date(2026, 11, 7))
+        d = g["courbe"](con, ["Grommash"])
+    assert d["jours"] == ["2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"] and d["fin"] == "2027-01-01"
+    assert d["n"] == [1, 1, 2, 2] and d["moyenne"] == [5, 12, 10, 14] and d["max"][3] == 20
+    assert d["mediane"][2] == 10 and d["q1"][3] == 11 and d["q3"][3] == 17
+    assert d["persos"][0]["nom"] == "Grommash" and d["persos"][0]["niveaux"] == [5, 12, 12, 20]
+    # Sur la page : les persos du joueur connecté sont dans les données de la courbe
+    connecter(nick="Gael")
+    c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"})
+    brut = c.get("/").text.split('id="donnees-courbe">')[1].split("</script>")[0]
+    assert [p["nom"] for p in json.loads(brut)["persos"]] == ["Zuljin"]
+
+
+def test_courbe_s_allonge_apres_le_1er_janvier(client, monkeypatch):
+    import datetime as dt
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "aujourdhui", lambda: dt.date(2027, 1, 15))
+    with g["db"]() as con:
+        d = g["courbe"](con)
+    assert d["fin"] == "2027-01-15" and len(d["jours"]) == 73
+
+
+# ---------- Personnages exclus (mules, banques) ----------
+def test_exclure_et_reintegrer_un_personnage(discord_client, monkeypatch):
+    c, connecter = discord_client
+    messages, _ = capturer(monkeypatch, c)
+    envoyer(c, LUA2)  # Grommash 60, Zuljin 21, Mok 5
+    connecter(ADMIN_ID, nick="Admin")
+    r = c.post("/admin", data={"action": "desactiver", "nom": "Grommash", "motif": "banque"})
+    assert "Grommash est exclu de la progression (banque)" in r.text and '<span class="puce exclu">Banque</span>' in r.text
+    assert c.post("/admin", data={"action": "desactiver", "nom": "Inconnu", "motif": "mule"}).status_code == 200
+    accueil = c.get("/").text
+    classement = accueil.split("<tbody>")[1]
+    assert "Grommash" not in classement and "Zuljin" in classement
+    d = c.get("/export.json?token=tok").json
+    assert {e["nom"] for e in d["exploits"]} == {"Zuljin"} and [e["rang"] for e in d["exploits"] if e["palier"] == 10] == [1]
+    assert d["inactifs"][0]["nom"] == "Grommash" and d["personnages"][0]["niveau"] == 60  # niveaux toujours suivis
+    # Un exclu ne déclenche plus d'annonce
+    messages.clear()
+    envoyer(c, LUA2.replace("Mok;Tauren;Paladin;5", "Mok;Tauren;Paladin;6").replace("Grommash;Orc;Guerrier;60", "Grommash;Orc;Guerrier;60"))
+    assert not any("Grommash" in m for m in messages)
+    # Réintégration : paliers rendus selon la date réelle, sans annonce
+    messages.clear()
+    r = c.post("/admin", data={"action": "reactiver", "nom": "Grommash"})
+    assert "Grommash est réintégré" in r.text and not messages
+    d = c.get("/export.json?token=tok").json
+    assert {e["palier"] for e in d["exploits"] if e["nom"] == "Grommash"} == {10, 20, 30, 40, 50, 60}
+    assert d["inactifs"] == []
+
+
+def test_exclus_hors_recap_et_vides_par_la_remise_a_zero(discord_client, monkeypatch):
+    c, connecter = discord_client
+    _, bruts = capturer(monkeypatch, c)
+    envoyer(c, LUA2)
+    connecter(ADMIN_ID, nick="Admin")
+    c.post("/admin", data={"action": "desactiver", "nom": "Mok", "motif": "mule"})
+    bruts.clear()
+    c.get("/recap?token=tok")
+    assert "Mok" not in bruts[0] and "2 membres" in bruts[0]
+    c.post("/admin", data={"action": "reinitialiser"})
+    assert c.get("/export.json?token=tok").json["inactifs"] == []

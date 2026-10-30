@@ -40,7 +40,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (à compléter à chaque bump de `version`).
 - `ha-app/quartz_forever/` : l'app Home Assistant (config.yaml, build.yaml,
   Dockerfile, run.sh, app.py, logo.png = cristal détouré 204×256 (bord érodé de 3 px et adouci en v1.4.2 pour retirer le liseré clair),
-  banniere.jpg = grotte de cristaux en fond d'en-tête). **C'est le code du serveur.**
+  banniere.jpg = grotte de cristaux en fond d'en-tête, icon.png = cristal 128×128 transparent : icône
+  de l'app dans la liste des apps de Home Assistant, lue par le Supervisor dans le dossier de l'app,
+  pas dans l'image ; `logo.png` sert aussi de logo sur la fiche de l'app). **C'est le code du serveur.**
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
@@ -86,7 +88,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   dans `exploits` ; le tableau d'honneur affiche le top 3 (10–50) et tous les 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
-  `/export.json`, `POST /reinitialiser` (vide progression, envois et associations — pas `comptes` —, copie dans
+  `/export.json`, `POST /reinitialiser` (vide progression, envois, associations et exclusions — pas `comptes` —, copie dans
   `<DB>.avant-reset`) — ces quatre protégées par `?token=`.
 - Connexion Discord (v1.4.0, OAuth2 code, scopes `identify guilds.members.read connections`) : `/connexion`
   → Discord → `/auth/discord/callback` (vérifie `state`, être sur le serveur `discord_serveur_id`
@@ -138,6 +140,20 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   montée est créditée au premier envoi qui l'apprend), `envois`, `lus`, `dernier` ; tri montées,
   envois, date. Top 3 sur `/` (bloc « Meilleurs contributeurs », caché sans envoi, lien Discord si
   compte relié), liste complète dans `/admin`. Remis à zéro avec la progression (table `envois`).
+- Courbe (v1.8.0) : `courbe(con, mes_noms)` → séries quotidiennes de `DEBUT_COURBE` (4/11/2026) à
+  `aujourdhui()` (patchable dans les tests) ; axe jusqu'à `max(FIN_COURBE_MIN = 1/1/2027, aujourd'hui)`.
+  Niveau d'un perso en fin de journée = dernier niveau de `historique` avant minuit (`bisect`).
+  Séries : `n`, `moyenne`, `min`, `q1`, `mediane`, `q3` (`quantile()`, interpolation linéaire), `max`,
+  + `persos` du joueur connecté (via `proprietaires()`), couleur de classe. Exclus ignorés. JSON dans
+  `<script id="donnees-courbe">`, dessiné en SVG par du JS maison dans `PAGE` (aucune bibliothèque) :
+  bande Q1–Q3, moyenne, plus haut niveau, persos avec point final et étiquette (≤ 4), réticule +
+  infobulle (`textContent`), clavier (←/→), redessin au redimensionnement, tableau dans `<details>`.
+- Exclusions (v1.8.0) : table `inactifs(nom PK, motif, date)`, `MOTIFS` mule/banque/autre.
+  `desactiver()` supprime les exploits du perso et reclasse ; `reactiver()` les recrée depuis
+  `historique` (`date_atteinte`) sans annonce. `verifier_exploits()` ignore un exclu (ni palier ni
+  annonce) ; exclus filtrés de `/` (classement, stats, fil), `gains()`, `recap()`, `courbe()`. Ses
+  niveaux restent suivis. `/admin` : colonne « Progression » (motif + Exclure / Réintégrer), filtre
+  « Exclus ». `/moi` : pastille sur un perso exclu. Vidé par la remise à zéro, dans `/export.json`.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
@@ -173,7 +189,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.6.1 mergée, v1.7.0 en PR)
+## État au 30 octobre 2026 (v1.7.0 mergée, v1.8.0 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -188,8 +204,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   « Déconnexion » (ou « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
 - ✅ v1.6.0 (mergée ; déploiement non confirmé) : personnages ↔ joueurs (+ addon 1.2.0 : `GuildExportMesPersos`, mergé).
 - ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
-- 🔜 v1.7.0 : meilleurs contributeurs (top 3 sur l'accueil, liste complète dans l'admin) ; la remise à
-  zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
+- ✅ v1.7.0 (mergée ; déploiement non confirmé) : meilleurs contributeurs (top 3 sur l'accueil, liste
+  complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
+- 🔜 v1.8.0 (PR ouverte, pas encore mergée) : courbe de progression sur l'accueil, exclusion des
+  mules/banques dans l'admin, et `icon.png` de l'app HA (ex-PR v1.7.1, regroupée ici).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
