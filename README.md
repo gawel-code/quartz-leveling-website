@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.10.1
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.11.0
 
 ## Fonctionnement
 
@@ -159,7 +159,35 @@ Les clés des membres sont dans `/app_configs/local_quartz_forever/cles.txt`
 
 ## Déploiement
 
-L'app est une app locale Home Assistant (slug `local_quartz_forever`), exposée par
+**Cible (v1.11.0) : dépôt d'apps Home Assistant.** `repository.yaml` à la racine fait de ce
+dépôt un dépôt d'apps : une fois ajouté dans HA (Paramètres → Apps → Boutique → ⋮ → Dépôts),
+chaque nouvelle `version` de `ha-app/quartz_forever/config.yaml` apparaît comme une mise à jour
+normale (installable d'un clic, automatique si « Mise à jour automatique » est activée, ou
+déclenchée par Claude via le connecteur HA). Plus de console. Le slug de l'app devient
+`<hash>_quartz_forever` (hash = 8 premiers caractères du SHA-1 de l'URL du dépôt) : migration
+unique décrite ci-dessous. La base (`guilde.db`, `secret.key`) est dans `/config` depuis la
+v1.11.0, c'est-à-dire `/app_configs/<slug>/` à côté de `cles.txt`.
+
+### Migration de l'app locale vers le dépôt (une fois)
+
+1. Déployer la v1.11.0 sur l'app locale avec le script (dernière fois) : au démarrage, la base
+   passe de `/data` à `/app_configs/local_quartz_forever/`.
+2. Ajouter le dépôt dans HA. Dépôt public : `https://github.com/gawel-code/quartz-leveling-website`.
+   Dépôt privé : `https://x-access-token:<jeton>@github.com/gawel-code/quartz-leveling-website`
+   (jeton lecture seule ; le hash du slug dépend alors de l'URL complète, donc **du jeton** :
+   changer de jeton = nouveau slug = nouvelle migration).
+3. Installer « Quartz Forever » depuis ce dépôt, **sans le démarrer** ; noter son slug.
+4. Arrêter l'app locale, puis dans Terminal & SSH :
+   `cp -a /app_configs/local_quartz_forever/. /app_configs/<slug>/`
+5. Reporter les options (token, webhook, secrets Discord et Battle.net…), démarrer la nouvelle app.
+6. Mettre à jour les adresses internes : `http://<slug avec - au lieu de _>:8080` dans la route
+   Cloudflared de `quartz.gawel.be` et dans les URL `quartz_*_url` de `secrets.yaml`
+   (puis recharger les `rest_command`).
+7. Vérifier le site, puis désinstaller l'app locale (sauvegarde HA avant).
+
+### Ancien déploiement (app locale, jusqu'à la migration)
+
+L'app locale Home Assistant (slug `local_quartz_forever`) est exposée par
 Cloudflare Tunnel sur `quartz.gawel.be`. Dans Terminal & SSH :
 
 ```bash
@@ -193,6 +221,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |
 | 1.9.0 | collecte automatique par l'API Blizzard (roster de guilde, races et classes en français, montées datées par la dernière connexion) ; options `bnet_*` ; `/collecter` indique la source lue ; script `tools/verifier_api_blizzard.py` enrichi (royaumes, roster, profil) |

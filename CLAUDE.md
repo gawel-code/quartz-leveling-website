@@ -60,7 +60,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
-- `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
+- `ha/deployer-quartz.sh` : déploiement de l'app locale depuis GitHub (voir plus bas ; obsolète
+  après la migration vers le dépôt d'apps).
+- `repository.yaml` (v1.11.0) : fait du dépôt un dépôt d'apps HA (le Supervisor trouve
+  `ha-app/quartz_forever/config.yaml` en parcourant le dépôt).
 - `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
   jeton `client_credentials` (`BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`), index races/classes
   (`static-…`), `--royaumes` (`dynamic-…`), `--guilde` (roster → lignes `Nom;Race;Classe;Niveau`,
@@ -190,8 +193,12 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   les persos de Progress venaient d'une collecte v1.9.0 et l'API était coupée).
   Accueil : colonne « Rang » seulement si un perso a un rang (`avec_rangs`), nom ou « Rang N ».
   L'API ne fournit pas les noms des rangs ni les rôles (tank/soigneur/DPS).
+- Stockage (v1.11.0) : `GUILDE_DB=/config/guilde.db` ; `secret.key` et `guilde.db.avant-reset` à côté
+  (`cle_de_session()` suit le dossier de la base). `run.sh` déplace une fois `guilde.db`,
+  `guilde.db.avant-reset` et `secret.key` de `/data` vers `/config` s'ils n'y sont pas déjà.
+  `/config` = `/app_configs/<slug>/` (Terminal & SSH, sauvegardes HA). `GuildExport.lua` reste dans `/data`.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
-  `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
+  `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/config/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
   `DISCORD_SERVEUR_ID`, `DISCORD_ROLE_ID`, `DISCORD_ADMINS`, `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET`,
   `BNET_REGION` (`eu`), `BNET_ESPACE` (`classic1x`), `BNET_ROYAUME`, `BNET_GUILDE`. Webhook vide = messages
@@ -226,12 +233,19 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   visible ; corrigé par Claude via `ha_manage_app(action="update")`. La copie
   `/homeassistant/deployer-quartz.sh` est à remplacer à la main après chaque changement du script.
   Bumper `version` dans `config.yaml` à chaque changement. `/data` et `cles.txt` ne bougent pas.
+- **Dépôt d'apps (v1.11.0, migration à faire)** : objectif = plus de console. Ajouter le dépôt dans
+  le store (public : URL simple ; privé : `https://x-access-token:<jeton>@github.com/…` — le slug
+  `<hash>_quartz_forever` est le SHA-1[:8] de l'URL **complète**, jeton compris : changer de jeton =
+  nouveau slug). Étapes dans README « Migration de l'app locale vers le dépôt ». Après migration :
+  déploiement = `ha_manage_app(action="check_updates")` puis `ha_manage_app(slug=…, action="update")`
+  par Claude, ou mise à jour auto (`auto_update`) ; mettre à jour ce fichier (slug, hôte
+  `<hash>-quartz-forever`, chemins `/app_configs/<slug>/`) et `ha/configuration.yaml`.
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
   `mcp.gawel.be → http://homeassistant:9583` (connecteur MCP de Claude, **ne pas
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.10.1 déployée)
+## État au 30 octobre 2026 (v1.10.1 déployée, v1.11.0 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -261,6 +275,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `discord.com/oauth2/authorize` avec `state` signé, `/connexion` → même URL) : connexion Discord par lien direct (app mobile) et `state` signé sans
   cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin (non vérifiée :
   session admin nécessaire). À tester sur téléphone (app installée, iOS et Android).
+- 🔜 v1.11.0 (PR ouverte) : `repository.yaml` + base dans `/config`. Puis migration vers le dépôt
+  d'apps (README), de préférence avant le 5/11. Choix en attente : dépôt public ou privé + jeton.
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointaient sur
   Firemaw / Progress ; probablement vidées depuis (collecte du 30/10 au soir → `source: null`, aucun
   appel API ; options non relues) — sinon les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis

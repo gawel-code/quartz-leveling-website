@@ -1,0 +1,5 @@
+# Dépôt d'apps Home Assistant (Paramètres → Apps → Boutique → ⋮ → Dépôts) : le Supervisor y trouve
+# ha-app/quartz_forever/config.yaml et propose chaque nouvelle `version` comme une mise à jour.
+name: Quartz Forever
+url: https://github.com/gawel-code/quartz-leveling-website
+maintainer: Gaël
