@@ -18,10 +18,10 @@ rest_command:
 # Automatisations : à coller dans automations.yaml (ou une par une via
 # Paramètres → Automatisations → Créer → ⋮ → Modifier en YAML, sans le tiret initial).
 # - id: quartz_collecte_horaire
-#   alias: Quartz – collecte horaire
+#   alias: Quartz – collecte toutes les 15 min
 #   triggers:
 #     - trigger: time_pattern
-#       minutes: 0
+#       minutes: "/15"
 #   actions:
 #     - action: rest_command.quartz_collecter
 #

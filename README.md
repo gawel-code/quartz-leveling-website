@@ -23,7 +23,7 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
                           app Flask + SQLite (app locale Home Assistant, HAOS)
                                                                     │
             Cloudflare Tunnel ◄─────────────────────────────────────┤
-            Home Assistant : collecte horaire + récap 9 h / 21 h ───┴─► webhook Discord
+            Home Assistant : collecte /15 min + récap 9 h / 21 h ───┴─► webhook Discord
 ```
 
 - **Addon** : dépôt séparé [gawel-code/quartz-leveling-addon](https://github.com/gawel-code/quartz-leveling-addon).
@@ -167,7 +167,9 @@ le cache de Cloudflare et des navigateurs.
 La base et `cles.txt` ne sont pas touchés. Détails et pièges connus : voir `CLAUDE.md`.
 
 Côté Home Assistant, `rest_command.quartz_collecter` et `rest_command.quartz_recap`
-sont appelés par deux automatisations (collecte horaire, récap à 9 h et 21 h).
+sont appelés par deux automatisations (collecte toutes les 15 minutes, récap à 9 h et 21 h).
+L'API Blizzard autorise 36 000 requêtes/h (100/s) ; une collecte en consomme 1 + 1 par perso
+qui a pris un niveau, donc on peut collecter souvent sans risque.
 
 ## Développement
 

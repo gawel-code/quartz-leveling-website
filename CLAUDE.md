@@ -22,8 +22,9 @@ concises, pas de pédagogie de base.
   niveau), tableau d'honneur, annonces Discord.
 - **API Blizzard** : l'espace de noms Forever n'est pas (encore) publié. On
   collecte donc via un **addon en jeu** dont les membres envoient le fichier
-  SavedVariables. `lire_api_blizzard()` dans `app.py` est le point de branchement
-  prévu pour l'API quand elle existera (Classic Era : `profile-classic1x-eu`).
+  SavedVariables. `lire_api_blizzard()` (v1.9.0) lit déjà le roster de guilde sur l'API
+  (testée en production sur Classic, `classic1x`) : il restera à renseigner l'espace de noms,
+  le royaume et la guilde de Forever (options `bnet_*`).
 
 ## Architecture
 ```
@@ -32,7 +33,8 @@ WoW (addon GuildExport) → GuildExport.lua (SavedVariables, écrit à la décon
      (clé affichée sur /moi après connexion Discord ; connecté, /contribuer n'en demande pas)
    → app Flask + SQLite dans une app locale Home Assistant (HAOS)
    → https://quartz.gawel.be via Cloudflare Tunnel
-Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) → webhook Discord
+Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 h / 21 h) → webhook Discord
+/collecter → API Blizzard (roster de guilde, si options bnet_*) sinon fichier déposé côté serveur
 ```
 
 ## Arborescence
@@ -202,7 +204,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.9.0 mergée)
+## État au 30 octobre 2026 (v1.9.0 déployée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -221,24 +223,27 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
 - ✅ v1.8.0 (mergée ; déploiement non confirmé) : courbe de progression sur l'accueil, exclusion des
   mules/banques dans l'admin, et `icon.png` de l'app HA (ex-PR v1.7.1, regroupée ici).
-- ✅ v1.9.0 (mergée ; déploiement non confirmé) : collecte par l'API Blizzard. Après déploiement, options `bnet_*` vides
-  = rien ne change. Pour l'essayer : renseigner `bnet_client_id` / `bnet_client_secret` (jamais
-  commités ni recopiés depuis le connecteur), `bnet_royaume` + `bnet_guilde` d'une guilde Classic
-  (ex. `firemaw` / `Progress`) et appeler `/collecter?token=…` → `source: "blizzard"` ; **attention,
-  ça remplit la base** (vider via `/admin` ensuite) et annonce sur Discord (webhook de test).
+- ✅ v1.9.0 (déployée, vérifiée le 30/10) : collecte par l'API Blizzard. Pied « v1.9.0 ». Identifiants
+  Battle.net de Gaël dans `bnet_client_id` / `bnet_client_secret` (jamais commités ni recopiés depuis
+  le connecteur). Essai réel avec `bnet_royaume = Firemaw`, `bnet_guilde = Progress` :
+  `/collecter` → `source: "blizzard"`, 6 persos (race, classe, niveau corrects), Kwindu daté par sa
+  dernière connexion (27/10 18:06), annonces parties sur le canal de test.
+- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
+  Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
+  redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,
+  Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
   pseudos sans espaces ni `|`, accents possibles : `Metam-Zap`, `Patéhenkrout`, `Finwë`…).
   Ligne de test `TestClaude` retirée (clé refusée → 403) ; copie dans `cles.txt.bak`.
-- ⏸️ Automatisations HA (collecte horaire, récap 9 h / 21 h) **coupées jusqu'au lancement** :
+- ⏸️ Automatisations HA (collecte toutes les 15 min depuis le 30/10, récap 9 h / 21 h) **coupées jusqu'au lancement** :
   `automation.quartz_reactivation_au_lancement` les réactive à la date/heure de
   `input_datetime.quartz_lancement_wow_forever` (5/11/2026 00:00, changer la date si besoin).
 - ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
   à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
-  `/export.json`, script `client/` sous Windows). ⚠️ La base contient encore les **données de test**
-  du 29/10 : la vider avant la distribution (bouton de `/admin`, les comptes sont conservés).
+  `/export.json`, script `client/` sous Windows). Données de test encore en base : voir ⚠️ ci-dessus.
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
 - ✅ Connecteur MCP Home Assistant de Claude : URL avec chemin secret, **sans OAuth**
   (si « needs_reconnect » → supprimer et recréer le connecteur avec l'URL complète)
@@ -257,7 +262,11 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - À vérifier : roster complet ? (6 membres seulement pour `<Progress>`, guilde pourtant active :
   dernière connexion d'un membre le 27/10/2026).
 - Profil `/profile/wow/character/{royaume}/{nom}` : race, classe, niveau, guilde,
-  `last_login_timestamp` (ms). Aucune date de montée de niveau dans l'API.
+  `last_login_timestamp` (ms). Aucune date de montée de niveau dans l'API. En production, 5 profils
+  sur 6 de `<Progress>` → **404** alors qu'ils sont dans le roster (royaumes `mograine`,
+  `earthshaker`, `ashbringer`, `gandling`, `firemaw`) : sans doute des persos inactifs dont Blizzard
+  ne publie plus le profil ; repli sur l'heure de collecte, comme prévu. Quotas : 36 000 req/h,
+  100 req/s ; une collecte = 1 roster + 1 profil par perso qui monte.
 - Branché en v1.9.0 (voir *Serveur*). À vérifier sur Forever : espace de noms, complétude du
   roster, sens exact de `last_login_timestamp` (connexion ou dernière sauvegarde ?).
 
@@ -277,11 +286,13 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
 2. ~~Automatisations HA~~ ✅ fait (29/10) : `rest_command.quartz_collecter` / `quartz_recap`
    chargés (secrets internes, token de l'app renseigné, appels testés → 200),
-   automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
+   automatisations `automation.quartz_collecte_horaire` (toutes les 15 min depuis le 30/10 —
+   `time_pattern` `/15`, alias « Quartz – collecte toutes les 15 min », entity_id inchangé) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
    coupées jusqu'au 5/11, réactivation automatique (voir État).
-3. Webhook Discord : configuré, mais **actuellement sur le canal de test** → remettre le vrai
-   salon de progression dans l'option `discord_webhook` avant le 5/11.
+3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
+   (actuellement canal de test) ; vider `bnet_royaume` / `bnet_guilde` (Progress) ; remettre la
+   base à zéro (persos de Progress et de test).
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
