@@ -19,6 +19,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("GUILDE_CLES", str(tmp_path / "cles.txt"))
     monkeypatch.setenv("GUILDE_TOKEN", "tok")
     monkeypatch.setenv("DISCORD_WEBHOOK", "")
+    monkeypatch.setenv("GUILDE_URL", "http://localhost")
+    monkeypatch.delenv("DISCORD_CLIENT_SECRET", raising=False)
     spec = importlib.util.spec_from_file_location("app", APP)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -257,3 +259,132 @@ def test_message_decoupe_au_dela_de_2000_caracteres(client, monkeypatch):
     assert len(lignes) == 40 and len(bruts) > 1
     assert all(len(b) <= 2000 for b in bruts)
     assert bruts[-1].endswith("_— via Gael_") and sum("via" in b for b in bruts) == 1
+
+
+# ---------- Connexion Discord ----------
+ADMIN_ID = "161139977328132107"
+ROLE = "1549720665844613130"
+
+
+class Reponse:
+    def __init__(self, donnees, code=200):
+        self.donnees, self.status_code = donnees, code
+
+    def json(self):
+        return self.donnees
+
+    def raise_for_status(self):
+        assert self.status_code < 400
+
+
+@pytest.fixture
+def discord_client(client, monkeypatch):
+    """Client avec la connexion Discord active. Renvoie (client, connecter(id, roles, sur_serveur))."""
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "DISCORD_SECRET", "secret")
+    profil = {}
+
+    def post(url, **kw):
+        assert url.endswith("/oauth2/token") and kw["data"]["code"] == "code-ok"
+        return Reponse({"access_token": "t"})
+
+    def get(url, **kw):
+        if url.endswith("/users/@me"):
+            return Reponse({"id": profil["id"], "username": "user" + profil["id"], "global_name": None})
+        if not profil["serveur"]:
+            return Reponse({"message": "Unknown Guild"}, 404)
+        return Reponse({"nick": "Surnom" + profil["id"], "roles": profil["roles"], "user": {}})
+    monkeypatch.setattr(g["requests"], "post", post)
+    monkeypatch.setattr(g["requests"], "get", get)
+
+    def connecter(id_discord="42", roles=(ROLE,), sur_serveur=True):
+        profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur)
+        r = client.get("/connexion")
+        assert r.status_code == 302 and "discord.com/oauth2/authorize" in r.location
+        with client.session_transaction() as s:
+            etat = s["etat"]
+        return client.get(f"/auth/discord/callback?code=code-ok&state={etat}")
+    return client, connecter
+
+
+def test_discord_inactif_sans_secret(client):
+    assert client.get("/connexion").status_code == 404
+    assert client.get("/moi").status_code == 404
+    assert "Connexion Discord" not in client.get("/").text
+
+
+def test_connexion_refusee_sans_role_ou_hors_serveur(discord_client):
+    c, connecter = discord_client
+    assert connecter(roles=["autre"]).status_code == 403
+    assert connecter(sur_serveur=False).status_code == 403
+    assert "Connexion Discord" in c.get("/").text  # toujours déconnecté
+
+
+def test_etat_oauth_verifie(discord_client):
+    c, _ = discord_client
+    c.get("/connexion")
+    assert c.get("/auth/discord/callback?code=code-ok&state=falsifie").status_code == 400
+    assert c.get("/moi").text.count("Connecté avec Discord") == 0
+
+
+def test_lier_avec_sa_cle_puis_envoyer_sans_cle(discord_client):
+    c, connecter = discord_client
+    r = connecter()
+    assert r.status_code == 302 and r.location.endswith("/moi")
+    assert "Première connexion" in c.get("/moi").text
+    assert c.post("/moi", data={"action": "lier", "cle": "mauvaise"}).status_code == 400
+    r = c.post("/moi", data={"action": "lier", "cle": "abc123"})
+    assert r.status_code == 200 and "Gael" in r.text and 'value="abc123"' in r.text
+    assert "Mon compte" in c.get("/").text
+    r = c.post("/contribuer", data={"fichier": (io.BytesIO(LUA1.encode()), "GuildExport.lua")},
+               content_type="multipart/form-data")
+    assert r.status_code == 200 and "Merci Gael" in r.text
+    # Un autre compte Discord ne peut pas reprendre le même pseudo
+    c.get("/deconnexion")
+    connecter("43")
+    assert c.post("/moi", data={"action": "lier", "cle": "abc123"}).status_code == 400
+
+
+def test_regenerer_la_cle_remplace_celle_de_cles_txt(discord_client):
+    c, connecter = discord_client
+    connecter()
+    c.post("/moi", data={"action": "lier", "cle": "abc123"})
+    c.post("/moi", data={"action": "regenerer"})
+    with c.application.app_context():
+        g = c.application.view_functions["index"].__globals__
+        with g["db"]() as con:
+            nouvelle = con.execute("SELECT cle FROM comptes").fetchone()[0]
+    assert nouvelle and nouvelle != "abc123"
+    assert envoyer(c, LUA1).status_code == 403
+    assert envoyer(c, LUA1, nouvelle).status_code == 200
+    assert f'value="{nouvelle}"' in c.get("/moi").text
+
+
+def test_creer_un_pseudo_sans_cle(discord_client):
+    c, connecter = discord_client
+    connecter()
+    assert c.post("/moi", data={"action": "creer", "pseudo": "gael"}).status_code == 400  # déjà dans cles.txt
+    assert c.post("/moi", data={"action": "creer", "pseudo": "a b"}).status_code == 400
+    r = c.post("/moi", data={"action": "creer", "pseudo": "Thrall"})
+    assert r.status_code == 200 and "Bienvenue Thrall" in r.text
+    cle = r.text.split('id="cle" type="text" value="')[1].split('"')[0]
+    assert len(cle) >= 20 and envoyer(c, LUA1, cle).status_code == 200
+
+
+def test_admin(discord_client):
+    c, connecter = discord_client
+    connecter()
+    assert c.get("/admin").status_code == 403
+    c.post("/moi", data={"action": "lier", "cle": "abc123"})
+    envoyer(c, LUA2)
+    c.get("/deconnexion")
+    # L'admin passe même sans le rôle ni le serveur
+    assert connecter(ADMIN_ID, roles=[], sur_serveur=False).status_code == 302
+    r = c.get("/admin")
+    assert r.status_code == 200 and "Gael" in r.text
+    r = c.post("/admin", data={"action": "reinitialiser"})
+    assert "3 personnages" in r.text
+    assert c.get("/export.json?token=tok").json["personnages"] == []
+    assert "Surnom42" in r.text  # le compte relié est conservé
+    c.post("/admin", data={"action": "delier", "discord_id": "42"})
+    assert "Aucun compte relié" in c.get("/admin").text

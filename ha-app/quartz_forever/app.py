@@ -1,8 +1,9 @@
 # Quartz Forever — suivi de progression de guilde (WoW Forever)
-import os, re, json, hmac, sqlite3, datetime
+import os, re, json, hmac, secrets, sqlite3, datetime
 from pathlib import Path
+from urllib.parse import urlencode
 import requests
-from flask import Flask, render_template_string, request, abort, jsonify, send_file
+from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
 
 # ---------- Configuration ----------
 DB = os.getenv("GUILDE_DB", "guilde.db")
@@ -11,6 +12,15 @@ FICHIER_CLES = Path(os.getenv("GUILDE_CLES", "cles.txt"))
 WEBHOOK = os.getenv("DISCORD_WEBHOOK", "")
 TOKEN = os.getenv("GUILDE_TOKEN", "change-moi")
 NOM_GUILDE = os.getenv("NOM_GUILDE", "Quartz Forever")
+URL_SITE = os.getenv("GUILDE_URL", "https://quartz.gawel.be").rstrip("/")
+# Connexion Discord (OAuth2) : active seulement si l'identifiant et le secret sont renseignés.
+DISCORD_ID = os.getenv("DISCORD_CLIENT_ID") or "1565628978633515028"
+DISCORD_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
+DISCORD_SERVEUR = os.getenv("DISCORD_SERVEUR_ID") or "801395490372583426"
+DISCORD_ROLE = os.getenv("DISCORD_ROLE_ID", "1549720665844613130")  # vide = tout membre du serveur
+ADMINS = {i.strip() for i in (os.getenv("DISCORD_ADMINS") or "161139977328132107").split(",") if i.strip()}
+API_DISCORD = "https://discord.com/api/v10"
+PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
 PALIERS = [10, 20, 30, 40, 50, 60]
 MEDAILLES = {1: "🥇", 2: "🥈", 3: "🥉"}
 COULEURS = {
@@ -50,6 +60,9 @@ def init_db():
             palier INTEGER, nom TEXT, rang INTEGER, date TEXT, UNIQUE(palier, nom));
         CREATE TABLE IF NOT EXISTS envois(
             pseudo TEXT, date TEXT, personnages INTEGER, nouveautes INTEGER);
+        CREATE TABLE IF NOT EXISTS comptes(
+            discord_id TEXT PRIMARY KEY, pseudo TEXT UNIQUE COLLATE NOCASE,
+            cle TEXT UNIQUE, discord_nom TEXT, lie_le TEXT);
         """)
 
 
@@ -153,17 +166,47 @@ def corriger_exploits(con, nom):
 
 
 # ---------- Contributeurs ----------
-def contributeur(cle):
-    """Renvoie le pseudo associé à une clé (fichier cles.txt, lignes Pseudo:clé), ou None."""
-    if not cle or not FICHIER_CLES.exists():
-        return None
+def cles_fichier():
+    """Clés de cles.txt (lignes Pseudo:clé) : {pseudo: clé}."""
+    if not FICHIER_CLES.exists():
+        return {}
+    cles = {}
     for ligne in FICHIER_CLES.read_text(encoding="utf-8").splitlines():
         ligne = ligne.strip()
         if ligne and not ligne.startswith("#") and ":" in ligne:
             pseudo, c = ligne.split(":", 1)
-            if c.strip() == cle.strip():
-                return pseudo.strip()
+            cles[pseudo.strip()] = c.strip()
+    return cles
+
+
+def contributeur(cle):
+    """Renvoie le pseudo associé à une clé, ou None. Une clé créée ou régénérée depuis le site
+    (table comptes) remplace celle de cles.txt pour ce pseudo."""
+    if not cle or not cle.strip():
+        return None
+    cle = cle.strip()
+    with db() as con:
+        r = con.execute("SELECT pseudo FROM comptes WHERE cle=?", (cle,)).fetchone()
+        if r:
+            return r[0]
+        remplacees = {p.casefold() for (p,) in con.execute("SELECT pseudo FROM comptes WHERE cle IS NOT NULL")}
+    for pseudo, c in cles_fichier().items():
+        if hmac.compare_digest(c.encode(), cle.encode()) and pseudo.casefold() not in remplacees:
+            return pseudo
     return None
+
+
+def cle_du_compte(compte):
+    return compte["cle"] or cles_fichier().get(compte["pseudo"]) or next(
+        (c for p, c in cles_fichier().items() if p.casefold() == compte["pseudo"].casefold()), None)
+
+
+def nouvelle_cle(con):
+    prises = set(cles_fichier().values())
+    while True:
+        cle = secrets.token_urlsafe(18)
+        if cle not in prises and not con.execute("SELECT 1 FROM comptes WHERE cle=?", (cle,)).fetchone():
+            return cle
 
 
 # ---------- Collecte ----------
@@ -299,6 +342,19 @@ def recap():
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 Mo max par envoi
 
+
+def cle_de_session():
+    """Clé de signature des cookies de session, créée une fois à côté de la base."""
+    f = Path(DB).with_name("secret.key")
+    if not f.exists():
+        f.write_text(secrets.token_hex(32))
+    return f.read_text().strip()
+
+
+app.secret_key = cle_de_session()
+app.config.update(SESSION_COOKIE_SECURE=URL_SITE.startswith("https"), SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SAMESITE="Lax", PERMANENT_SESSION_LIFETIME=datetime.timedelta(days=30))
+
 STYLE = """
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
@@ -401,16 +457,23 @@ footer img{width:16px;opacity:.7}
 .msg{padding:10px 14px;border-radius:10px;font-size:.9rem;border:1px solid}
 .ok{color:var(--vert);background:rgba(94,227,166,.08);border-color:rgba(94,227,166,.3)}
 .err{color:var(--rouge);background:rgba(255,138,122,.08);border-color:rgba(255,138,122,.3)}
+.actions,.boutons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.cta.sec,button.sec{background:transparent;color:var(--texte);border:1px solid var(--trait2);box-shadow:none}
+.formulaire form{display:flex;flex-direction:column;gap:12px}
+.formulaire h2{margin:0}
+.formulaire p{margin:0}
+.formulaire a:not(.cta){color:var(--cristal)}
 </style>
 """
 
 ENTETE = """<header>
 <div class="logo"><img src="logo.png" alt="Logo {{ guilde }}"></div>
-<div class="titre"><h1>{{ "Envoyer mes données" if formulaire else guilde }}</h1>
+<div class="titre"><h1>{{ titre or guilde }}</h1>
 <div class="meta"><span class="tag horde">Horde</span><span class="tag">WoW Forever · PvE</span>
 {% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
-{% if formulaire %}<a class="cta" href="./">← Retour au classement</a>
+<div class="actions">{% if titre %}<a class="cta" href="./">← Retour au classement</a>
 {% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
+{% if discord_actif and not titre %}<a class="cta sec" href="{{ 'moi' if session.discord else 'connexion' }}">{{ "Mon compte" if session.discord else "Connexion Discord" }}</a>{% endif %}</div>
 </header>"""
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -485,11 +548,86 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 """ + ENTETE + """
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
 <form class="carte formulaire" method="post" enctype="multipart/form-data">
-<label for="cle">Ta clé personnelle<input id="cle" type="password" name="cle" required></label>
+{% if pseudo %}<p>Envoi au nom de <b>{{ pseudo }}</b> (connecté avec Discord) · <a href="moi">Mon compte</a></p>
+{% else %}<label for="cle">Ta clé personnelle<input id="cle" type="password" name="cle" required>
+{% if discord_actif %}<small>ou <a href="connexion">connecte-toi avec Discord</a> pour ne plus la saisir</small>{% endif %}</label>{% endif %}
 <label for="fichier">Ton fichier GuildExport.lua<input id="fichier" type="file" name="fichier" accept=".lua" required>
 <small>Il se trouve dans World of Warcraft\\_forever_\\WTF\\Account\\TON_COMPTE\\SavedVariables\\</small></label>
 <div><button type="submit">Envoyer</button></div>
 </form></div></body></html>"""
+
+COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mon compte</title>""" + STYLE + """</head><body><div class="page">
+""" + ENTETE + """
+{% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
+<section class="carte formulaire">
+{% if not session.discord %}
+ <p>Connecte-toi avec ton compte Discord (il faut être sur le serveur de la guilde, avec le rôle de la guilde).</p>
+ <div><a class="cta" href="connexion">Connexion Discord</a></div>
+{% else %}
+ <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}
+ · <a href="deconnexion">Se déconnecter</a></p>
+ {% if compte %}
+ <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b></p>
+ {% if cle %}
+ <label for="cle">Ta clé personnelle (à coller dans le script d'envoi automatique)
+ <input id="cle" type="text" value="{{ cle }}" readonly onclick="this.select()"></label>
+ {% else %}<p>Aucune clé active : génère-en une.</p>{% endif %}
+ <div class="boutons">{% if cle %}<button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cle').value);this.textContent='Copiée !'">Copier la clé</button>{% endif %}
+ <a class="cta sec" href="contribuer">Envoyer mes données</a></div>
+ <form method="post" onsubmit="return confirm('L\\'ancienne clé ne fonctionnera plus : relance changer-cle.bat sur ton PC. Continuer ?')">
+ <input type="hidden" name="action" value="regenerer"><div><button class="sec" type="submit">Générer une nouvelle clé</button></div></form>
+ {% else %}
+ <h2>Première connexion</h2>
+ <p>Relie ton compte Discord à ton pseudo de guilde.</p>
+ <form method="post"><input type="hidden" name="action" value="lier">
+ <label for="ancienne">J'ai déjà reçu une clé en message privé<input id="ancienne" type="password" name="cle" required></label>
+ <div><button type="submit">Relier avec ma clé</button></div></form>
+ <form method="post"><input type="hidden" name="action" value="creer">
+ <label for="pseudo">Je n'ai pas de clé : choisis ton pseudo
+ <input id="pseudo" name="pseudo" required maxlength="24" value="{{ session.discord.nom }}">
+ <small>2 à 24 caractères, sans espace ni « : ». Une clé est créée pour toi.</small></label>
+ <div><button type="submit">Créer ma clé</button></div></form>
+ {% endif %}
+{% endif %}
+</section></div></body></html>"""
+
+ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Administration</title>""" + STYLE + """</head><body><div class="page">
+""" + ENTETE + """
+{% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
+<section class="sec"><h2>Comptes Discord reliés <small>{{ comptes|length }}</small></h2>
+<div class="carte table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
+{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td>
+<td>{{ "créée sur le site" if c.cle else "cles.txt" }}</td><td>{{ c.lie_le[:16].replace("T", " ") }}</td>
+<td><form method="post" onsubmit="return confirm('Délier ce compte ? La clé créée sur le site sera supprimée.')">
+<input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
+<button class="sec" type="submit">Délier</button></form></td></tr>
+{% else %}<tr><td colspan="5">Aucun compte relié.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="carte formulaire sec"><h2>Clés de cles.txt sans compte Discord</h2>
+<p>{{ sans_compte|join(", ") if sans_compte else "aucune" }}</p></section>
+<section class="carte formulaire sec"><h2>Zone dangereuse</h2>
+<form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
+<input type="hidden" name="action" value="reinitialiser"><div><button type="submit">Vider la base de progression</button></div></form>
+<small>Personnages, historique, exploits et envois. Les comptes et les clés sont conservés.</small></section>
+</div></body></html>"""
+
+
+@app.context_processor
+def contexte():
+    return {"discord_actif": bool(DISCORD_SECRET)}
+
+
+def est_admin():
+    return bool(session.get("discord")) and session["discord"]["id"] in ADMINS
+
+
+def compte_connecte(con):
+    d = session.get("discord")
+    return d and con.execute("SELECT * FROM comptes WHERE discord_id=?", (d["id"],)).fetchone()
 
 
 def verifier_token():
@@ -522,7 +660,11 @@ def index():
 
 
 def formulaire(**kw):
-    return render_template_string(FORMULAIRE, guilde=NOM_GUILDE, formulaire=True, **kw)
+    return render_template_string(FORMULAIRE, guilde=NOM_GUILDE, titre="Envoyer mes données", **kw)
+
+
+def page_compte(**kw):
+    return render_template_string(COMPTE, guilde=NOM_GUILDE, titre="Mon compte", admin=est_admin(), **kw)
 
 
 @app.route("/<any('logo.png', 'banniere.jpg'):fichier>")
@@ -547,11 +689,15 @@ def route_recap():
 def route_reinitialiser():
     """Vide toutes les tables (tests). Copie de sauvegarde dans <DB>.avant-reset."""
     verifier_token()
+    return jsonify(ok=True, supprimes=reinitialiser())
+
+
+def reinitialiser():
+    """Vide la progression (pas les comptes). Copie de sauvegarde dans <DB>.avant-reset."""
     with db() as con, sqlite3.connect(DB + ".avant-reset") as copie:
         con.backup(copie)
-        vides = {t: con.execute(f"DELETE FROM {t}").rowcount
-                 for t in ("personnages", "historique", "exploits", "envois")}
-    return jsonify(ok=True, supprimes=vides)
+        return {t: con.execute(f"DELETE FROM {t}").rowcount
+                for t in ("personnages", "historique", "exploits", "envois")}
 
 
 @app.route("/envoyer", methods=["POST"])
@@ -569,19 +715,133 @@ def route_envoyer():
 
 @app.route("/contribuer", methods=["GET", "POST"])
 def route_contribuer():
+    with db() as con:
+        compte = compte_connecte(con)
+    connecte = compte["pseudo"] if compte else None
     if request.method == "GET":
-        return formulaire()
-    pseudo = contributeur(request.form.get("cle"))
+        return formulaire(pseudo=connecte)
+    pseudo = connecte or contributeur(request.form.get("cle"))
     if not pseudo:
         return formulaire(message="Clé inconnue.", classe="err"), 403
     f = request.files.get("fichier")
     texte = f.read().decode("utf-8", errors="ignore") if f else ""
     persos = analyser_export(texte)
     if not persos:
-        return formulaire(message="Fichier vide ou invalide.", classe="err"), 400
+        return formulaire(message="Fichier vide ou invalide.", classe="err", pseudo=connecte), 400
     n = integrer(persos, pseudo, analyser_dates(texte))
-    return formulaire(classe="ok",
+    return formulaire(classe="ok", pseudo=connecte,
                       message=f"Merci {pseudo} ! {len(persos)} personnages lus, {n} mises à jour.")
+
+
+# ---------- Connexion Discord ----------
+@app.route("/connexion")
+def route_connexion():
+    if not DISCORD_SECRET:
+        abort(404)
+    session["etat"] = secrets.token_urlsafe(24)
+    return redirect("https://discord.com/oauth2/authorize?" + urlencode({
+        "response_type": "code", "client_id": DISCORD_ID, "scope": "identify guilds.members.read",
+        "redirect_uri": URL_SITE + "/auth/discord/callback", "state": session["etat"], "prompt": "none"}))
+
+
+@app.route("/auth/discord/callback")
+def route_retour_discord():
+    etat = session.pop("etat", None)
+    if (not DISCORD_SECRET or not etat or "code" not in request.args
+            or not hmac.compare_digest(etat.encode(), request.args.get("state", "").encode())):
+        return page_compte(message="Connexion annulée ou expirée, réessaie.", classe="err"), 400
+    try:
+        r = requests.post(API_DISCORD + "/oauth2/token", auth=(DISCORD_ID, DISCORD_SECRET), timeout=10, data={
+            "grant_type": "authorization_code", "code": request.args["code"],
+            "redirect_uri": URL_SITE + "/auth/discord/callback"})
+        r.raise_for_status()
+        entete = {"Authorization": "Bearer " + r.json()["access_token"]}
+        r = requests.get(API_DISCORD + "/users/@me", headers=entete, timeout=10)
+        r.raise_for_status()
+        utilisateur = r.json()
+        membre = requests.get(f"{API_DISCORD}/users/@me/guilds/{DISCORD_SERVEUR}/member", headers=entete, timeout=10)
+    except (requests.RequestException, KeyError, ValueError) as e:
+        print("Erreur de connexion Discord :", e, flush=True)
+        return page_compte(message="Discord ne répond pas, réessaie dans un instant.", classe="err"), 502
+    membre = membre.json() if membre.status_code == 200 else None
+    if utilisateur["id"] not in ADMINS:  # les admins passent toujours
+        if not membre:
+            return page_compte(message="Tu n'es pas sur le serveur Discord de la guilde.", classe="err"), 403
+        if DISCORD_ROLE and DISCORD_ROLE not in membre.get("roles", []):
+            return page_compte(message="Il te faut le rôle de la guilde sur Discord.", classe="err"), 403
+    nom = (membre or {}).get("nick") or utilisateur.get("global_name") or utilisateur["username"]
+    session.clear()
+    session.permanent = True
+    session["discord"] = {"id": utilisateur["id"], "nom": nom}
+    with db() as con:
+        con.execute("UPDATE comptes SET discord_nom=? WHERE discord_id=?", (nom, utilisateur["id"]))
+    return redirect(URL_SITE + "/moi")
+
+
+@app.route("/deconnexion")
+def route_deconnexion():
+    session.clear()
+    return redirect("./")
+
+
+@app.route("/moi", methods=["GET", "POST"])
+def route_moi():
+    if not DISCORD_SECRET:
+        abort(404)
+    d = session.get("discord")
+    if not d:
+        return page_compte()
+    message, classe = None, "ok"
+    with db() as con:
+        compte = compte_connecte(con)
+        action = request.form.get("action") if request.method == "POST" else None
+        if action == "lier" and not compte:
+            pseudo = contributeur(request.form.get("cle"))
+            if not pseudo:
+                message, classe = "Clé inconnue.", "err"
+            elif con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone():
+                message, classe = "Ce pseudo est déjà relié à un autre compte Discord : contacte un officier.", "err"
+            else:
+                con.execute("INSERT INTO comptes VALUES(?,?,NULL,?,?)", (d["id"], pseudo, d["nom"], maintenant()))
+                message = f"Compte relié à {pseudo}."
+        elif action == "creer" and not compte:
+            pseudo = request.form.get("pseudo", "").strip()
+            if not PSEUDO_VALIDE.match(pseudo):
+                message, classe = "Pseudo invalide : 2 à 24 caractères, sans espace ni « : ».", "err"
+            elif (pseudo.casefold() in {p.casefold() for p in cles_fichier()}
+                  or con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone()):
+                message, classe = "Ce pseudo a déjà une clé : utilise « J'ai déjà reçu une clé ».", "err"
+            else:
+                con.execute("INSERT INTO comptes VALUES(?,?,?,?,?)",
+                            (d["id"], pseudo, nouvelle_cle(con), d["nom"], maintenant()))
+                message = f"Bienvenue {pseudo} ! Ta clé est prête."
+        elif action == "regenerer" and compte:
+            con.execute("UPDATE comptes SET cle=? WHERE discord_id=?", (nouvelle_cle(con), d["id"]))
+            message = "Nouvelle clé créée. L'ancienne ne fonctionne plus."
+        compte = compte_connecte(con)
+    return page_compte(compte=compte, cle=cle_du_compte(compte) if compte else None,
+                       message=message, classe=classe), 400 if classe == "err" else 200
+
+
+@app.route("/admin", methods=["GET", "POST"])
+def route_admin():
+    if not est_admin():
+        abort(403)
+    message = None
+    action = request.form.get("action") if request.method == "POST" else None
+    if action == "delier":
+        with db() as con:
+            con.execute("DELETE FROM comptes WHERE discord_id=?", (request.form.get("discord_id"),))
+        message = "Compte délié."
+    elif action == "reinitialiser":
+        vides = reinitialiser()
+        message = f"Base de progression vidée ({vides['personnages']} personnages). Copie dans guilde.db.avant-reset."
+    with db() as con:
+        comptes = con.execute("SELECT * FROM comptes ORDER BY pseudo").fetchall()
+    lies = {c["pseudo"].casefold() for c in comptes}
+    return render_template_string(
+        ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe="ok",
+        sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 
 @app.route("/export.json")
