@@ -58,7 +58,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
-- `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
+- `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
+  jeton `client_credentials` (`BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`), index races/classes
+  (`static-…`), `--royaumes` (`dynamic-…`), `--guilde` (roster → lignes `Nom;Race;Classe;Niveau`,
+  forme attendue de `lire_api_blizzard()`), `--perso` (profil). `--jeu classic1x` par défaut.
 - `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
@@ -249,8 +252,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
-6. Créer un client API sur develop.battle.net, lancer `tools/verifier_api_blizzard.py` sur un
-   perso Classic Era ; vérifier si l'endpoint de liste de guilde existe.
+6. Créer un client API sur develop.battle.net (redirection prévue `https://quartz.gawel.be/auth/bnet/callback`),
+   lancer `tools/verifier_api_blizzard.py --guilde … --perso …` sur Classic Era ; vérifier que le roster
+   de guilde existe et donne la race.
 7. Surveiller la publication de l'espace de noms API Forever ; brancher
    `lire_api_blizzard()`. Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).

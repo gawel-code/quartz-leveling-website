@@ -86,7 +86,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `ha/deployer-quartz.sh` | déploiement de l'app depuis GitHub (à lancer dans Terminal & SSH) |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
-| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era |
+| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era (jeton, races/classes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help`) |
 | `tests/test_app.py` | tests du serveur |
 | `CLAUDE.md` | notes de projet détaillées (état, pièges de déploiement, to-do) |
 
