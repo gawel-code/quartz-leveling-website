@@ -128,7 +128,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   défaut des options). **Secret client** renseigné dans l'option `discord_client_secret` (jamais
   commité ; le connecteur HA renvoie les options en clair, ne jamais le recopier).
 - ✅ v1.4.1 : liaison automatique par nom Discord (déployée).
-- 🔜 v1.4.2 : logo redétouré, halo dans l'en-tête.
+- ✅ v1.4.2 : logo redétouré, halo dans l'en-tête (déployée).
+- 🔜 v1.4.3 : version en pied de page, images en `?v=version`.
+  Cache : `config.yaml` est copié dans l'image, `VERSION` en est lu ; les images sont servies avec
+  `max-age=86400` et Cloudflare les garde en cache → toujours bumper `version` quand une image change.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

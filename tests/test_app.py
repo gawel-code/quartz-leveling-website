@@ -418,3 +418,13 @@ def test_choisir_son_pseudo_relie_si_nom_discord_identique(discord_client, tmp_p
         f.write("Rexxar:cle-rexxar\n")
     r = c.post("/moi", data={"action": "creer", "pseudo": "rexxar"})
     assert r.status_code == 200 and "même nom que sur Discord" in r.text and 'value="cle-rexxar"' in r.text
+
+
+def test_version_en_pied_de_page_et_dans_les_url_des_images(client):
+    import re
+    version = re.search(r'^version: "([^"]+)"', (APP.parent / "config.yaml").read_text(), re.M).group(1)
+    for page in ("/", "/contribuer"):
+        html = client.get(page).text
+        assert f"v{version}</footer>" in html and f"logo.png?v={version}" in html
+    assert f"banniere.jpg?v={version}" in client.get("/").text
+    assert client.get(f"/logo.png?v={version}").status_code == 200

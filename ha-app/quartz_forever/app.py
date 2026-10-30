@@ -12,6 +12,11 @@ FICHIER_CLES = Path(os.getenv("GUILDE_CLES", "cles.txt"))
 WEBHOOK = os.getenv("DISCORD_WEBHOOK", "")
 TOKEN = os.getenv("GUILDE_TOKEN", "change-moi")
 NOM_GUILDE = os.getenv("NOM_GUILDE", "Quartz Forever")
+# Version de l'app (config.yaml copié dans l'image) : affichée en pied de page et ajoutée aux URL
+# des images pour que navigateurs et Cloudflare reprennent les nouvelles après un déploiement.
+_config = Path(__file__).with_name("config.yaml")
+_version = re.search(r'^version:\s*"?([^"\n]+)', _config.read_text(encoding="utf-8"), re.M) if _config.exists() else None
+VERSION = _version.group(1).strip() if _version else "dev"
 URL_SITE = os.getenv("GUILDE_URL", "https://quartz.gawel.be").rstrip("/")
 # Connexion Discord (OAuth2) : active seulement si l'identifiant et le secret sont renseignés.
 DISCORD_ID = os.getenv("DISCORD_CLIENT_ID") or "1565628978633515028"
@@ -376,7 +381,7 @@ app.config.update(SESSION_COOKIE_SECURE=URL_SITE.startswith("https"), SESSION_CO
                   SESSION_COOKIE_SAMESITE="Lax", PERMANENT_SESSION_LIFETIME=datetime.timedelta(days=30))
 
 STYLE = """
-<link rel="icon" href="logo.png">
+<link rel="icon" href="logo.png?v={{ version }}">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
 <style>
 :root{--nuit:#070b14;--nuit2:#0c1322;--verre:rgba(148,196,255,.05);--verre2:rgba(148,196,255,.09);
@@ -400,11 +405,11 @@ a{color:var(--cristal);text-decoration:none}
 header{display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:relative;overflow:hidden;
 padding:clamp(22px,4vw,40px);min-height:220px;border-radius:20px;border:1px solid var(--trait2);
 background:linear-gradient(90deg,rgba(7,11,20,.92) 0%,rgba(7,11,20,.7) 45%,rgba(7,11,20,.15) 100%),
-linear-gradient(0deg,rgba(7,11,20,.55),transparent 40%),url(banniere.jpg) center 40%/cover no-repeat,var(--nuit2);
+linear-gradient(0deg,rgba(7,11,20,.55),transparent 40%),url(banniere.jpg?v={{ version }}) center 40%/cover no-repeat,var(--nuit2);
 box-shadow:0 18px 60px rgba(0,0,0,.45),0 0 60px rgba(95,216,245,.08)}
 @media (min-width:861px){header{min-height:260px;
 background:linear-gradient(90deg,rgba(7,11,20,1) 0%,rgba(7,11,20,.96) 30%,rgba(7,11,20,.55) 55%,rgba(7,11,20,.05) 100%),
-linear-gradient(0deg,rgba(7,11,20,.5),transparent 35%),url(banniere.jpg) right 58%/72% auto no-repeat,var(--nuit)}}
+linear-gradient(0deg,rgba(7,11,20,.5),transparent 35%),url(banniere.jpg?v={{ version }}) right 58%/72% auto no-repeat,var(--nuit)}}
 .logo{flex:0 0 auto;width:clamp(72px,11vw,120px);position:relative}
 .logo::before{content:"";position:absolute;inset:-35% -45%;border-radius:50%;pointer-events:none;
 background:radial-gradient(closest-side,rgba(95,216,245,.32),rgba(95,216,245,.08) 55%,transparent)}
@@ -488,8 +493,10 @@ footer img{width:16px;opacity:.7}
 </style>
 """
 
+PIED = """<footer><img src="logo.png?v={{ version }}" alt="">{{ guilde }} · v{{ version }}</footer>"""
+
 ENTETE = """<header>
-<div class="logo"><img src="logo.png" alt="Logo {{ guilde }}"></div>
+<div class="logo"><img src="logo.png?v={{ version }}" alt="Logo {{ guilde }}"></div>
 <div class="titre"><h1>{{ titre or guilde }}</h1>
 <div class="meta"><span class="tag horde">Horde</span><span class="tag">WoW Forever · PvE</span>
 {% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
@@ -556,7 +563,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 </ul>
 </section>
 
-<footer><img src="logo.png" alt="">{{ guilde }} · données collectées par l'addon GuildExport</footer>
+<footer><img src="logo.png?v={{ version }}" alt="">{{ guilde }} · données collectées par l'addon GuildExport · v{{ version }}</footer>
 </div>
 <script>
 function filtrer(c){var n=0;document.querySelectorAll("tbody tr[data-classe]").forEach(function(tr){
@@ -576,7 +583,7 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <label for="fichier">Ton fichier GuildExport.lua<input id="fichier" type="file" name="fichier" accept=".lua" required>
 <small>Il se trouve dans World of Warcraft\\_forever_\\WTF\\Account\\TON_COMPTE\\SavedVariables\\</small></label>
 <div><button type="submit">Envoyer</button></div>
-</form></div></body></html>"""
+</form>""" + PIED + """</div></body></html>"""
 
 COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -613,7 +620,7 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <div><button type="submit">Créer ma clé</button></div></form>
  {% endif %}
 {% endif %}
-</section></div></body></html>"""
+</section>""" + PIED + """</div></body></html>"""
 
 ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -635,12 +642,12 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
 <input type="hidden" name="action" value="reinitialiser"><div><button type="submit">Vider la base de progression</button></div></form>
 <small>Personnages, historique, exploits et envois. Les comptes et les clés sont conservés.</small></section>
-</div></body></html>"""
+""" + PIED + """</div></body></html>"""
 
 
 @app.context_processor
 def contexte():
-    return {"discord_actif": bool(DISCORD_SECRET)}
+    return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION}
 
 
 def est_admin():
