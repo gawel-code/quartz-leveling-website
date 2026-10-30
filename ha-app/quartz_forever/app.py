@@ -340,6 +340,12 @@ def analyser_mes_persos(texte):
     return re.findall(r'\["([^"]+)"\]', bloc.group(1)) if bloc else []
 
 
+def analyser_rangs(texte):
+    """{nom: n° de rang} de la table GuildExportRangs (addon ≥ 1.3.0, 0 = maître de guilde)."""
+    bloc = re.search(r"GuildExportRangs\s*=\s*\{(.*?)\}", texte, re.S)
+    return {nom: int(r) for nom, r in re.findall(r'\["([^"]+)"\]\s*=\s*"(\d{1,2})"', bloc.group(1))} if bloc else {}
+
+
 # Sources d'association personnage → joueur. « admin » (choix d'un officier) l'emporte sur tout ;
 # « blizzard » est réservée à une future connexion Battle.net (liste des persos du compte).
 SOURCES = {"admin": "attribué par un officier", "blizzard": "vérifié par Battle.net",
@@ -557,7 +563,7 @@ def collecter():
     source = "blizzard" if persos else None
     if not persos and EXPORT.exists():
         texte = EXPORT.read_text(encoding="utf-8")
-        persos, dates = analyser_export(texte), analyser_dates(texte)
+        persos, dates, rangs = analyser_export(texte), analyser_dates(texte), analyser_rangs(texte)
         source = "fichier" if persos else None
     return (integrer(persos, "serveur", dates, rangs) if persos else 0), source
 
@@ -1335,7 +1341,7 @@ def route_envoyer():
     persos = analyser_export(texte)
     if not persos:
         return jsonify(ok=False, erreur="Fichier vide ou invalide"), 400
-    n = integrer(persos, pseudo, analyser_dates(texte))
+    n = integrer(persos, pseudo, analyser_dates(texte), analyser_rangs(texte))
     with db() as con:
         associer(con, pseudo, analyser_mes_persos(texte), "addon")
     return jsonify(ok=True, personnages=len(persos), nouveautes=n)
@@ -1356,7 +1362,7 @@ def route_contribuer():
     persos = analyser_export(texte)
     if not persos:
         return formulaire(message="Fichier vide ou invalide.", classe="err", pseudo=connecte), 400
-    n = integrer(persos, pseudo, analyser_dates(texte))
+    n = integrer(persos, pseudo, analyser_dates(texte), analyser_rangs(texte))
     with db() as con:
         associer(con, pseudo, analyser_mes_persos(texte), "addon")
     return formulaire(classe="ok", pseudo=connecte,

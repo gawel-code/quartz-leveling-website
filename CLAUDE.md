@@ -48,7 +48,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
-  `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`).
+  `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`). Rangs
+  (addon 1.3.0) dans `GuildExportRangs` : `["Nom"] = "3"` (`analyser_rangs()`, 0 = maître de guilde).
 - `client/` : envoi automatique pour les membres. `lancer.bat` (double-clic) lance
   `envoi-guilde.ps1` : au 1er lancement demande la clé (validée par un envoi vide → 400 = ok,
   403 = refusée), cherche `_forever_\WTF\Account\*\SavedVariables\GuildExport.lua`
@@ -171,8 +172,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   l'heure de collecte. `collecter()` → `(mises_a_jour, source)` (`blizzard` / `fichier` / None),
   source d'envoi `serveur` (pas de « via », hors contributeurs). Erreur réseau → `([], {})` → repli fichier.
 - Rangs (v1.10.0) : `lire_api_blizzard()` → `(persos, dates, rangs)`, `rangs = {nom: rank}` du roster
-  (entier, 0 = maître de guilde) ; `integrer(..., rangs)` met à jour `personnages.rang` (sans
-  `rangs`, ex. envoi d'addon, le rang connu est gardé). Table `rangs(id PK, nom)` = référentiel
+  (entier, 0 = maître de guilde) ; `analyser_rangs(texte)` lit le bloc `GuildExportRangs` de l'addon
+  ≥ 1.3.0 (`/envoyer`, `/contribuer`, repli fichier de `/collecter`) ; `integrer(..., rangs)` met à
+  jour `personnages.rang` (le dernier envoi l'emporte ; sans table, ancien addon, le rang est gardé). Table `rangs(id PK, nom)` = référentiel
   saisi dans `/admin` (action `rangs` : champs `rang_<id>`, vide = supprimer, + `nouveau_id` /
   `nouveau_nom`), **non vidée** par `reinitialiser()`, dans `/export.json`. `noms_rangs(con)`.
   Bloc admin « Rangs de la guilde » : n° connus (`rangs` ∪ `personnages.rang`) + effectifs.
@@ -239,7 +241,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `/collecter` → `source: "blizzard"`, 6 persos (race, classe, niveau corrects), Kwindu daté par sa
   dernière connexion (27/10 18:06), annonces parties sur le canal de test.
 - 🔜 v1.10.0 (PR ouverte) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
-  l'accueil). Les rangs n'apparaîtront qu'après une collecte par l'API (pas par l'addon).
+  l'accueil), lus par l'API et par l'addon 1.3.0 (PR gawel-code/quartz-leveling-addon ouverte).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
   Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
   redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,

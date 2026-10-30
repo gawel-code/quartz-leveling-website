@@ -855,3 +855,12 @@ def test_migration_colonne_rang(tmp_path, monkeypatch):
     spec.loader.exec_module(mod)
     c = mod.app.test_client()
     assert "Mok" in c.get("/").text and "<th>Rang</th>" not in c.get("/").text
+
+
+def test_rangs_lus_dans_le_fichier_de_l_addon(client):
+    lua = LUA2 + ('\nGuildExportMesPersos = {\n["Grommash"] = "1793450000",\n}'
+                  '\nGuildExportRangs = {\n["Grommash"] = "0",\n["Zuljin"] = "4",\n["Inconnu"] = "2",\n}')
+    assert envoyer(client, lua).status_code == 200
+    rangs = {p["nom"]: p["rang"] for p in client.get("/export.json?token=tok").json["personnages"]}
+    assert rangs == {"Grommash": 0, "Zuljin": 4, "Mok": None}
+    assert "Rang 4" in client.get("/").text
