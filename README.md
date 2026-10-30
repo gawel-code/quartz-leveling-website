@@ -87,7 +87,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `client/` | envoi automatique pour les membres (Windows) : `lancer.bat` (double-clic ; demande la clé au premier lancement, trouve le fichier, journal dans `%APPDATA%\QuartzForever\envoi.log`), `changer-cle.bat`, `envoi-guilde.ps1` |
 | `docs/README-guilde.md` | mode d'emploi non technique pour la guilde |
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
-| `ha/deployer-quartz.sh` | déploiement de l'app depuis GitHub (à lancer dans Terminal & SSH) |
+| `repository.yaml` | déclare ce dépôt comme dépôt d'apps Home Assistant |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
 | `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era (jeton, races/classes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help`) |
 | `tests/test_app.py` | tests du serveur |
@@ -172,9 +172,8 @@ console. La version s'affiche en pied de page et suffixe les URL des images (`lo
 ce qui contourne le cache de Cloudflare et des navigateurs.
 
 Historique : jusqu'à la v1.11.0, l'app était une app locale (`local_quartz_forever`) déployée
-par `ha/deployer-quartz.sh` dans Terminal & SSH ; migrée vers le dépôt d'apps le 30/10/2026
-(base copiée depuis `/app_configs/local_quartz_forever/`). Le script est conservé tant que
-l'ancienne app n'est pas désinstallée.
+par un script dans Terminal & SSH ; migrée vers le dépôt d'apps le 30/10/2026 (base copiée
+depuis `/app_configs/local_quartz_forever/`), ancienne app désinstallée et script supprimé.
 
 Côté Home Assistant, `rest_command.quartz_collecter` et `rest_command.quartz_recap`
 sont appelés par deux automatisations (collecte toutes les 15 minutes, récap à 9 h et 21 h).

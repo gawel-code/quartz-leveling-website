@@ -61,8 +61,6 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
-- `ha/deployer-quartz.sh` : **obsolète** (déploiement de l'ancienne app locale) ; à supprimer une
-  fois `local_quartz_forever` désinstallée.
 - `repository.yaml` (v1.11.0) : fait du dépôt un dépôt d'apps HA (le Supervisor trouve
   `ha-app/quartz_forever/config.yaml` en parcourant le dépôt).
 - `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
@@ -219,9 +217,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - **Déployer** (après « oui merge », `version` bumpée) : `ha_manage_app(action="check_updates")`
   puis `ha_manage_app(slug="ee5b467c_quartz_forever", action="update")`, puis vérifier le pied de
   page ; ou attendre la mise à jour automatique (le Supervisor relit le store périodiquement).
-- Ancienne app locale `local_quartz_forever` (`/local_apps/quartz_forever`, hôte
-  `local-quartz-forever`) : arrêtée le 30/10, démarrage manuel, watchdog et mise à jour auto coupés ;
-  à désinstaller après une sauvegarde HA.
+- Ancienne app locale `local_quartz_forever` (hôte `local-quartz-forever`) : désinstallée le 30/10.
+  Si le dossier `/local_apps/quartz_forever` existe encore, elle reste listée « disponible » dans le
+  store (sans effet) ; le supprimer dans Terminal & SSH la fait disparaître.
 - Dans Terminal & SSH, la config HA est sous **`/homeassistant`** (pas `/config`).
   Le collage peut être déformé par le *bracketed paste* (1ʳᵉ lettre mangée, `~` final) :
   taper à la main `printf '\e[?2004l'`.
@@ -229,11 +227,11 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `ha store reload`. Le shell est **BusyBox** (pas de `ls -b`, `grep` limité).
 - Fichiers créés via File editor = fins de ligne **CRLF** → casser bash.
   Toujours `sed -i 's/\r$//'` avant d'exécuter un script collé.
-- Ancien déploiement (app locale, jusqu'à la v1.11.0) : `/homeassistant/deployer-quartz.sh [réf]`
-  dans Terminal & SSH (archive de `main` via l'API GitHub avec le jeton `quartz_github_token` de
-  `/homeassistant/secrets.yaml`, copie dans `/local_apps/quartz_forever/`, `ha store reload`, attente
-  de `version_latest`, update ou rebuild). Piège vu le 30/10 : `ha apps update` lancé trop tôt,
-  repli `rebuild` → ancienne version restée installée sans erreur. Le jeton ne sert plus.
+- Ancien déploiement (app locale, jusqu'à la v1.11.0) : script `deployer-quartz.sh` (supprimé du
+  dépôt le 30/10, visible dans l'historique git) lancé dans Terminal & SSH, avec un jeton GitHub
+  lecture seule `quartz_github_token` dans `/homeassistant/secrets.yaml` (ne sert plus : à retirer
+  et à révoquer sur GitHub). Piège vu : `ha apps update` lancé juste après `ha store reload` ne
+  voyait pas encore la nouvelle version.
 - Slug d'une app de dépôt = `<SHA-1[:8] de l'URL du dépôt>_<slug>` : l'URL ne doit pas changer
   (sinon nouveau slug, nouvelle migration).
 - Cloudflared (app `396f0234_cloudflared`) : `additional_hosts` contient
@@ -278,7 +276,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   installée, options reportées, base copiée par Gaël, démarrée (9 persos, 3 noms de rangs, comptes
   OK), Cloudflared basculé, `secrets.yaml` mis à jour par Gaël (`rest_command.quartz_collecter` →
   200 depuis la nouvelle app, l'ancienne étant arrêtée). Reste : vérifier le site dans un navigateur
-  (le proxy de session Claude bloque `quartz.gawel.be`) ; désinstaller l'ancienne app.
+  (le proxy de session Claude bloque `quartz.gawel.be`). Ancienne app désinstallée (30/10).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
@@ -342,7 +340,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
    coupées jusqu'au 5/11, réactivation automatique (voir État).
 3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
    (actuellement canal de test) ; remettre la base à zéro (persos de Progress et de test) ;
-   finir la migration (désinstaller l'app locale, supprimer `ha/deployer-quartz.sh`).
+   nettoyage de la migration : supprimer `/local_apps/quartz_forever`, retirer `quartz_github_token`
+   de `secrets.yaml` (et `/homeassistant/deployer-quartz.sh`), révoquer ce jeton sur GitHub.
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
