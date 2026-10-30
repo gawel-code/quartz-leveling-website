@@ -405,8 +405,10 @@ box-shadow:0 18px 60px rgba(0,0,0,.45),0 0 60px rgba(95,216,245,.08)}
 @media (min-width:861px){header{min-height:260px;
 background:linear-gradient(90deg,rgba(7,11,20,1) 0%,rgba(7,11,20,.96) 30%,rgba(7,11,20,.55) 55%,rgba(7,11,20,.05) 100%),
 linear-gradient(0deg,rgba(7,11,20,.5),transparent 35%),url(banniere.jpg) right 58%/72% auto no-repeat,var(--nuit)}}
-.logo{flex:0 0 auto;width:clamp(64px,10vw,96px)}
-.logo img{display:block;width:100%;height:auto;filter:drop-shadow(0 0 18px rgba(95,216,245,.55))}
+.logo{flex:0 0 auto;width:clamp(72px,11vw,120px);position:relative}
+.logo::before{content:"";position:absolute;inset:-35% -45%;border-radius:50%;pointer-events:none;
+background:radial-gradient(closest-side,rgba(95,216,245,.32),rgba(95,216,245,.08) 55%,transparent)}
+.logo img{position:relative;display:block;width:100%;height:auto;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))}
 .titre{flex:1 1 260px;min-width:0}
 h1{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em;
 background:linear-gradient(100deg,var(--givre),var(--cristal) 55%,var(--cristal2));-webkit-background-clip:text;background-clip:text;color:transparent}
