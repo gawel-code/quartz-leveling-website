@@ -3,6 +3,16 @@
 Projet de Gaël. Réponds en **français**. Gaël est développeur : explications
 concises, pas de pédagogie de base.
 
+## Règles de travail (demandées par Gaël)
+- **Avant chaque PR et chaque merge**, mettre à jour dans le même commit :
+  - `README.md` : version en tête, fonctionnement, routes, options, **historique des versions** ;
+  - `CLAUDE.md` : section *État* (date, version déployée / en attente), détails techniques
+    touchés, to-do. Relire les deux pour retirer ce qui est devenu faux.
+- Bumper `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement de l'app
+  (sinon pas de mise à jour côté HA, et les images restent en cache).
+- Flux habituel : PR → « oui merge » → Gaël déploie → vérification par Claude via le connecteur HA.
+- Jamais de secret commité (webhook Discord, token de l'app, secret client Discord, clés).
+
 ## Contexte
 - **WoW Forever** (Blizzard) : lancement mondial le **5 novembre 2026** (minuit,
   heure de Paris). Niveau max 60, toutes les races de Classic, **paladin et chaman
@@ -19,6 +29,7 @@ concises, pas de pédagogie de base.
 ```
 WoW (addon GuildExport) → GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
    → envoi-guilde.ps1 (auto) ou formulaire /contribuer (manuel), clé perso par membre
+     (clé affichée sur /moi après connexion Discord ; connecté, /contribuer n'en demande pas)
    → app Flask + SQLite dans une app locale Home Assistant (HAOS)
    → https://quartz.gawel.be via Cloudflare Tunnel
 Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) → webhook Discord
@@ -52,7 +63,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 ## Serveur (app.py)
 - Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 - Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
-  (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`.
+  (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
+  (connexion Discord, voir plus bas).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
 - Dates (v1.3.0) : une montée de niveau est datée par l'addon quand il l'a vue
@@ -93,8 +105,13 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (`GUILDE_URL`, défaut https://quartz.gawel.be) sert à l'URL de redirection.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
-  `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`. Webhook vide = messages
+  `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
+  `DISCORD_SERVEUR_ID`, `DISCORD_ROLE_ID`, `DISCORD_ADMINS`. Webhook vide = messages
   seulement dans le journal (mode test).
+- Version (v1.4.3) : `VERSION` est lue dans `config.yaml` (copié dans l'image par le Dockerfile),
+  affichée en pied de page (`PIED`) et ajoutée aux URL des images (`logo.png?v=…`,
+  `banniere.jpg?v=…`) : Cloudflare et les navigateurs gardent les images en cache
+  (`max-age=86400`) ; sans ce suffixe, l'ancien logo à fond gris de la v1.1.0 restait affiché.
 
 ## Déploiement Home Assistant — pièges déjà rencontrés
 - HAOS récent : les apps locales vivent dans **`/local_apps`** (plus `/addons`,
@@ -121,17 +138,15 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.4.0 déployée)
-- ✅ v1.4.0 (connexion Discord) déployée et testée par Gaël : application Discord **Quartz Forever** (Client ID
+## État au 30 octobre 2026 (v1.4.2 déployée, v1.4.3 mergée à déployer)
+- ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
   défaut des options). **Secret client** renseigné dans l'option `discord_client_secret` (jamais
   commité ; le connecteur HA renvoie les options en clair, ne jamais le recopier).
-- ✅ v1.4.1 : liaison automatique par nom Discord (déployée).
-- ✅ v1.4.2 : logo redétouré, halo dans l'en-tête (déployée).
-- 🔜 v1.4.3 : version en pied de page, images en `?v=version`.
-  Cache : `config.yaml` est copié dans l'image, `VERSION` en est lu ; les images sont servies avec
-  `max-age=86400` et Cloudflare les garde en cache → toujours bumper `version` quand une image change.
+  Compte de Gaël relié au pseudo `Gael`.
+- ✅ v1.4.1 : liaison automatique par nom Discord ; v1.4.2 : logo redétouré, halo dans l'en-tête.
+- 🔜 v1.4.3 : version en pied de page, images en `?v=version` (corrige le logo gris servi par le cache).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
@@ -143,7 +158,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
   à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
-  `/export.json`), puis base remise à zéro : **la base est vide**, prête pour la guilde
+  `/export.json`, script `client/` sous Windows). ⚠️ La base contient encore les **données de test**
+  du 29/10 : la vider avant la distribution (bouton de `/admin`, les comptes sont conservés).
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
 - ✅ Connecteur MCP Home Assistant de Claude : URL avec chemin secret, **sans OAuth**
   (si « needs_reconnect » → supprimer et recréer le connecteur avec l'URL complète)
@@ -167,8 +183,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
    automatisations `automation.quartz_collecte_horaire` (toutes les heures à :00) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
    coupées jusqu'au 5/11, réactivation automatique (voir État).
-3. ~~Webhook Discord~~ ✅ fait (29/10) : webhook du vrai salon dans l'option
-   `discord_webhook`. Les annonces et récaps partent pour de vrai.
+3. Webhook Discord : configuré, mais **actuellement sur le canal de test** → remettre le vrai
+   salon de progression dans l'option `discord_webhook` avant le 5/11.
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).

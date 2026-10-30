@@ -125,7 +125,9 @@ Cloudflare Tunnel sur `quartz.gawel.be`. Dans Terminal & SSH :
 
 Le script télécharge `ha-app/quartz_forever` depuis `main` (ou la référence passée en
 argument), le copie dans `/local_apps/quartz_forever/` et met l'app à jour. Il faut
-augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement.
+augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement : elle
+s'affiche en pied de page et suffixe les URL des images (`logo.png?v=…`), ce qui contourne
+le cache de Cloudflare et des navigateurs.
 La base et `cles.txt` ne sont pas touchés. Détails et pièges connus : voir `CLAUDE.md`.
 
 Côté Home Assistant, `rest_command.quartz_collecter` et `rest_command.quartz_recap`
