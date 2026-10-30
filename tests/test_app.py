@@ -437,19 +437,20 @@ def test_battletag_recupere_via_les_connexions_discord(discord_client):
     bnet = [{"type": "steam", "name": "gawel_steam"}, {"type": "battlenet", "name": "Gawel#2345"}]
     assert "scope=identify+guilds.members.read+connections" in c.get("/connexion").location
     connecter(ADMIN_ID, nick="Gael", connexions=bnet)  # liaison auto : BattleTag enregistré avec le compte
-    assert "BattleTag : <b>Gawel#2345</b>" in c.get("/moi").text
+    r = c.get("/moi")
+    assert "BattleTag : <b>Gawel#2345</b> (lié à Discord)" in r.text and 'id="battletag"' not in r.text
     assert "Gawel#2345" in c.get("/admin").text
     # Compte Battle.net délié côté Discord : effacé à la connexion suivante
     c.get("/deconnexion")
     connecter(ADMIN_ID, nick="Gael")
-    assert "Pas de BattleTag" in c.get("/moi").text
+    assert 'id="battletag"' in c.get("/moi").text  # plus de BattleTag Discord : formulaire de saisie
 
 
 def test_echec_lecture_des_connexions_ne_bloque_pas(discord_client, monkeypatch):
     c, connecter = discord_client
     connecter(connexions=[{"type": "battlenet"}])  # sans nom
     r = c.post("/moi", data={"action": "lier", "cle": "abc123"})
-    assert r.status_code == 200 and "Pas de BattleTag" in r.text
+    assert r.status_code == 200 and 'id="battletag"' in r.text
 
 
 def test_migration_colonne_battletag(tmp_path, monkeypatch):
@@ -464,3 +465,33 @@ def test_migration_colonne_battletag(tmp_path, monkeypatch):
     spec.loader.exec_module(mod)
     with mod.db() as con:
         assert dict(con.execute("SELECT * FROM comptes").fetchone())["battletag"] is None
+
+
+def test_battletag_saisi_a_la_main(discord_client):
+    c, connecter = discord_client
+    connecter(nick="Gael")
+    assert c.post("/moi", data={"action": "battletag", "battletag": "pas un tag"}).status_code == 400
+    r = c.post("/moi", data={"action": "battletag", "battletag": " Gaël#21456 "})
+    assert r.status_code == 200 and 'value="Gaël#21456"' in r.text
+    c.get("/deconnexion")
+    connecter(ADMIN_ID, nick="Admin")
+    assert "Gaël#21456 <small>(saisi)</small>" in c.get("/admin").text
+    c.get("/deconnexion")
+    # Le BattleTag lu sur Discord prime ; la saisie est conservée en réserve
+    connecter(nick="Gael", connexions=[{"type": "battlenet", "name": "Gael#1111"}])
+    assert "Gael#1111</b> (lié à Discord)" in c.get("/moi").text
+    c.get("/deconnexion")
+    connecter(nick="Gael")
+    r = c.post("/moi", data={"action": "battletag", "battletag": ""})
+    assert "BattleTag effacé" in r.text and 'value=""' in r.text
+
+
+def test_mon_compte_et_deconnexion_dans_l_en_tete_de_toutes_les_pages(discord_client):
+    c, connecter = discord_client
+    for page in ("/", "/contribuer", "/moi"):
+        html = c.get(page).text
+        assert 'href="connexion">Connexion Discord</a>' in html and 'href="deconnexion"' not in html
+    connecter(ADMIN_ID)
+    for page in ("/", "/contribuer", "/moi", "/admin"):
+        entete = c.get(page).text.split("</header>")[0]
+        assert 'href="moi">Mon compte</a>' in entete and 'href="deconnexion">Déconnexion</a>' in entete

@@ -26,6 +26,7 @@ DISCORD_ROLE = os.getenv("DISCORD_ROLE_ID", "1549720665844613130")  # vide = tou
 ADMINS = {i.strip() for i in (os.getenv("DISCORD_ADMINS") or "161139977328132107").split(",") if i.strip()}
 API_DISCORD = "https://discord.com/api/v10"
 PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
+BATTLETAG_VALIDE = re.compile(r"^[^\W\d_]\w{1,11}#\d{4,6}$")  # Nom#1234 : 2 à 12 caractères, pas d'espace
 PALIERS = [10, 20, 30, 40, 50, 60]
 MEDAILLES = {1: "🥇", 2: "🥈", 3: "🥉"}
 COULEURS = {
@@ -69,8 +70,11 @@ def init_db():
             discord_id TEXT PRIMARY KEY, pseudo TEXT UNIQUE COLLATE NOCASE,
             cle TEXT UNIQUE, discord_nom TEXT, lie_le TEXT);
         """)
-        if "battletag" not in {c[1] for c in con.execute("PRAGMA table_info(comptes)")}:
-            con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0
+        colonnes = {c[1] for c in con.execute("PRAGMA table_info(comptes)")}
+        if "battletag" not in colonnes:
+            con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0 : lu sur Discord
+        if "battletag_saisi" not in colonnes:
+            con.execute("ALTER TABLE comptes ADD COLUMN battletag_saisi TEXT")  # v1.5.1 : saisi sur /moi
 
 
 # ---------- Discord ----------
@@ -505,7 +509,8 @@ ENTETE = """<header>
 {% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
 <div class="actions">{% if titre %}<a class="cta" href="./">← Retour au classement</a>
 {% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
-{% if discord_actif and not titre %}<a class="cta sec" href="{{ 'moi' if session.discord else 'connexion' }}">{{ "Mon compte" if session.discord else "Connexion Discord" }}</a>{% endif %}</div>
+{% if discord_actif %}{% if session.discord %}<a class="cta sec" href="moi">Mon compte</a><a class="cta sec" href="deconnexion">Déconnexion</a>
+{% else %}<a class="cta sec" href="connexion">Connexion Discord</a>{% endif %}{% endif %}</div>
 </header>"""
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -598,11 +603,16 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <p>Connecte-toi avec ton compte Discord (il faut être sur le serveur de la guilde, avec le rôle de la guilde).</p>
  <div><a class="cta" href="connexion">Connexion Discord</a></div>
 {% else %}
- <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}
- · <a href="deconnexion">Se déconnecter</a></p>
+ <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}</p>
  {% if compte %}
- <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b>{% if compte.battletag %} · BattleTag : <b>{{ compte.battletag }}</b>{% endif %}</p>
- {% if not compte.battletag %}<small>Pas de BattleTag : lie ton compte Battle.net à Discord (Paramètres → Connexions), puis reconnecte-toi ici.</small>{% endif %}
+ <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b>{% if compte.battletag %} · BattleTag : <b>{{ compte.battletag }}</b> (lié à Discord){% endif %}</p>
+ {% if not compte.battletag %}
+ <form method="post"><input type="hidden" name="action" value="battletag">
+ <label for="battletag">Ton BattleTag
+ <input id="battletag" name="battletag" maxlength="20" placeholder="Nom#1234" value="{{ compte.battletag_saisi or '' }}">
+ <small>Ou lie Battle.net à Discord (Paramètres → Connexions) puis reconnecte-toi : il sera lu automatiquement. Laisser vide pour l'effacer.</small></label>
+ <div><button class="sec" type="submit">Enregistrer le BattleTag</button></div></form>
+ {% endif %}
  {% if cle %}
  <label for="cle">Ta clé personnelle (à coller dans le script d'envoi automatique)
  <input id="cle" type="text" value="{{ cle }}" readonly onclick="this.select()"></label>
@@ -633,7 +643,7 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
 <section class="sec"><h2>Comptes Discord reliés <small>{{ comptes|length }}</small></h2>
 <div class="carte table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>BattleTag</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
-{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td><td>{{ c.battletag or "—" }}</td>
+{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td><td>{% if c.battletag %}{{ c.battletag }}{% elif c.battletag_saisi %}{{ c.battletag_saisi }} <small>(saisi)</small>{% else %}—{% endif %}</td>
 <td>{{ "créée sur le site" if c.cle else "cles.txt" }}</td><td>{{ c.lie_le[:16].replace("T", " ") }}</td>
 <td><form method="post" onsubmit="return confirm('Délier ce compte ? La clé créée sur le site sera supprimée.')">
 <input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
@@ -869,6 +879,13 @@ def route_moi():
             else:
                 lier(con, d, pseudo, nouvelle_cle(con))
                 message = f"Bienvenue {pseudo} ! Ta clé est prête."
+        elif action == "battletag" and compte:
+            saisi = request.form.get("battletag", "").strip()
+            if saisi and not BATTLETAG_VALIDE.match(saisi):
+                message, classe = "BattleTag invalide : il doit ressembler à Nom#1234.", "err"
+            else:
+                con.execute("UPDATE comptes SET battletag_saisi=? WHERE discord_id=?", (saisi or None, d["id"]))
+                message = f"BattleTag enregistré : {saisi}." if saisi else "BattleTag effacé."
         elif action == "regenerer" and compte:
             con.execute("UPDATE comptes SET cle=? WHERE discord_id=?", (nouvelle_cle(con), d["id"]))
             message = "Nouvelle clé créée. L'ancienne ne fonctionne plus."
