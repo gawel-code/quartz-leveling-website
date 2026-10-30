@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.10.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.10.1
 
 ## Fonctionnement
 
@@ -106,7 +106,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour` et `source` (`blizzard`, `fichier` ou `null`) |
 | `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
-| `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) |
+| `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) ; les boutons pointent directement sur discord.com (ouverture de l'app Discord sur mobile si installée), `/connexion` reste une redirection équivalente |
 | `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
 | `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, vider la progression |
 | `GET /export.json` | `?token=` | export complet de la base |
@@ -189,6 +189,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |
 | 1.9.0 | collecte automatique par l'API Blizzard (roster de guilde, races et classes en français, montées datées par la dernière connexion) ; options `bnet_*` ; `/collecter` indique la source lue ; script `tools/verifier_api_blizzard.py` enrichi (royaumes, roster, profil) |
 | 1.8.0 | courbe de progression sur l'accueil (moyenne, Q1–Q3, plus haut niveau, persos du membre connecté) ; exclusion des mules et banques dans l'admin ; icône du cristal pour l'app dans Home Assistant (`icon.png`) |

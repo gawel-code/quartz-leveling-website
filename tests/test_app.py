@@ -1,5 +1,8 @@
 """Tests du serveur. Lancer : pip install flask requests pytest && pytest -q"""
 import datetime
+import html
+import re
+from urllib.parse import parse_qs, urlsplit
 import importlib.util
 import io
 from pathlib import Path
@@ -304,8 +307,7 @@ def discord_client(client, monkeypatch):
         profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur, nick=nick, connexions=list(connexions))
         r = client.get("/connexion")
         assert r.status_code == 302 and "discord.com/oauth2/authorize" in r.location
-        with client.session_transaction() as s:
-            etat = s["etat"]
+        etat = parse_qs(urlsplit(r.location).query)["state"][0]
         return client.get(f"/auth/discord/callback?code=code-ok&state={etat}")
     return client, connecter
 
@@ -491,7 +493,7 @@ def test_mon_compte_et_deconnexion_dans_l_en_tete_de_toutes_les_pages(discord_cl
     c, connecter = discord_client
     for page in ("/", "/contribuer", "/moi"):
         html = c.get(page).text
-        assert 'href="connexion">Connexion Discord</a>' in html and 'href="deconnexion"' not in html
+        assert 'discord.com/oauth2/authorize' in html and 'Connexion Discord</a>' in html and 'href="deconnexion"' not in html
     connecter(ADMIN_ID)
     for page in ("/", "/contribuer", "/moi", "/admin"):
         entete = c.get(page).text.split("</header>")[0]
@@ -822,13 +824,15 @@ def admin(c):
 def test_rangs_lus_dans_le_roster_et_nommes_dans_l_admin(blizzard):
     c, etat = blizzard
     assert "<th>Rang</th>" not in c.get("/").text          # aucun rang connu : pas de colonne
+    admin(c)
+    assert "Aucun membre n'a encore de rang connu" in c.get("/admin").text
     etat["roster"] = [membre("Grommash", 12, rang=0), membre("Zuljin", 9, 8, 7, rang=3)]
     c.get("/collecter?token=tok")
     accueil = c.get("/").text
     assert "<th>Rang</th>" in accueil and "Rang 0" in accueil and "Rang 3" in accueil
     admin(c)
     page = c.get("/admin").text
-    assert 'name="rang_0"' in page and 'name="rang_3"' in page
+    assert 'name="rang_0"' in page and 'name="rang_3"' in page and "Aucun membre n'a encore de rang" not in page
     r = c.post("/admin", data={"action": "rangs", "rang_0": "Chef de guerre", "rang_3": " ",
                                "nouveau_id": "5", "nouveau_nom": "Recrue"})
     assert "Noms des rangs enregistrés" in r.text
@@ -864,3 +868,27 @@ def test_rangs_lus_dans_le_fichier_de_l_addon(client):
     rangs = {p["nom"]: p["rang"] for p in client.get("/export.json?token=tok").json["personnages"]}
     assert rangs == {"Grommash": 0, "Zuljin": 4, "Mok": None}
     assert "Rang 4" in client.get("/").text
+
+
+
+# ---------- Connexion Discord sans cookie de départ (v1.10.1) ----------
+def test_lien_direct_vers_discord_et_state_sans_session(discord_client):
+    c, connecter = discord_client
+    accueil = c.get("/").text
+    lien = html.unescape(re.search(r'href="(https://discord\.com/oauth2/authorize\?[^"]+)"', accueil).group(1))
+    etat = parse_qs(urlsplit(lien).query)["state"][0]
+    connecter("42")                                   # prépare le profil simulé
+    autre = c.application.test_client()               # retour dans un autre navigateur
+    r = autre.get(f"/auth/discord/callback?code=code-ok&state={etat}")
+    assert r.status_code == 302 and r.location.endswith("/moi")
+    assert "Progression</th>" in accueil and "Vers 60" not in accueil
+
+
+def test_state_expire_ou_signe_ailleurs(discord_client, monkeypatch):
+    c, _ = discord_client
+    g = c.application.view_functions["index"].__globals__
+    etranger = g["URLSafeTimedSerializer"]("autre-cle", salt="discord-etat").dumps("x")
+    assert c.get(f"/auth/discord/callback?code=code-ok&state={etranger}").status_code == 400
+    monkeypatch.setitem(g, "ETAT_VALIDITE", -1)       # tout state est alors périmé
+    etat = parse_qs(urlsplit(c.get("/connexion").location).query)["state"][0]
+    assert c.get(f"/auth/discord/callback?code=code-ok&state={etat}").status_code == 400
