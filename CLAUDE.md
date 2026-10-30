@@ -276,8 +276,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   script sur l'app locale (migration `/data` → `/config` vue dans le journal), dépôt passé en
   **public** (historique git vérifié : aucun secret), ajouté au store, app `ee5b467c_quartz_forever`
   installée, options reportées, base copiée par Gaël, démarrée (9 persos, 3 noms de rangs, comptes
-  OK), Cloudflared basculé. Reste : URL `quartz_*_url` de `secrets.yaml` →
-  `ee5b467c-quartz-forever` + recharger les `rest_command` ; vérifier le site dans un navigateur
+  OK), Cloudflared basculé, `secrets.yaml` mis à jour par Gaël (`rest_command.quartz_collecter` →
+  200 depuis la nouvelle app, l'ancienne étant arrêtée). Reste : vérifier le site dans un navigateur
   (le proxy de session Claude bloque `quartz.gawel.be`) ; désinstaller l'ancienne app.
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
@@ -342,7 +342,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
    coupées jusqu'au 5/11, réactivation automatique (voir État).
 3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
    (actuellement canal de test) ; remettre la base à zéro (persos de Progress et de test) ;
-   finir la migration (secrets.yaml, désinstaller l'app locale, supprimer `ha/deployer-quartz.sh`).
+   finir la migration (désinstaller l'app locale, supprimer `ha/deployer-quartz.sh`).
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
