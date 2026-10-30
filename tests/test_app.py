@@ -128,7 +128,7 @@ def test_reinitialiser(client):
     r = client.post("/reinitialiser?token=tok")
     assert r.status_code == 200 and r.json["supprimes"]["personnages"] == 3
     d = client.get("/export.json?token=tok").json
-    assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == []
+    assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == d["proprietaires"] == []
 
 
 def test_annonces_paliers_et_niveaux(client, monkeypatch):
@@ -561,9 +561,12 @@ def test_perso_au_nom_du_pseudo_et_admin(discord_client, tmp_path):
     c.post("/admin", data={"action": "dissocier", "nom": "Grommash"})
     tableau = c.get("/admin").text.split("Personnages ↔ joueurs")[1].split("</table>")[0]
     assert '<td class="nom">Grommash</td>' not in tableau and "même nom que le pseudo" in tableau  # Mok
-    # La remise à zéro de la progression garde les associations
-    c.post("/admin", data={"action": "reinitialiser"})
-    assert len(c.get("/export.json?token=tok").json["proprietaires"]) == 1
+    # La remise à zéro vide aussi les associations, mais garde les comptes et la session
+    r = c.post("/admin", data={"action": "reinitialiser"})
+    assert "1 associations" in r.text
+    d = c.get("/export.json?token=tok").json
+    assert d["proprietaires"] == d["personnages"] == []
+    assert "Mon compte</a>" in c.get("/").text and "Gael" in c.get("/admin").text
 
 
 def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):

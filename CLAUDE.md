@@ -86,7 +86,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   dans `exploits` ; le tableau d'honneur affiche le top 3 (10–50) et tous les 60.
 - Routes : `/` (classement, tableau d'honneur, fil d'activité), `/contribuer`
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
-  `/export.json`, `POST /reinitialiser` (vide toute la base, copie dans
+  `/export.json`, `POST /reinitialiser` (vide progression, envois et associations — pas `comptes` —, copie dans
   `<DB>.avant-reset`) — ces quatre protégées par `?token=`.
 - Connexion Discord (v1.4.0, OAuth2 code, scopes `identify guilds.members.read connections`) : `/connexion`
   → Discord → `/auth/discord/callback` (vérifie `state`, être sur le serveur `discord_serveur_id`
@@ -100,7 +100,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le, battletag, battletag_saisi)` : `cle` NULL =
   clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
   (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
-  délier un compte, voir les clés de `cles.txt` sans compte, vider la progression (pas les comptes).
+  délier un compte, voir les clés de `cles.txt` sans compte, vider la progression et les associations (pas les comptes).
   Secret vide = connexion désactivée (404), tout le reste marche comme avant. `URL_SITE`
   (`GUILDE_URL`, défaut https://quartz.gawel.be) sert à l'URL de redirection.
 - BattleTag (v1.5.0) : scope `connections`, `GET /users/@me/connections` à chaque connexion → entrée
@@ -122,7 +122,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   personnages » (retirer les ajouts manuels, « C'est mon personnage » parmi les persos sans joueur).
   `/admin` : formulaire « Associer » (tout perso connu × tout pseudo de `joueurs()` = `cles.txt` +
   `comptes`, source `admin`), tableau de toutes les associations (y compris `nom`, non dissociable :
-  l'écraser par un choix d'officier) + « Dissocier ». Conservé par la remise à zéro, inclus dans `/export.json`.
+  l'écraser par un choix d'officier) + « Dissocier ». **Vidé par la remise à zéro** (v1.7.0 ; les
+  associations se refont au premier envoi avec l'addon), inclus dans `/export.json`.
   Source `blizzard` prévue pour une connexion Battle.net (scope `wow.profile`) quand l'API Forever existera.
 - Interface (v1.6.1) : blocs `.carte.bloc` + `.bloc-tete` ; `/moi` = grille 2 colonnes (Profil avec
   BattleTag, Ma clé d'envoi) + bloc « Mes personnages » (cartes `.perso` couleur de classe, retrait
@@ -187,7 +188,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   « Déconnexion » (ou « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
 - ✅ v1.6.0 (mergée ; déploiement non confirmé) : personnages ↔ joueurs (+ addon 1.2.0 : `GuildExportMesPersos`, mergé).
 - ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
-- 🔜 v1.7.0 : meilleurs contributeurs (top 3 sur l'accueil, liste complète dans l'admin).
+- 🔜 v1.7.0 : meilleurs contributeurs (top 3 sur l'accueil, liste complète dans l'admin) ; la remise à
+  zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

@@ -893,7 +893,8 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <section class="carte bloc danger"><div class="bloc-tete"><h2><span class="ic">⚠️</span>Zone dangereuse</h2></div>
  <form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
  <input type="hidden" name="action" value="reinitialiser"><div><button class="danger-btn" type="submit">Vider la base de progression</button></div></form>
- <small>Personnages, historique, exploits et envois. Les comptes, les clés et les associations sont conservés.</small></section>
+ <small>Personnages, historique, tableau d'honneur, envois (contributeurs) et associations personnage ↔ joueur.
+ Les comptes Discord, les pseudos, les clés et les BattleTags sont conservés, et personne n'est déconnecté.</small></section>
 """ + PIED + """</div>
 <script>
 function filtrerAdmin(){var e=document.getElementById("f-etat").value,q=document.getElementById("f-texte").value.toLowerCase();
@@ -981,11 +982,12 @@ def route_reinitialiser():
 
 
 def reinitialiser():
-    """Vide la progression (pas les comptes). Copie de sauvegarde dans <DB>.avant-reset."""
+    """Vide la progression et les associations de personnages, pas les comptes (pseudos, clés,
+    BattleTags) ni les sessions. Copie de sauvegarde dans <DB>.avant-reset."""
     with db() as con, sqlite3.connect(DB + ".avant-reset") as copie:
         con.backup(copie)
         return {t: con.execute(f"DELETE FROM {t}").rowcount
-                for t in ("personnages", "historique", "exploits", "envois")}
+                for t in ("personnages", "historique", "exploits", "envois", "proprietaires")}
 
 
 @app.route("/envoyer", methods=["POST"])
@@ -1194,7 +1196,8 @@ def route_admin():
         message = "Personnage dissocié."
     elif action == "reinitialiser":
         vides = reinitialiser()
-        message = f"Base de progression vidée ({vides['personnages']} personnages). Copie dans guilde.db.avant-reset."
+        message = (f"Base vidée ({vides['personnages']} personnages, {vides['proprietaires']} associations). "
+                   "Copie dans guilde.db.avant-reset.")
     with db() as con:
         comptes = con.execute("SELECT * FROM comptes ORDER BY pseudo").fetchall()
         tous_persos = sorted({r[0] for r in con.execute(
