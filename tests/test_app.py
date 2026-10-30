@@ -824,13 +824,15 @@ def admin(c):
 def test_rangs_lus_dans_le_roster_et_nommes_dans_l_admin(blizzard):
     c, etat = blizzard
     assert "<th>Rang</th>" not in c.get("/").text          # aucun rang connu : pas de colonne
+    admin(c)
+    assert "Aucun membre n'a encore de rang connu" in c.get("/admin").text
     etat["roster"] = [membre("Grommash", 12, rang=0), membre("Zuljin", 9, 8, 7, rang=3)]
     c.get("/collecter?token=tok")
     accueil = c.get("/").text
     assert "<th>Rang</th>" in accueil and "Rang 0" in accueil and "Rang 3" in accueil
     admin(c)
     page = c.get("/admin").text
-    assert 'name="rang_0"' in page and 'name="rang_3"' in page
+    assert 'name="rang_0"' in page and 'name="rang_3"' in page and "Aucun membre n'a encore de rang" not in page
     r = c.post("/admin", data={"action": "rangs", "rang_0": "Chef de guerre", "rang_3": " ",
                                "nouveau_id": "5", "nouveau_nom": "Recrue"})
     assert "Noms des rangs enregistrés" in r.text

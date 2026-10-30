@@ -185,7 +185,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   jour `personnages.rang` (le dernier envoi l'emporte ; sans table, ancien addon, le rang est gardé). Table `rangs(id PK, nom)` = référentiel
   saisi dans `/admin` (action `rangs` : champs `rang_<id>`, vide = supprimer, + `nouveau_id` /
   `nouveau_nom`), **non vidée** par `reinitialiser()`, dans `/export.json`. `noms_rangs(con)`.
-  Bloc admin « Rangs de la guilde » : n° connus (`rangs` ∪ `personnages.rang`) + effectifs.
+  Bloc admin « Rangs de la guilde » : n° connus (`rangs` ∪ `personnages.rang`) + effectifs ; mention
+  (v1.10.1) quand aucun perso n'a de rang (vu en prod le 30/10 : noms saisis, colonne cachée car
+  les persos de Progress venaient d'une collecte v1.9.0 et l'API était coupée).
   Accueil : colonne « Rang » seulement si un perso a un rang (`avec_rangs`), nom ou « Rang N ».
   L'API ne fournit pas les noms des rangs ni les rôles (tank/soigneur/DPS).
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
@@ -251,7 +253,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - ✅ v1.10.0 (mergée ; déploiement non confirmé) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
   l'accueil), lus par l'API et par l'addon 1.3.0 (mergé, à tester en jeu).
 - 🔜 v1.10.1 (PR ouverte) : connexion Discord par lien direct (app mobile) et `state` signé sans
-  cookie ; « Vers 60 » → « Progression ». À tester sur téléphone (app installée, iOS et Android).
+  cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin. À tester sur téléphone (app installée, iOS et Android).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
   Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
   redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,

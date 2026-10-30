@@ -1191,6 +1191,8 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  (ses niveaux restent enregistrés ; « Réintégrer » lui rend ses paliers sans nouvelle annonce).</small>
 </section>
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🎖️</span>Rangs de la guilde <small>{{ rangs|length }}</small></h2></div>
+ {% if not rangs|selectattr("membres")|list %}<div class="msg">Aucun membre n'a encore de rang connu : la colonne « Rang » du classement
+ apparaîtra après une collecte par l'API Blizzard ou un envoi avec l'addon ≥ 1.3.0. Les noms saisis ici sont gardés en attendant.</div>{% endif %}
  <form method="post"><input type="hidden" name="action" value="rangs">
  <div class="table-wrap"><table><thead><tr><th>N°</th><th>Nom affiché</th><th>Membres</th></tr></thead><tbody>
  {% for r in rangs %}<tr><td class="num">{{ r.id }}{{ " (maître de guilde)" if r.id == 0 }}</td>
