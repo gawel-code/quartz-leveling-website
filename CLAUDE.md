@@ -97,7 +97,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   sur le serveur, le nom affiché ou le nom d'utilisateur Discord est un pseudo de `cles.txt` encore
   libre (casse ignorée), le compte y est relié ; « choisir son pseudo » relie aussi un pseudo de
   `cles.txt` s'il correspond à un de ces noms. Risque assumé : un membre qui prend le surnom d'un
-  autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le)` : `cle` NULL =
+  autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le, battletag)` : `cle` NULL =
   clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
   (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
   délier un compte, voir les clés de `cles.txt` sans compte, vider la progression (pas les comptes).
