@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.3
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.5.0
 
 ## Fonctionnement
 
@@ -29,7 +29,8 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   de la guilde, se connecte sur `/moi`, relie son compte à son pseudo (avec sa clé actuelle,
   ou en choisissant un pseudo : une clé est alors créée) et y retrouve sa clé. Si son surnom sur
   le serveur, son nom affiché ou son nom d'utilisateur Discord est un pseudo libre de `cles.txt`,
-  le compte est relié automatiquement dès la connexion. Connecté, il
+  le compte est relié automatiquement dès la connexion. Si le membre a lié Battle.net à Discord
+  (*Paramètres → Connexions*), son **BattleTag** est récupéré et affiché sur `/moi` et `/admin`. Connecté, il
   envoie son fichier sans saisir de clé. Les admins (IDs Discord) passent toujours et ont `/admin`.
 - **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
@@ -83,7 +84,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | intègre le fichier déposé côté serveur (et plus tard l'API Blizzard) |
 | `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
-| `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read`) |
+| `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) |
 | `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
 | `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, vider la progression |
 | `GET /export.json` | `?token=` | export complet de la base |
@@ -95,7 +96,7 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois), `comptes` (Discord ↔ pseudo ; clé créée sur le site, sinon
+`envois` (journal des envois), `comptes` (Discord ↔ pseudo et BattleTag ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` ne touche
 pas aux comptes. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
@@ -144,6 +145,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.5.0 | BattleTag récupéré via les connexions Discord (scope `connections`), affiché sur « Mon compte » et dans l'admin |
 | 1.4.3 | numéro de version en pied de page ; URL des images suffixées `?v=version` (Cloudflare servait encore l'ancien logo) |
 | 1.4.2 | cristal redétouré (plus de liseré clair), plus grand dans l'en-tête avec un halo diffus |
 | 1.4.1 | liaison automatique au pseudo de `cles.txt` identique à un nom Discord (surnom, nom affiché, utilisateur) |
