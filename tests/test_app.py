@@ -128,7 +128,7 @@ def test_reinitialiser(client):
     r = client.post("/reinitialiser?token=tok")
     assert r.status_code == 200 and r.json["supprimes"]["personnages"] == 3
     d = client.get("/export.json?token=tok").json
-    assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == []
+    assert d["personnages"] == d["exploits"] == d["historique"] == d["envois"] == d["proprietaires"] == []
 
 
 def test_annonces_paliers_et_niveaux(client, monkeypatch):
@@ -561,9 +561,12 @@ def test_perso_au_nom_du_pseudo_et_admin(discord_client, tmp_path):
     c.post("/admin", data={"action": "dissocier", "nom": "Grommash"})
     tableau = c.get("/admin").text.split("Personnages ↔ joueurs")[1].split("</table>")[0]
     assert '<td class="nom">Grommash</td>' not in tableau and "même nom que le pseudo" in tableau  # Mok
-    # La remise à zéro de la progression garde les associations
-    c.post("/admin", data={"action": "reinitialiser"})
-    assert len(c.get("/export.json?token=tok").json["proprietaires"]) == 1
+    # La remise à zéro vide aussi les associations, mais garde les comptes et la session
+    r = c.post("/admin", data={"action": "reinitialiser"})
+    assert "1 associations" in r.text
+    d = c.get("/export.json?token=tok").json
+    assert d["proprietaires"] == d["personnages"] == []
+    assert "Mon compte</a>" in c.get("/").text and "Gael" in c.get("/admin").text
 
 
 def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):
@@ -599,3 +602,20 @@ def test_emblemes_de_classe(client):
     g = client.application.view_functions["index"].__globals__
     assert 'stroke' not in g["embleme"]("Guerrier") and "<svg" in g["embleme"]("Chamane")
     assert g["embleme"]("Guerrier") != g["embleme"]("Mage") and "<svg" in g["embleme"]("Inconnue")
+
+
+def test_meilleurs_contributeurs(discord_client, tmp_path):
+    c, connecter = discord_client
+    (tmp_path / "cles.txt").write_text("Gael:abc123\nThrall:t\nMok:m\nJaina:j\n", encoding="utf-8")
+    assert "Meilleurs contributeurs" not in c.get("/").text
+    envoyer(c, LUA1)                     # Gael : 2 montées
+    envoyer(c, LUA2, "t")                # Thrall : 3 montées
+    envoyer(c, LUA2, "m")                # Mok : 0 (déjà connu)
+    envoyer(c, LUA2.replace("60", "60").replace("Mok;Tauren;Paladin;5", "Mok;Tauren;Paladin;6"), "j")  # Jaina : 1
+    c.get("/collecter?token=tok")        # la collecte serveur ne compte pas
+    html = c.get("/").text.split("Meilleurs contributeurs")[1].split("</section>")[0]
+    assert html.index("Thrall") < html.index("Gael") < html.index("Jaina") and "Mok" not in html
+    assert "<b class=\"num\">3</b> montées de niveau signalées · 1 envoi" in html
+    connecter(ADMIN_ID, nick="Admin")
+    admin = c.get("/admin").text.split("Contributeurs")[1].split("</table>")[0]
+    assert all(n in admin for n in ("Thrall", "Gael", "Jaina", "Mok")) and "serveur" not in admin
