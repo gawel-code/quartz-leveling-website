@@ -31,10 +31,20 @@ groupe** avec lui.
 
 ---
 
-## Étape 2 — Envoyer tes données (choisis UNE des deux options)
+## Étape 2 — Récupérer ta clé personnelle
+
+Va sur **https://quartz.gawel.be/moi** et clique sur **Connexion Discord** (il faut
+être sur le serveur Discord de la guilde, avec le rôle de la guilde).
+- Si Gaël t'a déjà envoyé une clé en MP : colle-la dans « J'ai déjà reçu une clé ».
+- Sinon : choisis ton pseudo, une clé est créée pour toi.
+
+Ta clé reste affichée sur cette page (bouton **Copier la clé**). Tu peux aussi en
+générer une nouvelle si elle a fuité.
+
+## Étape 3 — Envoyer tes données (choisis UNE des deux options)
 
 ### Option A — Automatique (recommandé, à faire une seule fois)
-1. Demande ta **clé personnelle** à Gaël.
+1. Récupère ta **clé personnelle** (étape 2).
 2. Télécharge `envoi-guilde.ps1`, `lancer.bat` et `changer-cle.bat`, mets-les dans le
    même dossier.
 3. Double-clique sur `lancer.bat`. La première fois, il te demande ta clé (colle
@@ -52,7 +62,7 @@ sur `changer-cle.bat`.
 
 ### Option B — À la main, sans rien installer
 1. Après ta session, va sur **https://quartz.gawel.be/contribuer**.
-2. Entre ta clé personnelle et choisis le fichier `GuildExport.lua`, dans
+2. Connecte-toi avec Discord (ou entre ta clé) et choisis le fichier `GuildExport.lua`, dans
    `World of Warcraft\_forever_\WTF\Account\TON_COMPTE\SavedVariables\`
 3. Clique sur **Envoyer**.
 
@@ -69,8 +79,9 @@ l'addon. Ça se complète tout seul.
 **Deux personnes envoient des données différentes ?** Le site garde toujours le
 **niveau le plus haut**. Pas de risque d'écraser les données de quelqu'un.
 
-**Ma clé est perdue ou quelqu'un l'a vue.** Préviens Gaël, il t'en donnera une
-nouvelle.
+**Ma clé est perdue ou quelqu'un l'a vue.** Sur https://quartz.gawel.be/moi, clique sur
+**Générer une nouvelle clé**, puis double-clique sur `changer-cle.bat` pour la donner au
+script.
 
 ## Et si j'envoie mon fichier en retard ?
 Pas de souci : l'addon **note l'heure de chaque montée de niveau** (la tienne à la

@@ -76,6 +76,17 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (formulaire), `POST /envoyer` (header `X-Cle`), `/collecter`, `/recap`,
   `/export.json`, `POST /reinitialiser` (vide toute la base, copie dans
   `<DB>.avant-reset`) — ces quatre protégées par `?token=`.
+- Connexion Discord (v1.4.0, OAuth2 code, scopes `identify guilds.members.read`) : `/connexion`
+  → Discord → `/auth/discord/callback` (vérifie `state`, être sur le serveur `discord_serveur_id`
+  et avoir le rôle `discord_role_id` ; les IDs de `discord_admins` passent toujours) → session
+  Flask (cookie signé par `/data/secret.key`, 30 jours). `/moi` : relier son compte à un pseudo
+  (avec sa clé existante, ou en choisissant un pseudo absent de `cles.txt` → clé créée), afficher
+  / régénérer sa clé. Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le)` : `cle` NULL =
+  clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
+  (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
+  délier un compte, voir les clés de `cles.txt` sans compte, vider la progression (pas les comptes).
+  Secret vide = connexion désactivée (404), tout le reste marche comme avant. `URL_SITE`
+  (`GUILDE_URL`, défaut https://quartz.gawel.be) sert à l'URL de redirection.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`. Webhook vide = messages
@@ -107,6 +118,11 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
 ## État au 29 octobre 2026 (v1.3.0 déployée)
+- 🔜 v1.4.0 (connexion Discord) : application Discord **Quartz Forever** créée (Client ID
+  `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
+  `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
+  défaut des options). Le **secret client** est à saisir par Gaël dans l'option
+  `discord_client_secret` (jamais commité).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

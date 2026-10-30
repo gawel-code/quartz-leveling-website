@@ -2,6 +2,11 @@
 export NOM_GUILDE="$(bashio::config 'nom_guilde')"
 export GUILDE_TOKEN="$(bashio::config 'token')"
 export DISCORD_WEBHOOK="$(bashio::config 'discord_webhook')"
+export DISCORD_CLIENT_ID="$(bashio::config 'discord_client_id')"
+export DISCORD_CLIENT_SECRET="$(bashio::config 'discord_client_secret')"
+export DISCORD_SERVEUR_ID="$(bashio::config 'discord_serveur_id')"
+export DISCORD_ROLE_ID="$(bashio::config 'discord_role_id')"
+export DISCORD_ADMINS="$(bashio::config 'discord_admins')"
 export GUILDE_DB=/data/guilde.db
 export GUILDE_CLES=/config/cles.txt
 export GUILDE_EXPORT=/data/GuildExport.lua

@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.3.3
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.0
 
 ## Fonctionnement
 
@@ -25,7 +25,11 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
 
 - **Addon** : dépôt séparé [gawel-code/quartz-leveling-addon](https://github.com/gawel-code/quartz-leveling-addon).
   Il exporte la liste de guilde (nom, race, classe, niveau) et l'heure des montées de niveau.
-- **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur). Le script
+- **Connexion Discord** (OAuth2) : un membre du serveur Discord de la guilde, avec le rôle
+  de la guilde, se connecte sur `/moi`, relie son compte à son pseudo (avec sa clé actuelle,
+  ou en choisissant un pseudo : une clé est alors créée) et y retrouve sa clé. Connecté, il
+  envoie son fichier sans saisir de clé. Les admins (IDs Discord) passent toujours et ont `/admin`.
+- **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
 - **Fusion** : on garde toujours le niveau le plus haut ; une race connue n'est jamais
   écrasée par `?`. Envoyer un vieux fichier ne fait rien régresser.
@@ -77,6 +81,9 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | intègre le fichier déposé côté serveur (et plus tard l'API Blizzard) |
 | `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
+| `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read`) |
+| `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
+| `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, vider la progression |
 | `GET /export.json` | `?token=` | export complet de la base |
 | `POST /reinitialiser` | `?token=` | vide la base (copie de sauvegarde dans `guilde.db.avant-reset`) |
 
@@ -86,7 +93,9 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois). Dates ISO à la seconde.
+`envois` (journal des envois), `comptes` (Discord ↔ pseudo ; clé créée sur le site, sinon
+celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` ne touche
+pas aux comptes. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
 ### Options de l'app Home Assistant
 
@@ -95,6 +104,10 @@ par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date rée
 | `nom_guilde` | nom affiché |
 | `token` | protège `/collecter`, `/recap`, `/export.json`, `/reinitialiser` |
 | `discord_webhook` | webhook du salon de progression ; vide = messages seulement dans le journal (mode test) |
+| `discord_client_id` / `discord_client_secret` | application Discord (OAuth2) ; secret vide = connexion Discord désactivée |
+| `discord_serveur_id` | serveur Discord de la guilde |
+| `discord_role_id` | rôle exigé ; vide = tout membre du serveur |
+| `discord_admins` | IDs Discord admins, séparés par des virgules (toujours acceptés, accès à `/admin`) |
 
 Les clés des membres sont dans `/app_configs/local_quartz_forever/cles.txt`
 (une ligne `Pseudo:clé` par membre, relu à chaque envoi, sans redémarrage).
@@ -127,6 +140,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.4.0 | connexion Discord : page « Mon compte » (relier son pseudo, voir / régénérer sa clé), envoi sans clé une fois connecté, page admin |
 | 1.3.3 | un seul message Discord par envoi (une ligne par annonce), « — via Pseudo » une fois à la fin |
 | 1.3.2 | chaque annonce cite le membre dont l'envoi l'a déclenchée (« — via Pseudo ») |
 | 1.3.1 | annonces d'un même envoi faites après intégration de tout le fichier, dans l'ordre chronologique : plus de double « 1ᵉʳ » |

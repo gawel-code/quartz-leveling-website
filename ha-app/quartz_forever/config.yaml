@@ -1,5 +1,5 @@
 name: Quartz Forever
-version: "1.3.3"
+version: "1.4.0"
 slug: quartz_forever
 description: Suivi de progression de la guilde Quartz Forever
 arch: [aarch64, amd64]
@@ -14,7 +14,17 @@ options:
   nom_guilde: "Quartz Forever"
   token: ""
   discord_webhook: ""
+  discord_client_id: "1565628978633515028"
+  discord_client_secret: ""
+  discord_serveur_id: "801395490372583426"
+  discord_role_id: "1549720665844613130"
+  discord_admins: "161139977328132107"
 schema:
   nom_guilde: str
   token: password
   discord_webhook: "str?"
+  discord_client_id: "str?"
+  discord_client_secret: "password?"
+  discord_serveur_id: "str?"
+  discord_role_id: "str?"
+  discord_admins: "str?"
