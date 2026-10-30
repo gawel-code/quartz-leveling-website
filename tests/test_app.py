@@ -396,7 +396,7 @@ def test_liaison_auto_si_le_nom_discord_correspond(discord_client, tmp_path):
     c, connecter = discord_client
     connecter(nick="gael")  # surnom sur le serveur = pseudo de cles.txt (casse ignorée)
     r = c.get("/moi")
-    assert "Pseudo sur le site : <b>Gael</b>" in r.text and 'value="abc123"' in r.text
+    assert "<dt>Pseudo</dt><dd>Gael</dd>" in r.text and 'value="abc123"' in r.text
     # Un autre compte avec le même surnom ne prend pas le pseudo déjà relié
     c.get("/deconnexion")
     connecter("43", nick="Gael")
@@ -438,7 +438,7 @@ def test_battletag_recupere_via_les_connexions_discord(discord_client):
     assert "scope=identify+guilds.members.read+connections" in c.get("/connexion").location
     connecter(ADMIN_ID, nick="Gael", connexions=bnet)  # liaison auto : BattleTag enregistré avec le compte
     r = c.get("/moi")
-    assert "BattleTag : <b>Gawel#2345</b> (lié à Discord)" in r.text and 'id="battletag"' not in r.text
+    assert 'Gawel#2345 <span class="puce verifie">lié à Discord</span>' in r.text and 'id="battletag"' not in r.text
     assert "Gawel#2345" in c.get("/admin").text
     # Compte Battle.net délié côté Discord : effacé à la connexion suivante
     c.get("/deconnexion")
@@ -475,11 +475,11 @@ def test_battletag_saisi_a_la_main(discord_client):
     assert r.status_code == 200 and 'value="Gaël#21456"' in r.text
     c.get("/deconnexion")
     connecter(ADMIN_ID, nick="Admin")
-    assert "Gaël#21456 <small>(saisi)</small>" in c.get("/admin").text
+    assert 'Gaël#21456 <span class="puce">saisi</span>' in c.get("/admin").text
     c.get("/deconnexion")
     # Le BattleTag lu sur Discord prime ; la saisie est conservée en réserve
     connecter(nick="Gael", connexions=[{"type": "battlenet", "name": "Gael#1111"}])
-    assert "Gael#1111</b> (lié à Discord)" in c.get("/moi").text
+    assert 'Gael#1111 <span class="puce verifie">lié à Discord</span>' in c.get("/moi").text
     c.get("/deconnexion")
     connecter(nick="Gael")
     r = c.post("/moi", data={"action": "battletag", "battletag": ""})
@@ -514,7 +514,7 @@ def test_persos_du_compte_wow_associes_a_l_envoi(discord_client):
     connecter(nick="Gael")
     assert 'href="https://discord.com/users/42"' in c.get("/").text
     r = c.get("/moi")
-    assert "<b>Grommash</b><small>détecté par l&#39;addon</small>" in r.text
+    assert "<b>Grommash</b>" in r.text and 'title="détecté par l&#39;addon">addon</span>' in r.text
 
 
 def test_reclamer_et_retirer_un_personnage(discord_client):
@@ -522,9 +522,10 @@ def test_reclamer_et_retirer_un_personnage(discord_client):
     envoyer(c, LUA2)
     connecter(nick="Gael")
     r = c.get("/moi")
-    assert '<option>Zuljin</option>' in r.text and '<option>Mok</option>' in r.text
+    assert 'name="nom" value="Zuljin"' in r.text and 'name="nom" value="Mok"' in r.text
     r = c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"})
-    assert "Zuljin est associé" in r.text and '<option>Zuljin</option>' not in r.text
+    assert "Zuljin est associé" in r.text and 'type="submit" name="nom" value="Zuljin"' not in r.text
+    assert 'aria-label="Retirer Zuljin"' in r.text
     assert '@Gael</a>' in c.get("/").text
     # Un autre joueur ne peut pas le prendre
     c.get("/deconnexion")
@@ -535,7 +536,7 @@ def test_reclamer_et_retirer_un_personnage(discord_client):
     c.get("/deconnexion")
     connecter(nick="Gael")
     r = c.post("/moi", data={"action": "retirer", "nom": "Zuljin"})
-    assert "Personnage retiré" in r.text and '<option>Zuljin</option>' in r.text
+    assert "Personnage retiré" in r.text and 'type="submit" name="nom" value="Zuljin"' in r.text
 
 
 def test_l_addon_l_emporte_sur_une_saisie_manuelle(discord_client):
@@ -570,7 +571,7 @@ def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):
     envoyer(c, LUA_MES_PERSOS)  # Grommash → Gael (addon)
     connecter(ADMIN_ID, nick="Admin")
     r = c.get("/admin")
-    assert '<option>Grommash</option>' in r.text and '<option>Gael</option>' in r.text
+    assert 'value="Grommash"' in r.text and '<option selected>Gael</option>' in r.text
     assert c.post("/admin", data={"action": "associer", "nom": "Inconnu", "pseudo": "Gael"}).status_code == 200
     assert "Personnage ou joueur inconnu" in c.post(
         "/admin", data={"action": "associer", "nom": "Grommash", "pseudo": "Personne"}).text
@@ -582,4 +583,19 @@ def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):
     assert (d["Grommash"]["pseudo"], d["Grommash"]["source"]) == ("Thrall", "admin")
     assert d["Reroll"]["pseudo"] == "Gael"
     r = c.get("/moi")  # côté joueur : pas de bouton Retirer sur un choix d'officier
-    assert "<b>Grommash</b><small>attribué par un officier</small>\n </div>" in r.text
+    assert 'title="attribué par un officier">officier</span>' in r.text and 'aria-label="Retirer Grommash"' not in r.text
+
+
+def test_admin_retire_une_association_avec_aucun(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA_MES_PERSOS)
+    connecter(ADMIN_ID, nick="Admin")
+    r = c.post("/admin", data={"action": "associer", "nom": "Grommash", "pseudo": ""})
+    assert "Grommash n&#39;est plus associé" in r.text
+    assert "Grommash" not in {p["nom"] for p in c.get("/export.json?token=tok").json["proprietaires"]}
+
+
+def test_emblemes_de_classe(client):
+    g = client.application.view_functions["index"].__globals__
+    assert 'stroke' not in g["embleme"]("Guerrier") and "<svg" in g["embleme"]("Chamane")
+    assert g["embleme"]("Guerrier") != g["embleme"]("Mage") and "<svg" in g["embleme"]("Inconnue")

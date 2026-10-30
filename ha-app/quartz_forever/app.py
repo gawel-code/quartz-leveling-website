@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
+from markupsafe import Markup
 
 # ---------- Configuration ----------
 DB = os.getenv("GUILDE_DB", "guilde.db")
@@ -35,6 +36,34 @@ COULEURS = {
     "Chasseur": "#AAD372", "Chasseresse": "#AAD372", "Démoniste": "#8788EE",
     "Paladin": "#F48CBA", "Chaman": "#2E8FEF", "Chamane": "#2E8FEF",
 }
+
+
+# Emblèmes de classe dessinés pour le site (SVG 24×24, trait) : aucune image externe.
+EMBLEMES = {
+    "guerrier": "M5 19 19 5M14 5h5v5M5 5l14 14M5 14v5h5",
+    "mage": "M12 3v18M3 12h18M6 6l12 12M18 6 6 18",
+    "pretre": "M12 3v18M6 9h12",
+    "voleur": "M12 3l2 10h-4zM8 13h8M12 13v5M10.5 21h3",
+    "druide": "M5 19C5 10 11 5 20 4c-1 9-6 15-15 15zM5 19l8-8",
+    "chasseur": "M7 3a13 13 0 0 1 0 18M7 3v18M3 12h17M17 9l3 3-3 3",
+    "demoniste": "M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-7 2 1 3 3 3 5 1-2 1-6 1-9z",
+    "paladin": "M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM12 8v8M9 11h6",
+    "chaman": "M13 2 5 14h6l-1 8 8-12h-6z",
+}
+CLASSES = {"Guerrier": "guerrier", "Guerrière": "guerrier", "Mage": "mage", "Prêtre": "pretre",
+           "Prêtresse": "pretre", "Voleur": "voleur", "Voleuse": "voleur", "Druide": "druide",
+           "Druidesse": "druide", "Chasseur": "chasseur", "Chasseresse": "chasseur",
+           "Démoniste": "demoniste", "Paladin": "paladin", "Chaman": "chaman", "Chamane": "chaman"}
+
+
+def couleur(classe):
+    return COULEURS.get(classe or "", "#8a9ab5")
+
+
+def embleme(classe):
+    """Emblème SVG de la classe (point d'interrogation si inconnue)."""
+    trace = EMBLEMES.get(CLASSES.get(classe or ""), "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5")
+    return Markup('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="%s"/></svg>' % trace)
 
 
 def maintenant():
@@ -553,6 +582,54 @@ footer img{width:16px;opacity:.7}
 .formulaire h2{margin:0}
 .formulaire p{margin:0}
 .formulaire a:not(.cta){color:var(--cristal)}
+.bloc{padding:20px 22px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.bloc>p,.bloc form p{margin:0}
+.bloc label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.88rem}
+.bloc small,.bloc .aide{color:var(--doux);font-size:.8rem;font-weight:500;overflow-wrap:anywhere}
+.bloc form{display:flex;flex-direction:column;gap:12px}
+.bloc-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+padding-bottom:12px;border-bottom:1px solid var(--trait)}
+.bloc-tete h2 .ic{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:9px;background:var(--verre2);
+border:1px solid var(--trait);font-size:.9rem}
+.grille2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grille2{grid-template-columns:1fr}}
+.infos{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:0;font-size:.9rem}
+.infos dt{color:var(--doux);font-weight:500}.infos dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.puce{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:2px 8px;
+border:1px solid var(--trait);color:var(--doux);background:var(--verre);white-space:nowrap}
+.puce.verifie{color:var(--vert);border-color:rgba(94,227,166,.3)}
+.puce.admin{color:var(--or);border-color:rgba(240,195,90,.35)}
+.ligne{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}.ligne input{flex:1 1 200px;min-width:0}
+.persos,.bloc form.persos{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.perso{--c:#8a9ab5;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;min-width:0;text-align:left;
+background:linear-gradient(90deg,color-mix(in srgb,var(--c) 14%,transparent),transparent 70%),rgba(7,11,20,.45);
+border:1px solid color-mix(in srgb,var(--c) 30%,transparent);border-left:3px solid var(--c);color:var(--texte);font:inherit}
+.embleme{flex:0 0 auto;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;
+background:color-mix(in srgb,var(--c) 22%,var(--nuit2));border:1px solid color-mix(in srgb,var(--c) 55%,transparent);
+box-shadow:0 0 14px color-mix(in srgb,var(--c) 25%,transparent)}
+.embleme svg{width:22px;height:22px;fill:none;stroke:var(--c);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.embleme.mini{width:26px;height:26px;border-radius:8px}.embleme.mini svg{width:15px;height:15px}
+.perso-id{display:flex;flex-direction:column;min-width:0;flex:1}
+.perso-id b{font-family:var(--f-titre);font-weight:600;color:var(--c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perso-id small{color:var(--doux);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perso .niv{font-size:.8rem;min-width:30px;padding:2px 6px}
+.perso form{margin:0}
+.retirer{display:grid;place-items:center;width:28px;height:28px;padding:0;border-radius:8px;font-size:1rem;line-height:1}
+button.perso{cursor:pointer;box-shadow:none;white-space:normal;transition:transform .12s,border-color .12s}
+button.perso:hover{transform:translateY(-1px);border-color:var(--c)}
+button.perso .plus{font:700 1.1rem var(--f-titre);color:var(--c);opacity:.8}
+.vide-etat{padding:18px;border:1px dashed var(--trait2);border-radius:14px;color:var(--doux);font-size:.88rem;text-align:center}
+.recherche{width:220px;max-width:100%}
+.filtres{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:600px){.recherche,.filtres{width:100%}.filtres>*{flex:1}}
+.bloc .table-wrap{margin:0 -22px;padding:0 22px}
+.bloc table{min-width:700px}
+td .persoligne{display:flex;align-items:center;gap:10px}
+td .persoligne b{font-family:var(--f-titre);font-weight:600;color:var(--c)}
+td .persoligne small{color:var(--doux);font-size:.74rem;display:block;font-weight:500}
+.danger{border-color:rgba(255,138,122,.3);background:linear-gradient(120deg,rgba(255,138,122,.07),transparent 60%),var(--verre)}
+button.danger-btn{background:linear-gradient(135deg,#ffc2b8,var(--rouge));box-shadow:0 6px 24px rgba(255,138,122,.2)}
+.puces{display:flex;flex-wrap:wrap;gap:6px}
 </style>
 """
 
@@ -650,97 +727,147 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div><button type="submit">Envoyer</button></div>
 </form>""" + PIED + """</div></body></html>"""
 
+# Carte d'un personnage : emblème de classe, nom à la couleur de la classe, race, classe, niveau.
+PERSO = """{% macro carte_perso(nom, info) -%}
+<span class="embleme">{{ embleme(info.classe if info else '') }}</span>
+<span class="perso-id"><b>{{ nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span>
+{%- if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}
+{%- endmacro %}"""
+
 COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mon compte</title>""" + STYLE + """</head><body><div class="page">
+<title>Mon compte</title>""" + STYLE + """</head><body>""" + PERSO + """<div class="page">
 """ + ENTETE + """
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
-<section class="carte formulaire">
 {% if not session.discord %}
- <p>Connecte-toi avec ton compte Discord (il faut être sur le serveur de la guilde, avec le rôle de la guilde).</p>
- <div><a class="cta" href="connexion">Connexion Discord</a></div>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🔑</span>Connexion</h2></div>
+ <p>Connecte-toi avec ton compte Discord : il faut être sur le serveur de la guilde, avec le rôle de la guilde.</p>
+ <div><a class="cta" href="connexion">Connexion Discord</a></div></section>
+{% elif not compte %}
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">👋</span>Bienvenue {{ session.discord.nom }}</h2>
+ {% if admin %}<a class="cta sec" href="admin">Administration</a>{% endif %}</div>
+ <p>Première connexion : relie ton compte Discord à ton pseudo de guilde, avec l'une des deux options.</p></section>
+<div class="grille2">
+ <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🔑</span>J'ai déjà une clé</h2></div>
+ <form method="post"><input type="hidden" name="action" value="lier">
+ <label for="ancienne">Clé reçue en message privé<input id="ancienne" type="password" name="cle" required></label>
+ <div><button type="submit">Relier avec ma clé</button></div></form></section>
+ <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">✨</span>Je n'ai pas de clé</h2></div>
+ <form method="post"><input type="hidden" name="action" value="creer">
+ <label for="pseudo">Choisis ton pseudo
+ <input id="pseudo" name="pseudo" required maxlength="24" value="{{ session.discord.nom }}"></label>
+ <small>2 à 24 caractères, sans espace ni « : ». Une clé est créée pour toi.</small>
+ <div><button type="submit">Créer ma clé</button></div></form></section>
+</div>
 {% else %}
- <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}</p>
- {% if compte %}
- <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b>{% if compte.battletag %} · BattleTag : <b>{{ compte.battletag }}</b> (lié à Discord){% endif %}</p>
+<div class="grille2">
+ <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">👤</span>Profil</h2>
+ {% if admin %}<a class="cta sec" href="admin">Administration</a>{% endif %}</div>
+ <dl class="infos"><dt>Pseudo</dt><dd>{{ compte.pseudo }}</dd>
+ <dt>Discord</dt><dd>{{ session.discord.nom }}</dd>
+ <dt>BattleTag</dt><dd>{% if compte.battletag %}{{ compte.battletag }} <span class="puce verifie">lié à Discord</span>
+ {% elif compte.battletag_saisi %}{{ compte.battletag_saisi }} <span class="puce">saisi</span>{% else %}<span class="aide">non renseigné</span>{% endif %}</dd></dl>
  {% if not compte.battletag %}
  <form method="post"><input type="hidden" name="action" value="battletag">
- <label for="battletag">Ton BattleTag
- <input id="battletag" name="battletag" maxlength="20" placeholder="Nom#1234" value="{{ compte.battletag_saisi or '' }}">
- <small>Ou lie Battle.net à Discord (Paramètres → Connexions) puis reconnecte-toi : il sera lu automatiquement. Laisser vide pour l'effacer.</small></label>
- <div><button class="sec" type="submit">Enregistrer le BattleTag</button></div></form>
+ <label for="battletag">{{ "Modifier mon BattleTag" if compte.battletag_saisi else "Ajouter mon BattleTag" }}</label>
+ <div class="ligne"><input id="battletag" name="battletag" maxlength="20" placeholder="Nom#1234" value="{{ compte.battletag_saisi or '' }}">
+ <button class="sec" type="submit">Enregistrer</button></div>
+ <small>Ou lie Battle.net à Discord (Paramètres → Connexions) puis reconnecte-toi : il sera lu automatiquement. Vide = effacer.</small></form>
  {% endif %}
+ </section>
+ <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🔑</span>Ma clé d'envoi</h2></div>
  {% if cle %}
- <label for="cle">Ta clé personnelle (à coller dans le script d'envoi automatique)
- <input id="cle" type="text" value="{{ cle }}" readonly onclick="this.select()"></label>
+ <label for="cle">À coller dans le script d'envoi automatique
+ <div class="ligne"><input id="cle" type="text" value="{{ cle }}" readonly onclick="this.select()">
+ <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cle').value);this.textContent='Copiée !'">Copier</button></div></label>
  {% else %}<p>Aucune clé active : génère-en une.</p>{% endif %}
- <div class="boutons">{% if cle %}<button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cle').value);this.textContent='Copiée !'">Copier la clé</button>{% endif %}
- <a class="cta sec" href="contribuer">Envoyer mes données</a></div>
+ <div class="boutons"><a class="cta sec" href="contribuer">Envoyer mes données</a>
  <form method="post" onsubmit="return confirm('L\\'ancienne clé ne fonctionnera plus : relance changer-cle.bat sur ton PC. Continuer ?')">
- <input type="hidden" name="action" value="regenerer"><div><button class="sec" type="submit">Générer une nouvelle clé</button></div></form>
- <h2>Mes personnages</h2>
- {% for m in mes_persos %}<div class="boutons"><b>{{ m.nom }}</b><small>{{ sources[m.source] }}</small>
- {% if m.source == "manuel" %}<form method="post"><input type="hidden" name="action" value="retirer">
- <input type="hidden" name="nom" value="{{ m.nom }}"><button class="sec" type="submit">Retirer</button></form>{% endif %}</div>
- {% else %}<p>Aucun personnage associé pour l'instant.</p>{% endfor %}
- <small>Les personnages de ton compte WoW sont ajoutés automatiquement à chaque envoi de ton fichier
- (addon GuildExport 1.2.0 ou plus). Ils sont reliés à ton profil Discord dans le classement.</small>
- {% if libres %}<form method="post"><input type="hidden" name="action" value="reclamer">
- <label for="perso">Ajouter un personnage<select id="perso" name="nom">{% for n in libres %}<option>{{ n }}</option>{% endfor %}</select></label>
- <div><button class="sec" type="submit">C'est mon personnage</button></div></form>{% endif %}
- {% else %}
- <h2>Première connexion</h2>
- <p>Relie ton compte Discord à ton pseudo de guilde.</p>
- <form method="post"><input type="hidden" name="action" value="lier">
- <label for="ancienne">J'ai déjà reçu une clé en message privé<input id="ancienne" type="password" name="cle" required></label>
- <div><button type="submit">Relier avec ma clé</button></div></form>
- <form method="post"><input type="hidden" name="action" value="creer">
- <label for="pseudo">Je n'ai pas de clé : choisis ton pseudo
- <input id="pseudo" name="pseudo" required maxlength="24" value="{{ session.discord.nom }}">
- <small>2 à 24 caractères, sans espace ni « : ». Une clé est créée pour toi.</small></label>
- <div><button type="submit">Créer ma clé</button></div></form>
+ <input type="hidden" name="action" value="regenerer"><button class="sec" type="submit">Générer une nouvelle clé</button></form></div>
+ <small>Garde-la pour toi : elle permet d'envoyer des données en ton nom.</small>
+ </section>
+</div>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">⚔️</span>Mes personnages <small>{{ mes_persos|length }}</small></h2></div>
+ {% if mes_persos %}<div class="persos">
+ {% for m in mes_persos %}{% set info = infos.get(m.nom) %}
+ <div class="perso" style="--c:{{ couleur(info.classe if info else '') }}">{{ carte_perso(m.nom, info) }}
+ {% if m.source == "manuel" %}<form method="post"><input type="hidden" name="action" value="retirer"><input type="hidden" name="nom" value="{{ m.nom }}">
+ <button class="sec retirer" type="submit" title="Retirer {{ m.nom }}" aria-label="Retirer {{ m.nom }}">×</button></form>
+ {% else %}<span class="puce{{ ' admin' if m.source == 'admin' else '' }}" title="{{ sources[m.source] }}">{{ {"admin": "officier", "addon": "addon", "nom": "pseudo", "blizzard": "Battle.net"}[m.source] }}</span>{% endif %}
+ </div>{% endfor %}</div>
+ {% else %}<div class="vide-etat">Aucun personnage pour l'instant. Envoie ton fichier GuildExport.lua ou ajoute-les ci-dessous.</div>{% endif %}
+ <small>Les personnages de ton compte WoW sont ajoutés tout seuls à chaque envoi (addon GuildExport 1.2.0 ou plus).
+ Dans le classement, ils affichent ton pseudo avec un lien vers ton profil Discord.</small>
+ {% if libres %}
+ <div class="bloc-tete"><h2><span class="ic">＋</span>Ajouter un personnage <small>clique sur le tien</small></h2>
+ <input class="recherche" type="search" placeholder="Rechercher…" aria-label="Rechercher un personnage" oninput="filtrerPersos(this.value)"></div>
+ <form method="post" class="persos" id="libres"><input type="hidden" name="action" value="reclamer">
+ {% for n in libres %}{% set info = infos.get(n) %}
+ <button class="perso" type="submit" name="nom" value="{{ n }}" data-nom="{{ n|lower }}" style="--c:{{ couleur(info.classe if info else '') }}">{{ carte_perso(n, info) }}<span class="plus">+</span></button>
+ {% endfor %}</form>
  {% endif %}
+</section>
+<script>
+function filtrerPersos(q){q=q.toLowerCase();document.querySelectorAll("#libres button[data-nom]").forEach(function(b){
+ b.style.display=b.dataset.nom.indexOf(q)>=0?"":"none";});}
+</script>
 {% endif %}
-</section>""" + PIED + """</div></body></html>"""
+""" + PIED + """</div></body></html>"""
 
 ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Administration</title>""" + STYLE + """</head><body><div class="page">
 """ + ENTETE + """
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
-<section class="sec"><h2>Comptes Discord reliés <small>{{ comptes|length }}</small></h2>
-<div class="carte table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>BattleTag</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
-{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td><td>{% if c.battletag %}{{ c.battletag }}{% elif c.battletag_saisi %}{{ c.battletag_saisi }} <small>(saisi)</small>{% else %}—{% endif %}</td>
-<td>{{ "créée sur le site" if c.cle else "cles.txt" }}</td><td>{{ c.lie_le[:16].replace("T", " ") }}</td>
-<td><form method="post" onsubmit="return confirm('Délier ce compte ? La clé créée sur le site sera supprimée.')">
-<input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
-<button class="sec" type="submit">Délier</button></form></td></tr>
-{% else %}<tr><td colspan="6">Aucun compte relié.</td></tr>{% endfor %}
-</tbody></table></div></section>
-<section class="sec"><h2>Personnages ↔ joueurs <small>{{ associations|length }} associés</small></h2>
-<form class="carte formulaire" method="post"><input type="hidden" name="action" value="associer">
-<div class="boutons"><label for="a-nom">Personnage<select id="a-nom" name="nom">{% for n in tous_persos %}<option>{{ n }}</option>{% endfor %}</select></label>
-<label for="a-pseudo">Joueur<select id="a-pseudo" name="pseudo">{% for j in joueurs %}<option>{{ j }}</option>{% endfor %}</select></label></div>
-<div><button type="submit">Associer</button></div>
-<small>Un choix d'officier l'emporte sur l'addon et les ajouts des joueurs, et n'est jamais remplacé automatiquement.</small></form>
-<div class="carte table-wrap"><table><thead><tr><th>Personnage</th><th>Joueur</th><th>Source</th><th></th></tr></thead><tbody>
-{% for a in associations %}<tr><td class="nom">{{ a.nom }}</td><td>{{ a.pseudo }}</td><td>{{ sources[a.source] }}</td>
-<td>{% if a.source != "nom" %}<form method="post"><input type="hidden" name="action" value="dissocier"><input type="hidden" name="nom" value="{{ a.nom }}">
-<button class="sec" type="submit">Dissocier</button></form>{% endif %}</td></tr>
-{% else %}<tr><td colspan="4">Aucun personnage associé.</td></tr>{% endfor %}
-</tbody></table></div></section>
-<section class="carte formulaire sec"><h2>Clés de cles.txt sans compte Discord</h2>
-<p>{{ sans_compte|join(", ") if sans_compte else "aucune" }}</p></section>
-<section class="carte formulaire sec"><h2>Zone dangereuse</h2>
-<form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
-<input type="hidden" name="action" value="reinitialiser"><div><button type="submit">Vider la base de progression</button></div></form>
-<small>Personnages, historique, exploits et envois. Les comptes et les clés sont conservés.</small></section>
-""" + PIED + """</div></body></html>"""
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">⚔️</span>Personnages ↔ joueurs
+ <small>{{ lignes|selectattr("pseudo")|list|length }} associés sur {{ lignes|length }}</small></h2>
+ <div class="filtres"><select aria-label="Filtrer" onchange="filtrerAdmin()" id="f-etat"><option value="">Tous</option>
+ <option value="libre">Sans joueur</option><option value="lie">Associés</option></select>
+ <input class="recherche" type="search" id="f-texte" placeholder="Personnage ou joueur…" aria-label="Rechercher" oninput="filtrerAdmin()"></div></div>
+ <div class="table-wrap"><table><thead><tr><th>Personnage</th><th>Niveau</th><th>Joueur</th><th>Source</th><th></th></tr></thead><tbody>
+ {% for l in lignes %}{% set info = l.info %}
+ <tr data-texte="{{ (l.nom ~ ' ' ~ (l.pseudo or ''))|lower }}" data-etat="{{ 'lie' if l.pseudo else 'libre' }}">
+ <td><span class="persoligne" style="--c:{{ couleur(info.classe if info else '') }}"><span class="embleme mini">{{ embleme(info.classe if info else '') }}</span>
+ <span><b>{{ l.nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span></span></td>
+ <td>{% if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}</td>
+ <td><select name="pseudo" form="a{{ loop.index }}" aria-label="Joueur de {{ l.nom }}"><option value="">— aucun —</option>
+ {% for j in joueurs %}<option{{ ' selected' if l.pseudo == j }}>{{ j }}</option>{% endfor %}</select></td>
+ <td>{% if l.source %}<span class="puce{{ ' admin' if l.source == 'admin' else '' }}">{{ sources[l.source] }}</span>{% endif %}</td>
+ <td><form id="a{{ loop.index }}" method="post"><input type="hidden" name="action" value="associer"><input type="hidden" name="nom" value="{{ l.nom }}">
+ <button class="sec" type="submit">Enregistrer</button></form></td></tr>
+ {% else %}<tr><td colspan="5">Aucun personnage pour l'instant.</td></tr>{% endfor %}
+ </tbody></table></div>
+ <small>Un choix d'officier l'emporte sur l'addon et les ajouts des joueurs, et n'est jamais remplacé automatiquement.
+ « — aucun — » retire l'association enregistrée (un perso au nom d'un pseudo reste relié d'office).</small>
+</section>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">💬</span>Comptes Discord reliés <small>{{ comptes|length }}</small></h2></div>
+ <div class="table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>BattleTag</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
+ {% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td>
+ <td>{% if c.battletag %}{{ c.battletag }}{% elif c.battletag_saisi %}{{ c.battletag_saisi }} <span class="puce">saisi</span>{% else %}—{% endif %}</td>
+ <td>{{ "créée sur le site" if c.cle else "cles.txt" }}</td><td>{{ c.lie_le[:16].replace("T", " ") }}</td>
+ <td><form method="post" onsubmit="return confirm('Délier ce compte ? La clé créée sur le site sera supprimée.')">
+ <input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
+ <button class="sec" type="submit">Délier</button></form></td></tr>
+ {% else %}<tr><td colspan="6">Aucun compte relié.</td></tr>{% endfor %}
+ </tbody></table></div></section>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🗝️</span>Clés de cles.txt sans compte Discord <small>{{ sans_compte|length }}</small></h2></div>
+ {% if sans_compte %}<div class="puces">{% for p in sans_compte %}<span class="puce">{{ p }}</span>{% endfor %}</div>
+ {% else %}<p>Tout le monde est relié.</p>{% endif %}</section>
+<section class="carte bloc danger"><div class="bloc-tete"><h2><span class="ic">⚠️</span>Zone dangereuse</h2></div>
+ <form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
+ <input type="hidden" name="action" value="reinitialiser"><div><button class="danger-btn" type="submit">Vider la base de progression</button></div></form>
+ <small>Personnages, historique, exploits et envois. Les comptes, les clés et les associations sont conservés.</small></section>
+""" + PIED + """</div>
+<script>
+function filtrerAdmin(){var e=document.getElementById("f-etat").value,q=document.getElementById("f-texte").value.toLowerCase();
+ document.querySelectorAll("tr[data-etat]").forEach(function(tr){
+  tr.style.display=(!e||tr.dataset.etat===e)&&tr.dataset.texte.indexOf(q)>=0?"":"none";});}
+</script></body></html>"""
 
 
 @app.context_processor
 def contexte():
-    return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION}
+    return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION, "couleur": couleur, "embleme": embleme}
 
 
 def est_admin():
@@ -779,7 +906,7 @@ def index():
         maj=max((p["maj"] for p in persos), default="")[:16].replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
         liste_classes=sorted({p["classe"] for p in persos}),
-        couleur=lambda c: COULEURS.get(c, "#e6eefb"))
+        couleur=lambda c: COULEURS.get(c, "#e6eefb"))  # texte clair par défaut dans le classement
 
 
 def formulaire(**kw):
@@ -988,15 +1115,16 @@ def route_moi():
             con.execute("UPDATE comptes SET cle=? WHERE discord_id=?", (nouvelle_cle(con), d["id"]))
             message = "Nouvelle clé créée. L'ancienne ne fonctionne plus."
         compte = compte_connecte(con)
-        mes_persos, libres = [], []
+        mes_persos, libres, infos = [], [], {}
         if compte:
             noms = [r["nom"] for r in con.execute("SELECT nom FROM personnages ORDER BY nom")]
             proprios = proprietaires(con, set(noms) | {r["nom"] for r in con.execute("SELECT nom FROM proprietaires")})
             mes_persos = [{"nom": n, **p} for n, p in sorted(proprios.items())
                           if p["pseudo"].casefold() == compte["pseudo"].casefold()]
             libres = [n for n in noms if n not in proprios]
+        infos = {r["nom"]: r for r in con.execute("SELECT * FROM personnages")}
     return page_compte(compte=compte, cle=cle_du_compte(compte) if compte else None, sources=SOURCES,
-                       mes_persos=mes_persos, libres=libres,
+                       mes_persos=mes_persos, libres=libres, infos=infos,
                        message=message, classe=classe), 400 if classe == "err" else 200
 
 
@@ -1014,7 +1142,10 @@ def route_admin():
         nom, pseudo = request.form.get("nom", ""), request.form.get("pseudo", "")
         with db() as con:
             connus = {r[0] for r in con.execute("SELECT nom FROM personnages UNION SELECT nom FROM proprietaires")}
-            if nom in connus and pseudo in joueurs(con):
+            if nom in connus and not pseudo:
+                con.execute("DELETE FROM proprietaires WHERE nom=?", (nom,))
+                message = f"{nom} n'est plus associé."
+            elif nom in connus and pseudo in joueurs(con):
                 associer(con, pseudo, [nom], "admin")
                 message = f"{nom} est associé à {pseudo}."
             else:
@@ -1030,13 +1161,16 @@ def route_admin():
         comptes = con.execute("SELECT * FROM comptes ORDER BY pseudo").fetchall()
         tous_persos = sorted({r[0] for r in con.execute(
             "SELECT nom FROM personnages UNION SELECT nom FROM proprietaires")}, key=str.casefold)
-        associations = sorted(({"nom": n, **a} for n, a in proprietaires(con, tous_persos).items()),
-                              key=lambda a: (a["pseudo"].casefold(), a["nom"].casefold()))
+        proprios = proprietaires(con, tous_persos)
+        infos = {r["nom"]: r for r in con.execute("SELECT * FROM personnages")}
+        lignes = [{"nom": n, "info": infos.get(n), "pseudo": proprios.get(n, {}).get("pseudo"),
+                   "source": proprios.get(n, {}).get("source")} for n in tous_persos]
+        lignes.sort(key=lambda l: (l["pseudo"] is not None, -(l["info"]["niveau"] if l["info"] else 0), l["nom"].casefold()))
         liste_joueurs = joueurs(con)
     lies = {c["pseudo"].casefold() for c in comptes}
     return render_template_string(
         ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe=classe,
-        associations=associations, sources=SOURCES, tous_persos=tous_persos, joueurs=liste_joueurs,
+        lignes=lignes, sources=SOURCES, joueurs=liste_joueurs,
         sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 

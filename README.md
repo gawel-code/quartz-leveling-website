@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.6.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.6.1
 
 ## Fonctionnement
 
@@ -154,6 +154,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.6.1 | « Mon compte » en blocs (profil, clé, personnages) ; personnages en cartes aux couleurs de classe avec emblème, ajout en un clic avec recherche ; admin en blocs pleine largeur, tableau de tous les persos avec choix du joueur sur chaque ligne et filtres |
 | 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; dans l'admin, associer / dissocier n'importe quel perso (choix prioritaire) |
 | 1.5.1 | BattleTag saisi à la main sur « Mon compte » quand Battle.net n'est pas lié à Discord ; boutons « Mon compte » et « Déconnexion » (ou « Connexion Discord ») dans l'en-tête de toutes les pages |
 | 1.5.0 | BattleTag récupéré via les connexions Discord (scope `connections`), affiché sur « Mon compte » et dans l'admin |
