@@ -13,7 +13,15 @@ export BNET_REGION="$(bashio::config 'bnet_region')"
 export BNET_ESPACE="$(bashio::config 'bnet_espace')"
 export BNET_ROYAUME="$(bashio::config 'bnet_royaume')"
 export BNET_GUILDE="$(bashio::config 'bnet_guilde')"
-export GUILDE_DB=/data/guilde.db
+# v1.11.0 : la base et la clé de session vivent dans /config (/app_configs/<slug>/ côté hôte),
+# lisible depuis Terminal & SSH et incluse dans les sauvegardes : c'est ce qui permet de migrer
+# l'app vers un autre slug par simple copie. Déplacement unique depuis /data (anciennes versions).
+for f in guilde.db guilde.db.avant-reset secret.key; do
+  if [ -f "/data/$f" ] && [ ! -f "/config/$f" ]; then
+    mv "/data/$f" "/config/$f" && bashio::log.info "Migration : /data/$f → /config/$f"
+  fi
+done
+export GUILDE_DB=/config/guilde.db
 export GUILDE_CLES=/config/cles.txt
 export GUILDE_EXPORT=/data/GuildExport.lua
 export PYTHONPATH=/app
