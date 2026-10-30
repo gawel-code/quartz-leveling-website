@@ -35,6 +35,8 @@ groupe** avec lui.
 
 Va sur **https://quartz.gawel.be/moi** et clique sur **Connexion Discord** (il faut
 être sur le serveur Discord de la guilde, avec le rôle de la guilde).
+- Si ton pseudo Discord (ou ton surnom sur le serveur) est ton pseudo de guilde, ton
+  compte est relié tout seul et ta clé s'affiche directement.
 - Si Gaël t'a déjà envoyé une clé en MP : colle-la dans « J'ai déjà reçu une clé ».
 - Sinon : choisis ton pseudo, une clé est créée pour toi.
 

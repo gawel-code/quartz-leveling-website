@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.1
 
 ## Fonctionnement
 
@@ -27,7 +27,9 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   Il exporte la liste de guilde (nom, race, classe, niveau) et l'heure des montées de niveau.
 - **Connexion Discord** (OAuth2) : un membre du serveur Discord de la guilde, avec le rôle
   de la guilde, se connecte sur `/moi`, relie son compte à son pseudo (avec sa clé actuelle,
-  ou en choisissant un pseudo : une clé est alors créée) et y retrouve sa clé. Connecté, il
+  ou en choisissant un pseudo : une clé est alors créée) et y retrouve sa clé. Si son surnom sur
+  le serveur, son nom affiché ou son nom d'utilisateur Discord est un pseudo libre de `cles.txt`,
+  le compte est relié automatiquement dès la connexion. Connecté, il
   envoie son fichier sans saisir de clé. Les admins (IDs Discord) passent toujours et ont `/admin`.
 - **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
@@ -140,6 +142,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.4.1 | liaison automatique au pseudo de `cles.txt` identique à un nom Discord (surnom, nom affiché, utilisateur) |
 | 1.4.0 | connexion Discord : page « Mon compte » (relier son pseudo, voir / régénérer sa clé), envoi sans clé une fois connecté, page admin |
 | 1.3.3 | un seul message Discord par envoi (une ligne par annonce), « — via Pseudo » une fois à la fin |
 | 1.3.2 | chaque annonce cite le membre dont l'envoi l'a déclenchée (« — via Pseudo ») |

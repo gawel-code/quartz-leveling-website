@@ -293,12 +293,12 @@ def discord_client(client, monkeypatch):
             return Reponse({"id": profil["id"], "username": "user" + profil["id"], "global_name": None})
         if not profil["serveur"]:
             return Reponse({"message": "Unknown Guild"}, 404)
-        return Reponse({"nick": "Surnom" + profil["id"], "roles": profil["roles"], "user": {}})
+        return Reponse({"nick": profil["nick"] or "Surnom" + profil["id"], "roles": profil["roles"], "user": {}})
     monkeypatch.setattr(g["requests"], "post", post)
     monkeypatch.setattr(g["requests"], "get", get)
 
-    def connecter(id_discord="42", roles=(ROLE,), sur_serveur=True):
-        profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur)
+    def connecter(id_discord="42", roles=(ROLE,), sur_serveur=True, nick=None):
+        profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur, nick=nick)
         r = client.get("/connexion")
         assert r.status_code == 302 and "discord.com/oauth2/authorize" in r.location
         with client.session_transaction() as s:
@@ -388,3 +388,33 @@ def test_admin(discord_client):
     assert "Surnom42" in r.text  # le compte relié est conservé
     c.post("/admin", data={"action": "delier", "discord_id": "42"})
     assert "Aucun compte relié" in c.get("/admin").text
+
+
+def test_liaison_auto_si_le_nom_discord_correspond(discord_client, tmp_path):
+    c, connecter = discord_client
+    connecter(nick="gael")  # surnom sur le serveur = pseudo de cles.txt (casse ignorée)
+    r = c.get("/moi")
+    assert "Pseudo sur le site : <b>Gael</b>" in r.text and 'value="abc123"' in r.text
+    # Un autre compte avec le même surnom ne prend pas le pseudo déjà relié
+    c.get("/deconnexion")
+    connecter("43", nick="Gael")
+    assert "Première connexion" in c.get("/moi").text
+    assert c.post("/moi", data={"action": "creer", "pseudo": "Gael"}).status_code == 400
+    # Pseudo ajouté à cles.txt après la connexion : « choisir son pseudo » relie s'il correspond
+    with open(tmp_path / "cles.txt", "a", encoding="utf-8") as f:
+        f.write("Thrall:cle-thrall\n")
+    c.get("/deconnexion")
+    connecter("44", nick="Surnom44")
+    assert c.post("/moi", data={"action": "creer", "pseudo": "Thrall"}).status_code == 400  # nom différent
+    c.get("/deconnexion")
+    connecter("45", nick="thrall")  # liaison automatique dès la connexion
+    assert 'value="cle-thrall"' in c.get("/moi").text
+
+
+def test_choisir_son_pseudo_relie_si_nom_discord_identique(discord_client, tmp_path):
+    c, connecter = discord_client
+    connecter(nick="Rexxar")
+    with open(tmp_path / "cles.txt", "a", encoding="utf-8") as f:
+        f.write("Rexxar:cle-rexxar\n")
+    r = c.post("/moi", data={"action": "creer", "pseudo": "rexxar"})
+    assert r.status_code == 200 and "même nom que sur Discord" in r.text and 'value="cle-rexxar"' in r.text
