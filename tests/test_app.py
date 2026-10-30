@@ -289,6 +289,8 @@ def discord_client(client, monkeypatch):
         return Reponse({"access_token": "t"})
 
     def get(url, **kw):
+        if url.endswith("/users/@me/connections"):
+            return Reponse(profil["connexions"])
         if url.endswith("/users/@me"):
             return Reponse({"id": profil["id"], "username": "user" + profil["id"], "global_name": None})
         if not profil["serveur"]:
@@ -297,8 +299,8 @@ def discord_client(client, monkeypatch):
     monkeypatch.setattr(g["requests"], "post", post)
     monkeypatch.setattr(g["requests"], "get", get)
 
-    def connecter(id_discord="42", roles=(ROLE,), sur_serveur=True, nick=None):
-        profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur, nick=nick)
+    def connecter(id_discord="42", roles=(ROLE,), sur_serveur=True, nick=None, connexions=()):
+        profil.update(id=id_discord, roles=list(roles), serveur=sur_serveur, nick=nick, connexions=list(connexions))
         r = client.get("/connexion")
         assert r.status_code == 302 and "discord.com/oauth2/authorize" in r.location
         with client.session_transaction() as s:
@@ -428,3 +430,37 @@ def test_version_en_pied_de_page_et_dans_les_url_des_images(client):
         assert f"v{version}</footer>" in html and f"logo.png?v={version}" in html
     assert f"banniere.jpg?v={version}" in client.get("/").text
     assert client.get(f"/logo.png?v={version}").status_code == 200
+
+
+def test_battletag_recupere_via_les_connexions_discord(discord_client):
+    c, connecter = discord_client
+    bnet = [{"type": "steam", "name": "gawel_steam"}, {"type": "battlenet", "name": "Gawel#2345"}]
+    assert "scope=identify+guilds.members.read+connections" in c.get("/connexion").location
+    connecter(ADMIN_ID, nick="Gael", connexions=bnet)  # liaison auto : BattleTag enregistré avec le compte
+    assert "BattleTag : <b>Gawel#2345</b>" in c.get("/moi").text
+    assert "Gawel#2345" in c.get("/admin").text
+    # Compte Battle.net délié côté Discord : effacé à la connexion suivante
+    c.get("/deconnexion")
+    connecter(ADMIN_ID, nick="Gael")
+    assert "Pas de BattleTag" in c.get("/moi").text
+
+
+def test_echec_lecture_des_connexions_ne_bloque_pas(discord_client, monkeypatch):
+    c, connecter = discord_client
+    connecter(connexions=[{"type": "battlenet"}])  # sans nom
+    r = c.post("/moi", data={"action": "lier", "cle": "abc123"})
+    assert r.status_code == 200 and "Pas de BattleTag" in r.text
+
+
+def test_migration_colonne_battletag(tmp_path, monkeypatch):
+    import sqlite3
+    with sqlite3.connect(tmp_path / "ancienne.db") as con:  # schéma v1.4.x
+        con.execute("CREATE TABLE comptes(discord_id TEXT PRIMARY KEY, pseudo TEXT UNIQUE COLLATE NOCASE,"
+                    " cle TEXT UNIQUE, discord_nom TEXT, lie_le TEXT)")
+        con.execute("INSERT INTO comptes VALUES('42','Gael',NULL,'Gawel','2026-10-30T09:00:00')")
+    monkeypatch.setenv("GUILDE_DB", str(tmp_path / "ancienne.db"))
+    spec = importlib.util.spec_from_file_location("app", APP)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    with mod.db() as con:
+        assert dict(con.execute("SELECT * FROM comptes").fetchone())["battletag"] is None

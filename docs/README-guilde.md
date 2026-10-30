@@ -40,6 +40,10 @@ Va sur **https://quartz.gawel.be/moi** et clique sur **Connexion Discord** (il f
 - Si Gaël t'a déjà envoyé une clé en MP : colle-la dans « J'ai déjà reçu une clé ».
 - Sinon : choisis ton pseudo, une clé est créée pour toi.
 
+Discord te demande aussi l'accès à tes connexions : si ton compte Battle.net est lié à Discord
+(*Paramètres → Connexions*), ton **BattleTag** est enregistré (visible seulement par toi et les
+officiers).
+
 Ta clé reste affichée sur cette page (bouton **Copier la clé**). Tu peux aussi en
 générer une nouvelle si elle a fuité.
 

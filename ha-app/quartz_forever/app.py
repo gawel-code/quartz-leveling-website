@@ -69,6 +69,8 @@ def init_db():
             discord_id TEXT PRIMARY KEY, pseudo TEXT UNIQUE COLLATE NOCASE,
             cle TEXT UNIQUE, discord_nom TEXT, lie_le TEXT);
         """)
+        if "battletag" not in {c[1] for c in con.execute("PRAGMA table_info(comptes)")}:
+            con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0
 
 
 # ---------- Discord ----------
@@ -212,7 +214,8 @@ def pseudo_du_fichier(nom):
 
 
 def lier(con, d, pseudo, cle=None):
-    con.execute("INSERT INTO comptes VALUES(?,?,?,?,?)", (d["id"], pseudo, cle, d["nom"], maintenant()))
+    con.execute("INSERT INTO comptes(discord_id, pseudo, cle, discord_nom, lie_le, battletag) VALUES(?,?,?,?,?,?)",
+                (d["id"], pseudo, cle, d["nom"], maintenant(), d.get("battletag")))
 
 
 def liaison_auto(con, d):
@@ -598,7 +601,8 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}
  · <a href="deconnexion">Se déconnecter</a></p>
  {% if compte %}
- <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b></p>
+ <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b>{% if compte.battletag %} · BattleTag : <b>{{ compte.battletag }}</b>{% endif %}</p>
+ {% if not compte.battletag %}<small>Pas de BattleTag : lie ton compte Battle.net à Discord (Paramètres → Connexions), puis reconnecte-toi ici.</small>{% endif %}
  {% if cle %}
  <label for="cle">Ta clé personnelle (à coller dans le script d'envoi automatique)
  <input id="cle" type="text" value="{{ cle }}" readonly onclick="this.select()"></label>
@@ -628,13 +632,13 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 """ + ENTETE + """
 {% if message %}<div class="msg {{ classe }}">{{ message }}</div>{% endif %}
 <section class="sec"><h2>Comptes Discord reliés <small>{{ comptes|length }}</small></h2>
-<div class="carte table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
-{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td>
+<div class="carte table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>BattleTag</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
+{% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td><td>{{ c.battletag or "—" }}</td>
 <td>{{ "créée sur le site" if c.cle else "cles.txt" }}</td><td>{{ c.lie_le[:16].replace("T", " ") }}</td>
 <td><form method="post" onsubmit="return confirm('Délier ce compte ? La clé créée sur le site sera supprimée.')">
 <input type="hidden" name="action" value="delier"><input type="hidden" name="discord_id" value="{{ c.discord_id }}">
 <button class="sec" type="submit">Délier</button></form></td></tr>
-{% else %}<tr><td colspan="5">Aucun compte relié.</td></tr>{% endfor %}
+{% else %}<tr><td colspan="6">Aucun compte relié.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <section class="carte formulaire sec"><h2>Clés de cles.txt sans compte Discord</h2>
 <p>{{ sans_compte|join(", ") if sans_compte else "aucune" }}</p></section>
@@ -769,7 +773,7 @@ def route_connexion():
         abort(404)
     session["etat"] = secrets.token_urlsafe(24)
     return redirect("https://discord.com/oauth2/authorize?" + urlencode({
-        "response_type": "code", "client_id": DISCORD_ID, "scope": "identify guilds.members.read",
+        "response_type": "code", "client_id": DISCORD_ID, "scope": "identify guilds.members.read connections",
         "redirect_uri": URL_SITE + "/auth/discord/callback", "state": session["etat"], "prompt": "none"}))
 
 
@@ -789,6 +793,7 @@ def route_retour_discord():
         r.raise_for_status()
         utilisateur = r.json()
         membre = requests.get(f"{API_DISCORD}/users/@me/guilds/{DISCORD_SERVEUR}/member", headers=entete, timeout=10)
+        connexions = requests.get(API_DISCORD + "/users/@me/connections", headers=entete, timeout=10)
     except (requests.RequestException, KeyError, ValueError) as e:
         print("Erreur de connexion Discord :", e, flush=True)
         return page_compte(message="Discord ne répond pas, réessaie dans un instant.", classe="err"), 502
@@ -801,12 +806,24 @@ def route_retour_discord():
     noms = [n for n in ((membre or {}).get("nick"), utilisateur.get("global_name"), utilisateur["username"]) if n]
     session.clear()
     session.permanent = True
-    session["discord"] = d = {"id": utilisateur["id"], "nom": noms[0], "noms": noms}
+    session["discord"] = d = {"id": utilisateur["id"], "nom": noms[0], "noms": noms,
+                              "battletag": battletag(connexions)}
     with db() as con:
-        con.execute("UPDATE comptes SET discord_nom=? WHERE discord_id=?", (d["nom"], d["id"]))
+        con.execute("UPDATE comptes SET discord_nom=?, battletag=? WHERE discord_id=?",
+                    (d["nom"], d["battletag"], d["id"]))
         if not compte_connecte(con):
             liaison_auto(con, d)
     return redirect(URL_SITE + "/moi")
+
+
+def battletag(reponse):
+    """BattleTag du compte Battle.net lié au compte Discord (scope connections), ou None.
+    Un échec de cette lecture ne bloque pas la connexion."""
+    try:
+        liste = reponse.json() if reponse.status_code == 200 else []
+        return next((c["name"] for c in liste if c.get("type") == "battlenet" and c.get("name")), None)
+    except (ValueError, TypeError, AttributeError, KeyError):
+        return None
 
 
 @app.route("/deconnexion")
