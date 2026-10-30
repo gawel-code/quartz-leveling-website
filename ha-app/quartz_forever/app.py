@@ -26,6 +26,13 @@ DISCORD_SERVEUR = os.getenv("DISCORD_SERVEUR_ID") or "801395490372583426"
 DISCORD_ROLE = os.getenv("DISCORD_ROLE_ID", "1549720665844613130")  # vide = tout membre du serveur
 ADMINS = {i.strip() for i in (os.getenv("DISCORD_ADMINS") or "161139977328132107").split(",") if i.strip()}
 API_DISCORD = "https://discord.com/api/v10"
+# API Blizzard (v1.9.0) : roster de la guilde lu à chaque /collecter ; active si les quatre sont renseignés.
+BNET_ID = os.getenv("BNET_CLIENT_ID", "")
+BNET_SECRET = os.getenv("BNET_CLIENT_SECRET", "")
+BNET_REGION = os.getenv("BNET_REGION") or "eu"
+BNET_ESPACE = os.getenv("BNET_ESPACE") or "classic1x"  # Classic Era ; à changer pour Forever
+BNET_ROYAUME = os.getenv("BNET_ROYAUME", "")
+BNET_GUILDE = os.getenv("BNET_GUILDE", "")
 PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
 BATTLETAG_VALIDE = re.compile(r"^[^\W\d_]\w{1,11}#\d{4,6}$")  # Nom#1234 : 2 à 12 caractères, pas d'espace
 PALIERS = [10, 20, 30, 40, 50, 60]
@@ -450,18 +457,96 @@ def integrer(persos, source="serveur", dates=None):
     return nouveaux
 
 
+# ---------- API Blizzard ----------
+_bnet = {"jeton": None, "expire": 0, "race": {}, "class": {}}
+
+
+def slug(texte):
+    return texte.strip().lower().replace("'", "").replace(" ", "-")
+
+
+def bnet_actif():
+    return bool(BNET_ID and BNET_SECRET and BNET_ROYAUME and BNET_GUILDE)
+
+
+def bnet_get(chemin, espace):
+    """GET sur l'API (jeton client_credentials gardé jusqu'à son expiration) ; None si échec."""
+    if not _bnet["jeton"] or _bnet["expire"] < datetime.datetime.now().timestamp():
+        r = requests.post("https://oauth.battle.net/token", data={"grant_type": "client_credentials"},
+                          auth=(BNET_ID, BNET_SECRET), timeout=15)
+        if r.status_code != 200:
+            print("API Blizzard : jeton refusé", r.status_code, flush=True)
+            return None
+        d = r.json()
+        _bnet["jeton"] = d["access_token"]
+        _bnet["expire"] = datetime.datetime.now().timestamp() + d.get("expires_in", 3600) - 60
+    r = requests.get(f"https://{BNET_REGION}.api.blizzard.com{chemin}",
+                     params={"namespace": f"{espace}-{BNET_ESPACE}-{BNET_REGION}", "locale": "fr_FR"},
+                     headers={"Authorization": f"Bearer {_bnet['jeton']}"}, timeout=15)
+    if r.status_code != 200:
+        print("API Blizzard :", chemin, r.status_code, flush=True)
+        return None
+    return r.json()
+
+
+def libelles(type_):
+    """{id: nom français} des races ou classes jouables, lu une fois par démarrage."""
+    if not _bnet[type_]:
+        d = bnet_get(f"/data/wow/playable-{type_}/index", "static") or {}
+        _bnet[type_] = {x["id"]: x["name"] for x in d.get("races" if type_ == "race" else "classes", [])}
+    return _bnet[type_]
+
+
 def lire_api_blizzard():
-    """À brancher quand l'espace de noms Forever sera publié par Blizzard."""
-    return []
+    """Roster de la guilde via l'API → (persos au format d'analyser_export(), dates). Une montée de
+    niveau est datée par la dernière connexion du perso (profil), borne haute plus juste que l'heure
+    de collecte, si elle est postérieure à la dernière fois qu'on l'a vu à l'ancien niveau (sinon
+    c'est l'heure de connexion d'une session encore en cours). ([], {}) si inactif ou en échec."""
+    if not bnet_actif():
+        return [], {}
+    try:
+        d = bnet_get(f"/data/wow/guild/{slug(BNET_ROYAUME)}/{slug(BNET_GUILDE)}/roster", "profile")
+        if not d:
+            return [], {}
+        races, classes = libelles("race"), libelles("class")
+        persos = {}
+        for m in d.get("members", []):
+            c = m.get("character", {})
+            nom, niveau = c.get("name"), c.get("level") or 0
+            if not nom or (nom in persos and persos[nom][3] >= niveau):
+                continue  # homonyme sur un royaume connecté : le plus haut niveau l'emporte
+            persos[nom] = (nom, races.get(c.get("playable_race", {}).get("id"), "?"),
+                           classes.get(c.get("playable_class", {}).get("id"), "?"), niveau,
+                           c.get("realm", {}).get("slug") or slug(BNET_ROYAUME))
+        dates = {}
+        with db() as con:
+            for nom, _, _, niveau, royaume in persos.values():
+                row = con.execute("SELECT niveau, maj FROM personnages WHERE nom=?", (nom,)).fetchone()
+                if row and niveau <= row["niveau"]:
+                    continue
+                profil = bnet_get(f"/profile/wow/character/{royaume}/{nom.lower()}", "profile") or {}
+                ts = profil.get("last_login_timestamp")
+                if not ts or profil.get("level") != niveau:
+                    continue
+                date = depuis_epoch(ts / 1000)
+                if row is None or date >= row["maj"]:
+                    dates[nom] = {niveau: date}
+        return [p[:4] for p in persos.values()], dates
+    except (requests.RequestException, ValueError, KeyError) as e:
+        print("API Blizzard : erreur", e, flush=True)
+        return [], {}
 
 
 def collecter():
-    persos = lire_api_blizzard()
-    dates = {}
+    """Intègre l'API Blizzard si elle répond, sinon le fichier déposé côté serveur.
+    Renvoie (nombre de mises à jour, source lue ou None)."""
+    persos, dates = lire_api_blizzard()
+    source = "blizzard" if persos else None
     if not persos and EXPORT.exists():
         texte = EXPORT.read_text(encoding="utf-8")
         persos, dates = analyser_export(texte), analyser_dates(texte)
-    return integrer(persos, "serveur", dates) if persos else 0
+        source = "fichier" if persos else None
+    return (integrer(persos, "serveur", dates) if persos else 0), source
 
 
 # ---------- Récapitulatif ----------
@@ -1186,7 +1271,8 @@ def route_image(fichier):
 @app.route("/collecter", methods=["GET", "POST"])
 def route_collecter():
     verifier_token()
-    return jsonify(ok=True, mises_a_jour=collecter())
+    mises_a_jour, source = collecter()
+    return jsonify(ok=True, mises_a_jour=mises_a_jour, source=source)
 
 
 @app.route("/recap", methods=["GET", "POST"])

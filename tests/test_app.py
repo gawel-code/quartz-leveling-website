@@ -1,4 +1,5 @@
 """Tests du serveur. Lancer : pip install flask requests pytest && pytest -q"""
+import datetime
 import importlib.util
 import io
 from pathlib import Path
@@ -699,3 +700,114 @@ def test_exclus_hors_recap_et_vides_par_la_remise_a_zero(discord_client, monkeyp
     assert "Mok" not in bruts[0] and "2 membres" in bruts[0]
     c.post("/admin", data={"action": "reinitialiser"})
     assert c.get("/export.json?token=tok").json["inactifs"] == []
+
+
+# ---------- API Blizzard (v1.9.0) ----------
+RACES_API = {"races": [{"id": 2, "name": "Orc"}, {"id": 8, "name": "Troll"}, {"id": 6, "name": "Tauren"}]}
+CLASSES_API = {"classes": [{"id": 1, "name": "Guerrier"}, {"id": 7, "name": "Chaman"}]}
+
+
+def membre(nom, niveau, race=2, classe=1, royaume="firemaw"):
+    return {"character": {"name": nom, "level": niveau, "realm": {"slug": royaume},
+                          "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": 1}
+
+
+@pytest.fixture
+def blizzard(client, monkeypatch):
+    """API Blizzard active et simulée. Renvoie (client, état) : état["roster"] = membres,
+    état["profils"] = {nom: (niveau, last_login ms)}, état["appels"] = chemins demandés."""
+    g = client.application.view_functions["index"].__globals__
+    for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
+                     "BNET_GUILDE": "Quartz Forever"}.items():
+        monkeypatch.setitem(g, cle, val)
+    etat = {"roster": [], "profils": {}, "appels": [], "jetons": 0, "panne": False}
+
+    def post(url, **kw):
+        assert url == "https://oauth.battle.net/token" and kw["auth"] == ("id", "s")
+        etat["jetons"] += 1
+        return Reponse({"access_token": "t", "expires_in": 86399})
+
+    def get(url, **kw):
+        chemin = url.split("api.blizzard.com")[1]
+        etat["appels"].append(chemin)
+        assert kw["params"]["namespace"].endswith("-classic1x-eu")
+        if etat["panne"]:
+            return Reponse({}, 503)
+        if chemin.endswith("/playable-race/index"):
+            return Reponse(RACES_API)
+        if chemin.endswith("/playable-class/index"):
+            return Reponse(CLASSES_API)
+        if chemin == "/data/wow/guild/firemaw/quartz-forever/roster":
+            return Reponse({"members": etat["roster"]})
+        nom = chemin.rsplit("/", 1)[1]
+        for n, (niveau, ts) in etat["profils"].items():
+            if n.lower() == nom:
+                return Reponse({"name": n, "level": niveau, "last_login_timestamp": ts})
+        return Reponse({}, 404)
+    monkeypatch.setattr(g["requests"], "post", post)
+    monkeypatch.setattr(g["requests"], "get", get)
+    return client, etat
+
+
+def test_api_inactive_par_defaut(client, monkeypatch):
+    g = client.application.view_functions["index"].__globals__
+    monkeypatch.setattr(g["requests"], "get", lambda *a, **k: pytest.fail("aucun appel attendu"))
+    assert client.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 0, "source": None}
+
+
+def test_collecte_par_l_api(blizzard, monkeypatch):
+    c, etat = blizzard
+    messages, _ = capturer(monkeypatch, c)
+    etat["roster"] = [membre("Grommash", 12), membre("Zuljin", 9, 8, 7)]
+    r = c.get("/collecter?token=tok").json
+    assert r == {"ok": True, "mises_a_jour": 2, "source": "blizzard"}
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert (persos["Grommash"]["race"], persos["Grommash"]["classe"], persos["Grommash"]["niveau"]) == ("Orc", "Guerrier", 12)
+    assert persos["Zuljin"]["race"] == "Troll" and any("Grommash" in m and "10" in m for m in messages)
+    # Rien n'a bougé : pas de profil demandé, jeton et index réutilisés
+    etat["appels"].clear()
+    assert c.get("/collecter?token=tok").json["mises_a_jour"] == 0
+    assert etat["appels"] == ["/data/wow/guild/firemaw/quartz-forever/roster"] and etat["jetons"] == 1
+
+
+def test_montee_datee_par_la_derniere_connexion(blizzard):
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    etat["roster"] = [membre("Grommash", 12)]
+    c.get("/collecter?token=tok")
+    vu = (datetime.datetime.now() - datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+    with g["db"]() as con:  # dernière collecte il y a une heure, Grommash encore 12
+        con.execute("UPDATE personnages SET maj=?", (vu,))
+    connexion = datetime.datetime.now().replace(microsecond=0) - datetime.timedelta(minutes=20)
+    etat["roster"] = [membre("Grommash", 14)]
+    etat["profils"] = {"Grommash": (14, int(connexion.timestamp()) * 1000)}
+    c.get("/collecter?token=tok")
+    assert etat["appels"][-1] == "/profile/wow/character/firemaw/grommash"
+    with g["db"]() as con:
+        dates = dict(con.execute("SELECT niveau, date FROM historique WHERE nom='Grommash'").fetchall())
+    assert dates[14] == connexion.isoformat() and dates[12] <= dates[14]
+    # Connexion antérieure à la dernière collecte (session en cours) : ignorée (date de réception)
+    etat["roster"] = [membre("Grommash", 15)]
+    etat["profils"] = {"Grommash": (15, int((connexion - datetime.timedelta(days=1)).timestamp()) * 1000)}
+    c.get("/collecter?token=tok")
+    with g["db"]() as con:
+        d15 = con.execute("SELECT date FROM historique WHERE nom='Grommash' AND niveau=15").fetchone()[0]
+    assert d15 > connexion.isoformat()
+
+
+def test_homonymes_sur_royaumes_connectes(blizzard):
+    c, etat = blizzard
+    etat["roster"] = [membre("Mok", 30, royaume="gandling"), membre("Mok", 12)]
+    c.get("/collecter?token=tok")
+    assert c.get("/export.json?token=tok").json["personnages"][0]["niveau"] == 30
+    assert "/profile/wow/character/gandling/mok" in etat["appels"]
+
+
+def test_api_en_panne_repli_sur_le_fichier(blizzard, tmp_path, monkeypatch):
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    fichier = tmp_path / "GuildExport.lua"
+    fichier.write_text(LUA1, encoding="utf-8")
+    monkeypatch.setitem(g, "EXPORT", fichier)
+    etat["panne"] = True
+    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 2, "source": "fichier"}

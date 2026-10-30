@@ -58,7 +58,10 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `ha/deployer-quartz.sh` : déploiement de l'app depuis GitHub (voir plus bas).
-- `tools/verifier_api_blizzard.py` : test de l'API Blizzard sur Classic Era.
+- `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
+  jeton `client_credentials` (`BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`), index races/classes
+  (`static-…`), `--royaumes` (`dynamic-…`), `--guilde` (roster → lignes `Nom;Race;Classe;Niveau`,
+  forme attendue de `lire_api_blizzard()`), `--perso` (profil). `--jeu classic1x` par défaut.
 - `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
@@ -154,10 +157,20 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   annonce) ; exclus filtrés de `/` (classement, stats, fil), `gains()`, `recap()`, `courbe()`. Ses
   niveaux restent suivis. `/admin` : colonne « Progression » (motif + Exclure / Réintégrer), filtre
   « Exclus ». `/moi` : pastille sur un perso exclu. Vidé par la remise à zéro, dans `/export.json`.
+- API Blizzard (v1.9.0) : `lire_api_blizzard()` → `(persos, dates)`, active si `bnet_actif()` (id,
+  secret, royaume, guilde). `bnet_get()` : jeton `client_credentials` gardé dans `_bnet` jusqu'à
+  expiration, `namespace = {profile|static}-{BNET_ESPACE}-{BNET_REGION}`, `fr_FR`, None si ≠ 200.
+  `libelles()` met en cache les index race/classe. Roster → tuples `analyser_export()` ; homonyme =
+  plus haut niveau. Pour un perso nouveau ou qui monte : profil (royaume du membre) → date du niveau
+  = `last_login_timestamp` si le profil a le même niveau et si la date ≥ `personnages.maj` (dernière
+  vue à l'ancien niveau ; sinon heure de connexion d'une session en cours) ; sinon `dater()` prend
+  l'heure de collecte. `collecter()` → `(mises_a_jour, source)` (`blizzard` / `fichier` / None),
+  source d'envoi `serveur` (pas de « via », hors contributeurs). Erreur réseau → `([], {})` → repli fichier.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
-  `DISCORD_SERVEUR_ID`, `DISCORD_ROLE_ID`, `DISCORD_ADMINS`. Webhook vide = messages
+  `DISCORD_SERVEUR_ID`, `DISCORD_ROLE_ID`, `DISCORD_ADMINS`, `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET`,
+  `BNET_REGION` (`eu`), `BNET_ESPACE` (`classic1x`), `BNET_ROYAUME`, `BNET_GUILDE`. Webhook vide = messages
   seulement dans le journal (mode test).
 - Version (v1.4.3) : `VERSION` est lue dans `config.yaml` (copié dans l'image par le Dockerfile),
   affichée en pied de page (`PIED`) et ajoutée aux URL des images (`logo.png?v=…`,
@@ -189,7 +202,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.7.0 mergée, v1.8.0 en PR)
+## État au 30 octobre 2026 (v1.9.0 mergée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -206,8 +219,13 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
 - ✅ v1.7.0 (mergée ; déploiement non confirmé) : meilleurs contributeurs (top 3 sur l'accueil, liste
   complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
-- 🔜 v1.8.0 (PR ouverte, pas encore mergée) : courbe de progression sur l'accueil, exclusion des
+- ✅ v1.8.0 (mergée ; déploiement non confirmé) : courbe de progression sur l'accueil, exclusion des
   mules/banques dans l'admin, et `icon.png` de l'app HA (ex-PR v1.7.1, regroupée ici).
+- ✅ v1.9.0 (mergée ; déploiement non confirmé) : collecte par l'API Blizzard. Après déploiement, options `bnet_*` vides
+  = rien ne change. Pour l'essayer : renseigner `bnet_client_id` / `bnet_client_secret` (jamais
+  commités ni recopiés depuis le connecteur), `bnet_royaume` + `bnet_guilde` d'une guilde Classic
+  (ex. `firemaw` / `Progress`) et appeler `/collecter?token=…` → `source: "blizzard"` ; **attention,
+  ça remplit la base** (vider via `/admin` ensuite) et annonce sur Discord (webhook de test).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
@@ -224,6 +242,24 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
 - ✅ Connecteur MCP Home Assistant de Claude : URL avec chemin secret, **sans OAuth**
   (si « needs_reconnect » → supprimer et recréer le connecteur avec l'URL complète)
+
+## API Blizzard — essais sur Classic du 30/10/2026 (`tools/verifier_api_blizzard.py`)
+- Client API créé par Gaël sur develop.battle.net (identifiants chez lui, jamais commités) ;
+  flux `client_credentials` OK.
+- L'espace `classic1x` (EU) regroupe Classic Era, Season of Discovery, Anniversary et Season
+  (`--royaumes`) ; aucun royaume Forever pour l'instant. Forever arrivera peut-être là plutôt
+  que dans un nouvel espace : relancer `--royaumes` à l'approche du lancement.
+- **Roster de guilde** `/data/wow/guild/{royaume}/{guilde}/roster` (`profile-…`) : marche et donne
+  nom, niveau, `playable_race.id`, `playable_class.id`, rang, et le **royaume de chaque membre**
+  (royaumes connectés : un membre de `<Progress>`/Firemaw est sur `gandling`). Index
+  `playable-race` / `playable-class` (`static-…`, `fr_FR`) → libellés FR masculins, mêmes que le
+  client (OK pour `CLASSES`, `couleur()`, `embleme()`).
+- À vérifier : roster complet ? (6 membres seulement pour `<Progress>`, guilde pourtant active :
+  dernière connexion d'un membre le 27/10/2026).
+- Profil `/profile/wow/character/{royaume}/{nom}` : race, classe, niveau, guilde,
+  `last_login_timestamp` (ms). Aucune date de montée de niveau dans l'API.
+- Branché en v1.9.0 (voir *Serveur*). À vérifier sur Forever : espace de noms, complétude du
+  roster, sens exact de `last_login_timestamp` (connexion ou dernière sauvegarde ?).
 
 ## Outils utiles pour Claude (via le connecteur HA)
 - Appeler l'app directement : `ha_manage_app(slug="local_quartz_forever", port=8080,
@@ -249,10 +285,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
-6. Créer un client API sur develop.battle.net, lancer `tools/verifier_api_blizzard.py` sur un
-   perso Classic Era ; vérifier si l'endpoint de liste de guilde existe.
-7. Surveiller la publication de l'espace de noms API Forever ; brancher
-   `lire_api_blizzard()`. Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
+6. ~~Client API develop.battle.net + essais Classic Era~~ ✅ fait (30/10) : roster OK avec la race.
+7. Surveiller la publication de l'espace de noms API Forever (`--royaumes`) ; renseigner
+   `bnet_espace` / `bnet_royaume` / `bnet_guilde` (`lire_api_blizzard()` est branchée en v1.9.0). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
    lien https://quartz.gawel.be/moi (connexion Discord : liaison auto si le nom Discord = pseudo,
