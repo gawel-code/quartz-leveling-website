@@ -202,7 +202,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.8.0 mergée, v1.9.0 en PR)
+## État au 30 octobre 2026 (v1.9.0 mergée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -221,7 +221,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   complète dans l'admin) ; la remise à zéro vide aussi `proprietaires` (garde `comptes` et les sessions).
 - ✅ v1.8.0 (mergée ; déploiement non confirmé) : courbe de progression sur l'accueil, exclusion des
   mules/banques dans l'admin, et `icon.png` de l'app HA (ex-PR v1.7.1, regroupée ici).
-- 🔜 v1.9.0 (PR ouverte) : collecte par l'API Blizzard. Après déploiement, options `bnet_*` vides
+- ✅ v1.9.0 (mergée ; déploiement non confirmé) : collecte par l'API Blizzard. Après déploiement, options `bnet_*` vides
   = rien ne change. Pour l'essayer : renseigner `bnet_client_id` / `bnet_client_secret` (jamais
   commités ni recopiés depuis le connecteur), `bnet_royaume` + `bnet_guilde` d'une guilde Classic
   (ex. `firemaw` / `Progress`) et appeler `/collecter?token=…` → `source: "blizzard"` ; **attention,
