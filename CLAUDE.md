@@ -226,7 +226,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.9.0 déployée, v1.10.0 mergée, v1.10.1 en PR)
+## État au 30 octobre 2026 (v1.10.0 déployée, v1.10.1 mergée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -250,9 +250,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   le connecteur). Essai réel avec `bnet_royaume = Firemaw`, `bnet_guilde = Progress` :
   `/collecter` → `source: "blizzard"`, 6 persos (race, classe, niveau corrects), Kwindu daté par sa
   dernière connexion (27/10 18:06), annonces parties sur le canal de test.
-- ✅ v1.10.0 (mergée ; déploiement non confirmé) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
+- ✅ v1.10.0 (déployée, pied « v1.10.0 » vérifié le 30/10 ; noms de rangs saisis : Grand Chef, Petit Chef, Péon) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
   l'accueil), lus par l'API et par l'addon 1.3.0 (mergé, à tester en jeu).
-- 🔜 v1.10.1 (PR ouverte) : connexion Discord par lien direct (app mobile) et `state` signé sans
+- ✅ v1.10.1 (mergée ; déploiement non confirmé) : connexion Discord par lien direct (app mobile) et `state` signé sans
   cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin. À tester sur téléphone (app installée, iOS et Android).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
   Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
