@@ -154,56 +154,27 @@ tant qu'il n'a pas de nom). Ces noms forment un référentiel : la remise à zé
 Un fichier sans `GuildExportRangs` (addon < 1.3.0) garde le rang déjà connu ; sinon le dernier
 envoi ou la dernière collecte l'emporte.
 
-Les clés des membres sont dans `/app_configs/local_quartz_forever/cles.txt`
+Les clés des membres sont dans `/app_configs/ee5b467c_quartz_forever/cles.txt`
 (une ligne `Pseudo:clé` par membre, relu à chaque envoi, sans redémarrage).
 
 ## Déploiement
 
-**Cible (v1.11.0) : dépôt d'apps Home Assistant.** `repository.yaml` à la racine fait de ce
-dépôt un dépôt d'apps : une fois ajouté dans HA (Paramètres → Apps → Boutique → ⋮ → Dépôts),
-chaque nouvelle `version` de `ha-app/quartz_forever/config.yaml` apparaît comme une mise à jour
-normale (installable d'un clic, automatique si « Mise à jour automatique » est activée, ou
-déclenchée par Claude via le connecteur HA). Plus de console. Le slug de l'app devient
-`<hash>_quartz_forever` (hash = 8 premiers caractères du SHA-1 de l'URL du dépôt) : migration
-unique décrite ci-dessous. La base (`guilde.db`, `secret.key`) est dans `/config` depuis la
-v1.11.0, c'est-à-dire `/app_configs/<slug>/` à côté de `cles.txt`.
+L'app est installée depuis ce dépôt, déclaré comme **dépôt d'apps Home Assistant**
+(`repository.yaml`, URL `https://github.com/gawel-code/quartz-leveling-website`, dépôt public).
+Slug **`ee5b467c_quartz_forever`**, hôte interne **`ee5b467c-quartz-forever`**, exposée par
+Cloudflare Tunnel sur `quartz.gawel.be`. Configuration, base (`guilde.db`, `secret.key`) et
+`cles.txt` : `/app_configs/ee5b467c_quartz_forever/` (inclus dans les sauvegardes HA).
 
-### Migration de l'app locale vers le dépôt (une fois)
+**Déployer** = merger dans `main` une version dont `version` (`ha-app/quartz_forever/config.yaml`)
+a été augmentée. HA propose alors la mise à jour (Paramètres → Apps), installée automatiquement
+(« Mise à jour automatique » activée) ou tout de suite par Claude via le connecteur HA. Aucune
+console. La version s'affiche en pied de page et suffixe les URL des images (`logo.png?v=…`),
+ce qui contourne le cache de Cloudflare et des navigateurs.
 
-1. Déployer la v1.11.0 sur l'app locale avec le script (dernière fois) : au démarrage, la base
-   passe de `/data` à `/app_configs/local_quartz_forever/`.
-2. Ajouter le dépôt dans HA. Dépôt public : `https://github.com/gawel-code/quartz-leveling-website`.
-   Dépôt privé : `https://x-access-token:<jeton>@github.com/gawel-code/quartz-leveling-website`
-   (jeton lecture seule ; le hash du slug dépend alors de l'URL complète, donc **du jeton** :
-   changer de jeton = nouveau slug = nouvelle migration).
-3. Installer « Quartz Forever » depuis ce dépôt, **sans le démarrer** ; noter son slug.
-4. Arrêter l'app locale, puis dans Terminal & SSH :
-   `cp -a /app_configs/local_quartz_forever/. /app_configs/<slug>/`
-5. Reporter les options (token, webhook, secrets Discord et Battle.net…), démarrer la nouvelle app.
-6. Mettre à jour les adresses internes : `http://<slug avec - au lieu de _>:8080` dans la route
-   Cloudflared de `quartz.gawel.be` et dans les URL `quartz_*_url` de `secrets.yaml`
-   (puis recharger les `rest_command`).
-7. Vérifier le site, puis désinstaller l'app locale (sauvegarde HA avant).
-
-### Ancien déploiement (app locale, jusqu'à la migration)
-
-L'app locale Home Assistant (slug `local_quartz_forever`) est exposée par
-Cloudflare Tunnel sur `quartz.gawel.be`. Dans Terminal & SSH :
-
-```bash
-/homeassistant/deployer-quartz.sh
-```
-
-Le script télécharge `ha-app/quartz_forever` depuis `main` (ou la référence passée en
-argument), le copie dans `/local_apps/quartz_forever/` et met l'app à jour : il attend que le
-Supervisor voie la nouvelle version (jusqu'à 30 s), lance la mise à jour (ou une reconstruction
-si la version est déjà installée) et s'arrête sur « ÉCHEC » si la version installée n'est pas
-celle du code copié. Après une mise à jour du script dans le dépôt, recopier
-`ha/deployer-quartz.sh` dans `/homeassistant/` (puis `sed -i 's/\r$//'` et `chmod +x`). Il faut
-augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement : elle
-s'affiche en pied de page et suffixe les URL des images (`logo.png?v=…`), ce qui contourne
-le cache de Cloudflare et des navigateurs.
-La base et `cles.txt` ne sont pas touchés. Détails et pièges connus : voir `CLAUDE.md`.
+Historique : jusqu'à la v1.11.0, l'app était une app locale (`local_quartz_forever`) déployée
+par `ha/deployer-quartz.sh` dans Terminal & SSH ; migrée vers le dépôt d'apps le 30/10/2026
+(base copiée depuis `/app_configs/local_quartz_forever/`). Le script est conservé tant que
+l'ancienne app n'est pas désinstallée.
 
 Côté Home Assistant, `rest_command.quartz_collecter` et `rest_command.quartz_recap`
 sont appelés par deux automatisations (collecte toutes les 15 minutes, récap à 9 h et 21 h).
