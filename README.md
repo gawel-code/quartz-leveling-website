@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.9.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.10.0
 
 ## Fonctionnement
 
@@ -122,7 +122,7 @@ par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date rée
 mules, banques), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` vide la
 progression, les envois, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
-BattleTags) ni les sessions. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
+BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
 ### Options de l'app Home Assistant
 
@@ -146,6 +146,13 @@ niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces
 elle est postérieure à la collecte précédente, sinon par l'heure de collecte ; l'addon, plus
 précis, l'emporte s'il donne une date plus ancienne. Homonymes sur des royaumes connectés : le
 plus haut niveau l'emporte. API en panne → repli sur le fichier déposé côté serveur.
+
+**Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
+donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
+classement de la page d'accueil affiche une colonne « Rang » dès qu'un rang est connu (« Rang N »
+tant qu'il n'a pas de nom). Ces noms forment un référentiel : la remise à zéro ne les vide pas.
+Un fichier sans `GuildExportRangs` (addon < 1.3.0) garde le rang déjà connu ; sinon le dernier
+envoi ou la dernière collecte l'emporte.
 
 Les clés des membres sont dans `/app_configs/local_quartz_forever/cles.txt`
 (une ligne `Pseudo:clé` par membre, relu à chaque envoi, sans redémarrage).
@@ -182,6 +189,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |
 | 1.9.0 | collecte automatique par l'API Blizzard (roster de guilde, races et classes en français, montées datées par la dernière connexion) ; options `bnet_*` ; `/collecter` indique la source lue ; script `tools/verifier_api_blizzard.py` enrichi (royaumes, roster, profil) |
 | 1.8.0 | courbe de progression sur l'accueil (moyenne, Q1–Q3, plus haut niveau, persos du membre connecté) ; exclusion des mules et banques dans l'admin ; icône du cristal pour l'app dans Home Assistant (`icon.png`) |
 | 1.7.0 | meilleurs contributeurs : top 3 sur la page d'accueil, liste complète dans l'admin ; la remise à zéro vide aussi les associations personnage ↔ joueur |

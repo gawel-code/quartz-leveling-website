@@ -110,6 +110,10 @@ def init_db():
             nom TEXT PRIMARY KEY, motif TEXT, date TEXT)""")  # v1.8.0 : mules, banques… hors progression
         con.execute("""CREATE TABLE IF NOT EXISTS proprietaires(
             nom TEXT PRIMARY KEY, pseudo TEXT, source TEXT, date TEXT)""")  # v1.6.0 : perso → joueur
+        con.execute("""CREATE TABLE IF NOT EXISTS rangs(
+            id INTEGER PRIMARY KEY, nom TEXT)""")  # v1.10.0 : noms des rangs, gardés par la remise à zéro
+        if "rang" not in {c[1] for c in con.execute("PRAGMA table_info(personnages)")}:
+            con.execute("ALTER TABLE personnages ADD COLUMN rang INTEGER")  # v1.10.0 : n° lu dans le roster
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(comptes)")}
         if "battletag" not in colonnes:
             con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0 : lu sur Discord
@@ -148,6 +152,11 @@ def reclasser(con, palier):
     rows = con.execute("SELECT rowid FROM exploits WHERE palier=? ORDER BY date, nom", (palier,)).fetchall()
     for rang, r in enumerate(rows, 1):
         con.execute("UPDATE exploits SET rang=? WHERE rowid=?", (rang, r[0]))
+
+
+def noms_rangs(con):
+    """{n° de rang: nom} défini dans l'admin (référentiel, pas vidé par la remise à zéro)."""
+    return {r["id"]: r["nom"] for r in con.execute("SELECT id, nom FROM rangs")}
 
 
 def inactifs(con):
@@ -331,6 +340,12 @@ def analyser_mes_persos(texte):
     return re.findall(r'\["([^"]+)"\]', bloc.group(1)) if bloc else []
 
 
+def analyser_rangs(texte):
+    """{nom: n° de rang} de la table GuildExportRangs (addon ≥ 1.3.0, 0 = maître de guilde)."""
+    bloc = re.search(r"GuildExportRangs\s*=\s*\{(.*?)\}", texte, re.S)
+    return {nom: int(r) for nom, r in re.findall(r'\["([^"]+)"\]\s*=\s*"(\d{1,2})"', bloc.group(1))} if bloc else {}
+
+
 # Sources d'association personnage → joueur. « admin » (choix d'un officier) l'emporte sur tout ;
 # « blizzard » est réservée à une future connexion Battle.net (liste des persos du compte).
 SOURCES = {"admin": "attribué par un officier", "blizzard": "vérifié par Battle.net",
@@ -424,9 +439,10 @@ def dater(con, nom, connues, plafond, nouveau=None):
             plus_tot = r["date"]
 
 
-def integrer(persos, source="serveur", dates=None):
+def integrer(persos, source="serveur", dates=None, rangs=None):
     """Fusionne des données : garde toujours le niveau le plus haut, complète les races
-    et date les montées de niveau (dates de l'addon si fournies, sinon date de réception)."""
+    et date les montées de niveau (dates de l'addon si fournies, sinon date de réception).
+    rangs = {nom: n° de rang dans la guilde} (API Blizzard) ; sans, le rang connu est gardé."""
     dates = dates or {}
     nouveaux, annonces = 0, []
     with db() as con:
@@ -448,10 +464,12 @@ def integrer(persos, source="serveur", dates=None):
             if monte:
                 verifier_exploits(con, nom, classe, ancien, niveau, annonces)
                 nouveaux += 1
-            con.execute("""INSERT INTO personnages VALUES(?,?,?,?,?)
+            con.execute("""INSERT INTO personnages(nom, race, classe, niveau, maj) VALUES(?,?,?,?,?)
                 ON CONFLICT(nom) DO UPDATE SET race=excluded.race, classe=excluded.classe,
                 niveau=excluded.niveau, maj=excluded.maj""",
                         (nom, race, classe, niveau, maintenant()))
+        for nom, rang in (rangs or {}).items():
+            con.execute("UPDATE personnages SET rang=? WHERE nom=?", (rang, nom))
         con.execute("INSERT INTO envois VALUES(?,?,?,?)", (source, maintenant(), len(persos), nouveaux))
         annoncer(con, annonces, source)
     return nouveaux
@@ -498,16 +516,16 @@ def libelles(type_):
 
 
 def lire_api_blizzard():
-    """Roster de la guilde via l'API → (persos au format d'analyser_export(), dates). Une montée de
+    """Roster de la guilde via l'API → (persos au format d'analyser_export(), dates, rangs). Une montée de
     niveau est datée par la dernière connexion du perso (profil), borne haute plus juste que l'heure
     de collecte, si elle est postérieure à la dernière fois qu'on l'a vu à l'ancien niveau (sinon
-    c'est l'heure de connexion d'une session encore en cours). ([], {}) si inactif ou en échec."""
+    c'est l'heure de connexion d'une session encore en cours). ([], {}, {}) si inactif ou en échec."""
     if not bnet_actif():
-        return [], {}
+        return [], {}, {}
     try:
         d = bnet_get(f"/data/wow/guild/{slug(BNET_ROYAUME)}/{slug(BNET_GUILDE)}/roster", "profile")
         if not d:
-            return [], {}
+            return [], {}, {}
         races, classes = libelles("race"), libelles("class")
         persos = {}
         for m in d.get("members", []):
@@ -517,10 +535,10 @@ def lire_api_blizzard():
                 continue  # homonyme sur un royaume connecté : le plus haut niveau l'emporte
             persos[nom] = (nom, races.get(c.get("playable_race", {}).get("id"), "?"),
                            classes.get(c.get("playable_class", {}).get("id"), "?"), niveau,
-                           c.get("realm", {}).get("slug") or slug(BNET_ROYAUME))
+                           c.get("realm", {}).get("slug") or slug(BNET_ROYAUME), m.get("rank"))
         dates = {}
         with db() as con:
-            for nom, _, _, niveau, royaume in persos.values():
+            for nom, _, _, niveau, royaume, _ in persos.values():
                 row = con.execute("SELECT niveau, maj FROM personnages WHERE nom=?", (nom,)).fetchone()
                 if row and niveau <= row["niveau"]:
                     continue
@@ -531,22 +549,23 @@ def lire_api_blizzard():
                 date = depuis_epoch(ts / 1000)
                 if row is None or date >= row["maj"]:
                     dates[nom] = {niveau: date}
-        return [p[:4] for p in persos.values()], dates
+        rangs = {p[0]: p[5] for p in persos.values() if isinstance(p[5], int)}
+        return [p[:4] for p in persos.values()], dates, rangs
     except (requests.RequestException, ValueError, KeyError) as e:
         print("API Blizzard : erreur", e, flush=True)
-        return [], {}
+        return [], {}, {}
 
 
 def collecter():
     """Intègre l'API Blizzard si elle répond, sinon le fichier déposé côté serveur.
     Renvoie (nombre de mises à jour, source lue ou None)."""
-    persos, dates = lire_api_blizzard()
+    persos, dates, rangs = lire_api_blizzard()
     source = "blizzard" if persos else None
     if not persos and EXPORT.exists():
         texte = EXPORT.read_text(encoding="utf-8")
-        persos, dates = analyser_export(texte), analyser_dates(texte)
+        persos, dates, rangs = analyser_export(texte), analyser_dates(texte), analyser_rangs(texte)
         source = "fichier" if persos else None
-    return (integrer(persos, "serveur", dates) if persos else 0), source
+    return (integrer(persos, "serveur", dates, rangs) if persos else 0), source
 
 
 # ---------- Récapitulatif ----------
@@ -741,6 +760,7 @@ tbody tr:hover{background:var(--verre2)}
 td.rang{color:var(--pale);font-weight:700;width:36px}
 td.nom{font-weight:700}
 .joueur{font:500 .78rem var(--f-corps);color:var(--doux);margin-left:6px;text-decoration:none;white-space:nowrap}
+.rang-guilde{color:var(--doux);font-size:.85rem;white-space:nowrap}
 a.joueur:hover{color:var(--cristal);text-decoration:underline}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
 .niv{display:inline-grid;place-items:center;min-width:36px;padding:3px 8px;border-radius:8px;font:700 .9rem var(--f-titre);background:var(--verre2);border:1px solid var(--trait)}
@@ -918,16 +938,17 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
 <select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
 {% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
-<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th><th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
+<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
 <tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
 <td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}
 {%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
 <td>{{ p.race }}</td><td>{{ p.classe }}</td>
+{% if avec_rangs %}<td class="rang-guilde">{% if p.rang is not none %}{{ rangs.get(p.rang) or "Rang " ~ p.rang }}{% endif %}</td>{% endif %}
 <td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
 <td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
 <td>{% if g24.get(p.nom, 0) > 0 %}<span class="gain num">+{{ g24[p.nom] }}</span>{% endif %}</td></tr>
-{% else %}<tr><td colspan="7">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
+{% else %}<tr><td colspan="{{ 8 if avec_rangs else 7 }}">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
 </tbody></table></div>
 </section>
 
@@ -1168,6 +1189,17 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  « Exclure » sort une mule ou une banque du classement, du tableau d'honneur, des annonces, du récap et de la courbe
  (ses niveaux restent enregistrés ; « Réintégrer » lui rend ses paliers sans nouvelle annonce).</small>
 </section>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🎖️</span>Rangs de la guilde <small>{{ rangs|length }}</small></h2></div>
+ <form method="post"><input type="hidden" name="action" value="rangs">
+ <div class="table-wrap"><table><thead><tr><th>N°</th><th>Nom affiché</th><th>Membres</th></tr></thead><tbody>
+ {% for r in rangs %}<tr><td class="num">{{ r.id }}{{ " (maître de guilde)" if r.id == 0 }}</td>
+ <td><input name="rang_{{ r.id }}" value="{{ r.nom }}" maxlength="40" placeholder="Rang {{ r.id }}" aria-label="Nom du rang {{ r.id }}"></td>
+ <td class="num">{{ r.membres }}</td></tr>
+ {% endfor %}<tr><td><input name="nouveau_id" type="number" min="0" max="20" placeholder="N°" aria-label="Numéro du nouveau rang"></td>
+ <td><input name="nouveau_nom" maxlength="40" placeholder="Ajouter un rang…" aria-label="Nom du nouveau rang"></td><td></td></tr>
+ </tbody></table></div><div><button type="submit">Enregistrer les rangs</button></div></form>
+ <small>Les numéros viennent du roster de l'API Blizzard (0 = maître de guilde, puis dans l'ordre des rangs en jeu).
+ Un nom vide efface ce nom. Ces noms ne sont pas touchés par la remise à zéro de la progression.</small></section>
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">📤</span>Contributeurs <small>{{ contribs|length }}</small></h2></div>
  <div class="table-wrap"><table><thead><tr><th>#</th><th>Joueur</th><th>Montées signalées</th><th>Envois</th><th>Persos lus</th><th>Dernier envoi</th></tr></thead><tbody>
  {% for c in contribs %}<tr><td class="rang num">{{ loop.index }}</td>
@@ -1238,12 +1270,14 @@ def index():
         mes_noms = [n for n, a in proprios.items()
                     if compte and a["pseudo"].casefold() == compte["pseudo"].casefold()]
         donnees_courbe = courbe(con, mes_noms)
+        rangs = noms_rangs(con)
     exploits = {}
     for e in rows:
         exploits.setdefault(e["palier"], []).append(e)
     return render_template_string(
         PAGE, guilde=NOM_GUILDE, persos=persos, paliers=PALIERS, exploits=exploits,
-        medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios, top=top,
+        medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios, top=top, rangs=rangs,
+        avec_rangs=any(p["rang"] is not None for p in persos),
         donnees_courbe=donnees_courbe, connecte=bool(compte),
         total24=sum(v for v in g24.values() if v > 0),
         actifs=sum(1 for v in g24.values() if v > 0),
@@ -1307,7 +1341,7 @@ def route_envoyer():
     persos = analyser_export(texte)
     if not persos:
         return jsonify(ok=False, erreur="Fichier vide ou invalide"), 400
-    n = integrer(persos, pseudo, analyser_dates(texte))
+    n = integrer(persos, pseudo, analyser_dates(texte), analyser_rangs(texte))
     with db() as con:
         associer(con, pseudo, analyser_mes_persos(texte), "addon")
     return jsonify(ok=True, personnages=len(persos), nouveautes=n)
@@ -1328,7 +1362,7 @@ def route_contribuer():
     persos = analyser_export(texte)
     if not persos:
         return formulaire(message="Fichier vide ou invalide.", classe="err", pseudo=connecte), 400
-    n = integrer(persos, pseudo, analyser_dates(texte))
+    n = integrer(persos, pseudo, analyser_dates(texte), analyser_rangs(texte))
     with db() as con:
         associer(con, pseudo, analyser_mes_persos(texte), "addon")
     return formulaire(classe="ok", pseudo=connecte,
@@ -1516,6 +1550,22 @@ def route_admin():
         with db() as con:
             con.execute("DELETE FROM proprietaires WHERE nom=?", (request.form.get("nom"),))
         message = "Personnage dissocié."
+    elif action == "rangs":
+        with db() as con:
+            for cle, valeur in request.form.items():
+                if not (cle.startswith("rang_") and cle[5:].isdigit()):
+                    continue
+                nom = valeur.strip()[:40]
+                if nom:
+                    con.execute("INSERT INTO rangs VALUES(?,?) ON CONFLICT(id) DO UPDATE SET nom=excluded.nom",
+                                (int(cle[5:]), nom))
+                else:
+                    con.execute("DELETE FROM rangs WHERE id=?", (int(cle[5:]),))
+            nouveau = request.form.get("nouveau_id", "").strip()
+            if nouveau.isdigit() and request.form.get("nouveau_nom", "").strip():
+                con.execute("INSERT INTO rangs VALUES(?,?) ON CONFLICT(id) DO UPDATE SET nom=excluded.nom",
+                            (int(nouveau), request.form["nouveau_nom"].strip()[:40]))
+        message = "Noms des rangs enregistrés."
     elif action == "reinitialiser":
         vides = reinitialiser()
         message = (f"Base vidée ({vides['personnages']} personnages, {vides['proprietaires']} associations). "
@@ -1532,10 +1582,14 @@ def route_admin():
         lignes.sort(key=lambda l: (l["pseudo"] is not None, -(l["info"]["niveau"] if l["info"] else 0), l["nom"].casefold()))
         liste_joueurs = joueurs(con)
         contribs = contributeurs(con)
+        noms = noms_rangs(con)
+        effectifs = dict(con.execute("SELECT rang, COUNT(*) FROM personnages WHERE rang IS NOT NULL GROUP BY rang").fetchall())
+        liste_rangs = [{"id": i, "nom": noms.get(i, ""), "membres": effectifs.get(i, 0)}
+                       for i in sorted(set(noms) | set(effectifs))]
     lies = {c["pseudo"].casefold() for c in comptes}
     return render_template_string(
         ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe=classe,
-        lignes=lignes, sources=SOURCES, joueurs=liste_joueurs, contribs=contribs, motifs=MOTIFS,
+        lignes=lignes, sources=SOURCES, joueurs=liste_joueurs, contribs=contribs, motifs=MOTIFS, rangs=liste_rangs,
         sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 
@@ -1552,6 +1606,7 @@ def route_export():
             "envois": [dict(r) for r in con.execute("SELECT * FROM envois ORDER BY date")],
             "proprietaires": [dict(r) for r in con.execute("SELECT * FROM proprietaires ORDER BY nom")],
             "inactifs": [dict(r) for r in con.execute("SELECT * FROM inactifs ORDER BY nom")],
+            "rangs": [dict(r) for r in con.execute("SELECT * FROM rangs ORDER BY id")],
         }
     return app.response_class(
         json.dumps(donnees, ensure_ascii=False, indent=2), mimetype="application/json",

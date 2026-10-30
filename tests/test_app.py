@@ -637,7 +637,7 @@ def test_courbe_series_quotidiennes(discord_client, monkeypatch):
         con.executemany("INSERT INTO historique VALUES(?,?,?)", [
             ("Grommash", 5, "2026-11-04T10:00:00"), ("Grommash", 12, "2026-11-05T22:00:00"),
             ("Grommash", 20, "2026-11-07T08:00:00"), ("Zuljin", 8, "2026-11-06T12:00:00")])
-        con.executemany("INSERT INTO personnages VALUES(?,?,?,?,?)", [
+        con.executemany("INSERT INTO personnages(nom, race, classe, niveau, maj) VALUES(?,?,?,?,?)", [
             ("Grommash", "Orc", "Guerrier", 20, "2026-11-07T08:00:00"), ("Zuljin", "Troll", "Chaman", 8, "2026-11-06T12:00:00")])
         monkeypatch.setitem(g, "aujourdhui", lambda: dt.date(2026, 11, 7))
         d = g["courbe"](con, ["Grommash"])
@@ -707,9 +707,9 @@ RACES_API = {"races": [{"id": 2, "name": "Orc"}, {"id": 8, "name": "Troll"}, {"i
 CLASSES_API = {"classes": [{"id": 1, "name": "Guerrier"}, {"id": 7, "name": "Chaman"}]}
 
 
-def membre(nom, niveau, race=2, classe=1, royaume="firemaw"):
+def membre(nom, niveau, race=2, classe=1, royaume="firemaw", rang=1):
     return {"character": {"name": nom, "level": niveau, "realm": {"slug": royaume},
-                          "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": 1}
+                          "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": rang}
 
 
 @pytest.fixture
@@ -811,3 +811,56 @@ def test_api_en_panne_repli_sur_le_fichier(blizzard, tmp_path, monkeypatch):
     monkeypatch.setitem(g, "EXPORT", fichier)
     etat["panne"] = True
     assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 2, "source": "fichier"}
+
+
+# ---------- Rangs de la guilde (v1.10.0) ----------
+def admin(c):
+    with c.session_transaction() as s:
+        s["discord"] = {"id": ADMIN_ID, "nom": "Admin"}
+
+
+def test_rangs_lus_dans_le_roster_et_nommes_dans_l_admin(blizzard):
+    c, etat = blizzard
+    assert "<th>Rang</th>" not in c.get("/").text          # aucun rang connu : pas de colonne
+    etat["roster"] = [membre("Grommash", 12, rang=0), membre("Zuljin", 9, 8, 7, rang=3)]
+    c.get("/collecter?token=tok")
+    accueil = c.get("/").text
+    assert "<th>Rang</th>" in accueil and "Rang 0" in accueil and "Rang 3" in accueil
+    admin(c)
+    page = c.get("/admin").text
+    assert 'name="rang_0"' in page and 'name="rang_3"' in page
+    r = c.post("/admin", data={"action": "rangs", "rang_0": "Chef de guerre", "rang_3": " ",
+                               "nouveau_id": "5", "nouveau_nom": "Recrue"})
+    assert "Noms des rangs enregistrés" in r.text
+    accueil = c.get("/").text
+    assert "Chef de guerre" in accueil and "Rang 3" in accueil
+    assert c.get("/export.json?token=tok").json["rangs"] == [{"id": 0, "nom": "Chef de guerre"}, {"id": 5, "nom": "Recrue"}]
+    # Un envoi d'addon (sans rang) ne l'efface pas ; la remise à zéro garde le référentiel
+    envoyer(c, LUA2)
+    assert {p["nom"]: p["rang"] for p in c.get("/export.json?token=tok").json["personnages"]}["Grommash"] == 0
+    c.post("/admin", data={"action": "reinitialiser"})
+    d = c.get("/export.json?token=tok").json
+    assert d["personnages"] == [] and [r["nom"] for r in d["rangs"]] == ["Chef de guerre", "Recrue"]
+
+
+def test_migration_colonne_rang(tmp_path, monkeypatch):
+    import sqlite3
+    base = tmp_path / "v19.db"
+    with sqlite3.connect(base) as con:
+        con.execute("CREATE TABLE personnages(nom TEXT PRIMARY KEY, race TEXT, classe TEXT, niveau INTEGER, maj TEXT)")
+        con.execute("INSERT INTO personnages VALUES('Mok','Tauren','Paladin',5,'2026-10-30T10:00:00')")
+    monkeypatch.setenv("GUILDE_DB", str(base))
+    spec = importlib.util.spec_from_file_location("app", APP)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    c = mod.app.test_client()
+    assert "Mok" in c.get("/").text and "<th>Rang</th>" not in c.get("/").text
+
+
+def test_rangs_lus_dans_le_fichier_de_l_addon(client):
+    lua = LUA2 + ('\nGuildExportMesPersos = {\n["Grommash"] = "1793450000",\n}'
+                  '\nGuildExportRangs = {\n["Grommash"] = "0",\n["Zuljin"] = "4",\n["Inconnu"] = "2",\n}')
+    assert envoyer(client, lua).status_code == 200
+    rangs = {p["nom"]: p["rang"] for p in client.get("/export.json?token=tok").json["personnages"]}
+    assert rangs == {"Grommash": 0, "Zuljin": 4, "Mok": None}
+    assert "Rang 4" in client.get("/").text
