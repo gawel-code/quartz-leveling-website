@@ -120,7 +120,15 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   théorique, limité à un compte membre de la guilde). Les liens « Connexion Discord » des templates
   appellent `url_connexion()` (contexte) → URL discord.com directe : seul un lien touché (pas une
   redirection) laisse iOS / Android ouvrir l'app ; `/connexion` reste une redirection équivalente.
-  Ouverture de l'app non vérifiée sur téléphone.
+  **L'app Discord ne s'ouvre pas pour la connexion, par choix de Discord** (testé par Gaël le 30/10 :
+  page web sur mobile). `https://discord.com/.well-known/apple-app-site-association` exclut
+  explicitement `/oauth2/authorize` avec un `response_type` (« Exclude oauth2 flows that have a
+  specified response type from deep linking ») et ne prend en charge que l'ajout d'apps ou de bots
+  (sans `response_type`) ; or `response_type=code` est obligatoire pour la connexion. Android
+  (`assetlinks.json`, app `com.discord`) : probablement pareil, non vérifié (filtres déclarés dans
+  l'app). Pas de contournement côté site : se connecter une fois à discord.com dans le navigateur
+  du téléphone (ensuite un seul tap, ou aucun avec `prompt=none`), session du site de 30 jours.
+  Le `state` signé reste utile (retour dans un autre navigateur).
   Secret vide = connexion désactivée (404), tout le reste marche comme avant. `URL_SITE`
   (`GUILDE_URL`, défaut https://quartz.gawel.be) sert à l'URL de redirection.
 - BattleTag (v1.5.0) : scope `connections`, `GET /users/@me/connections` à chaque connexion → entrée
@@ -269,7 +277,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - ✅ v1.10.1 (déployée, vérifiée le 30/10 : pied « v1.10.1 », colonne « Progression », liens
   `discord.com/oauth2/authorize` avec `state` signé, `/connexion` → même URL) : connexion Discord par lien direct (app mobile) et `state` signé sans
   cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin (non vérifiée :
-  session admin nécessaire). À tester sur téléphone (app installée, iOS et Android).
+  session admin nécessaire). Sur téléphone, la connexion reste dans le navigateur : Discord exclut
+  les flux OAuth de connexion de l'ouverture dans l'app (voir *Connexion Discord*).
+  Rangs vus en ligne le 30/10 (collecte ponctuelle Progress : colonne « Rang », « Rang 3 / 4 »,
+  options `bnet_royaume` / `bnet_guilde` revidées ensuite).
 - ✅ v1.11.0 (déployée le 30/10) : `repository.yaml` + base dans `/config`. Dernier déploiement par le
   script sur l'app locale (migration `/data` → `/config` vue dans le journal), dépôt passé en
   **public** (historique git vérifié : aucun secret), ajouté au store, app `ee5b467c_quartz_forever`
