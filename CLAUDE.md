@@ -245,7 +245,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.10.1 déployée, v1.11.0 en PR)
+## État au 30 octobre 2026 (v1.10.1 déployée, v1.11.0 mergée)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -275,8 +275,11 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `discord.com/oauth2/authorize` avec `state` signé, `/connexion` → même URL) : connexion Discord par lien direct (app mobile) et `state` signé sans
   cookie ; « Vers 60 » → « Progression » ; mention « aucun rang connu » dans l'admin (non vérifiée :
   session admin nécessaire). À tester sur téléphone (app installée, iOS et Android).
-- 🔜 v1.11.0 (PR ouverte) : `repository.yaml` + base dans `/config`. Puis migration vers le dépôt
-  d'apps (README), de préférence avant le 5/11. Choix en attente : dépôt public ou privé + jeton.
+- ✅ v1.11.0 (mergée ; à déployer une dernière fois par le script) : `repository.yaml` + base dans
+  `/config`. Puis migration vers le dépôt d'apps (README), de préférence avant le 5/11. Choix de Gaël
+  (30/10) : **dépôt public** → URL du store `https://github.com/gawel-code/quartz-leveling-website`,
+  sans jeton (slug stable). Ne jamais commiter de secret (déjà la règle) ; le jeton lecture seule
+  `quartz_github_token` du script ne servira plus après la migration.
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointaient sur
   Firemaw / Progress ; probablement vidées depuis (collecte du 30/10 au soir → `source: null`, aucun
   appel API ; options non relues) — sinon les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
