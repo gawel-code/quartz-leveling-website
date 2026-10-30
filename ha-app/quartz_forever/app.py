@@ -201,6 +201,26 @@ def cle_du_compte(compte):
         (c for p, c in cles_fichier().items() if p.casefold() == compte["pseudo"].casefold()), None)
 
 
+def pseudo_du_fichier(nom):
+    """Pseudo de cles.txt correspondant à nom (sans tenir compte de la casse), ou None."""
+    return next((p for p in cles_fichier() if p.casefold() == nom.casefold()), None)
+
+
+def lier(con, d, pseudo, cle=None):
+    con.execute("INSERT INTO comptes VALUES(?,?,?,?,?)", (d["id"], pseudo, cle, d["nom"], maintenant()))
+
+
+def liaison_auto(con, d):
+    """Relie le compte Discord au pseudo de cles.txt identique à l'un de ses noms Discord
+    (surnom sur le serveur, nom affiché, nom d'utilisateur), si ce pseudo est encore libre."""
+    for nom in d.get("noms", [d["nom"]]):
+        pseudo = pseudo_du_fichier(nom)
+        if pseudo and not con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone():
+            lier(con, d, pseudo)
+            return pseudo
+    return None
+
+
 def nouvelle_cle(con):
     prises = set(cles_fichier().values())
     while True:
@@ -769,12 +789,14 @@ def route_retour_discord():
             return page_compte(message="Tu n'es pas sur le serveur Discord de la guilde.", classe="err"), 403
         if DISCORD_ROLE and DISCORD_ROLE not in membre.get("roles", []):
             return page_compte(message="Il te faut le rôle de la guilde sur Discord.", classe="err"), 403
-    nom = (membre or {}).get("nick") or utilisateur.get("global_name") or utilisateur["username"]
+    noms = [n for n in ((membre or {}).get("nick"), utilisateur.get("global_name"), utilisateur["username"]) if n]
     session.clear()
     session.permanent = True
-    session["discord"] = {"id": utilisateur["id"], "nom": nom}
+    session["discord"] = d = {"id": utilisateur["id"], "nom": noms[0], "noms": noms}
     with db() as con:
-        con.execute("UPDATE comptes SET discord_nom=? WHERE discord_id=?", (nom, utilisateur["id"]))
+        con.execute("UPDATE comptes SET discord_nom=? WHERE discord_id=?", (d["nom"], d["id"]))
+        if not compte_connecte(con):
+            liaison_auto(con, d)
     return redirect(URL_SITE + "/moi")
 
 
@@ -802,18 +824,24 @@ def route_moi():
             elif con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone():
                 message, classe = "Ce pseudo est déjà relié à un autre compte Discord : contacte un officier.", "err"
             else:
-                con.execute("INSERT INTO comptes VALUES(?,?,NULL,?,?)", (d["id"], pseudo, d["nom"], maintenant()))
+                lier(con, d, pseudo)
                 message = f"Compte relié à {pseudo}."
         elif action == "creer" and not compte:
             pseudo = request.form.get("pseudo", "").strip()
             if not PSEUDO_VALIDE.match(pseudo):
                 message, classe = "Pseudo invalide : 2 à 24 caractères, sans espace ni « : ».", "err"
-            elif (pseudo.casefold() in {p.casefold() for p in cles_fichier()}
-                  or con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone()):
-                message, classe = "Ce pseudo a déjà une clé : utilise « J'ai déjà reçu une clé ».", "err"
+            elif con.execute("SELECT 1 FROM comptes WHERE pseudo=?", (pseudo,)).fetchone():
+                message, classe = "Ce pseudo est déjà relié à un autre compte Discord : contacte un officier.", "err"
+            elif pseudo_du_fichier(pseudo):
+                # Pseudo déjà dans cles.txt : relié seulement s'il correspond à un nom Discord du membre.
+                if pseudo.casefold() in {n.casefold() for n in d.get("noms", [d["nom"]])}:
+                    lier(con, d, pseudo_du_fichier(pseudo))
+                    message = f"Compte relié à {pseudo_du_fichier(pseudo)} (même nom que sur Discord)."
+                else:
+                    message, classe = ("Ce pseudo a déjà une clé : utilise « J'ai déjà reçu une clé », "
+                                       "ou prends ce pseudo comme surnom sur le serveur Discord."), "err"
             else:
-                con.execute("INSERT INTO comptes VALUES(?,?,?,?,?)",
-                            (d["id"], pseudo, nouvelle_cle(con), d["nom"], maintenant()))
+                lier(con, d, pseudo, nouvelle_cle(con))
                 message = f"Bienvenue {pseudo} ! Ta clé est prête."
         elif action == "regenerer" and compte:
             con.execute("UPDATE comptes SET cle=? WHERE discord_id=?", (nouvelle_cle(con), d["id"]))

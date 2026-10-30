@@ -81,7 +81,11 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   et avoir le rôle `discord_role_id` ; les IDs de `discord_admins` passent toujours) → session
   Flask (cookie signé par `/data/secret.key`, 30 jours). `/moi` : relier son compte à un pseudo
   (avec sa clé existante, ou en choisissant un pseudo absent de `cles.txt` → clé créée), afficher
-  / régénérer sa clé. Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le)` : `cle` NULL =
+  / régénérer sa clé. Liaison automatique (v1.4.1, `liaison_auto()`) : à la connexion, si le surnom
+  sur le serveur, le nom affiché ou le nom d'utilisateur Discord est un pseudo de `cles.txt` encore
+  libre (casse ignorée), le compte y est relié ; « choisir son pseudo » relie aussi un pseudo de
+  `cles.txt` s'il correspond à un de ces noms. Risque assumé : un membre qui prend le surnom d'un
+  autre avant lui récupère sa clé (seulement avec le rôle de la guilde ; l'admin peut délier). Table `comptes(discord_id, pseudo, cle, discord_nom, lie_le)` : `cle` NULL =
   clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
   (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
   délier un compte, voir les clés de `cles.txt` sans compte, vider la progression (pas les comptes).
@@ -117,12 +121,13 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 29 octobre 2026 (v1.3.0 déployée)
-- 🔜 v1.4.0 (connexion Discord) : application Discord **Quartz Forever** créée (Client ID
+## État au 30 octobre 2026 (v1.4.0 déployée)
+- ✅ v1.4.0 (connexion Discord) déployée et testée par Gaël : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
-  défaut des options). Le **secret client** est à saisir par Gaël dans l'option
-  `discord_client_secret` (jamais commité).
+  défaut des options). **Secret client** renseigné dans l'option `discord_client_secret` (jamais
+  commité ; le connecteur HA renvoie les options en clair, ne jamais le recopier).
+- 🔜 v1.4.1 : liaison automatique par nom Discord.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
@@ -168,7 +173,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 7. Surveiller la publication de l'espace de noms API Forever ; brancher
    `lire_api_blizzard()`.
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
-   clés en MP.
+   lien https://quartz.gawel.be/moi (connexion Discord : liaison auto si le nom Discord = pseudo,
+   sinon clé en MP ou nouveau pseudo).
 9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.
 10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
 11. Idées en attente : graphiques de progression, fiche par personnage, maquette
