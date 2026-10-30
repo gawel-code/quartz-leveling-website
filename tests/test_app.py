@@ -495,3 +495,91 @@ def test_mon_compte_et_deconnexion_dans_l_en_tete_de_toutes_les_pages(discord_cl
     for page in ("/", "/contribuer", "/moi", "/admin"):
         entete = c.get(page).text.split("</header>")[0]
         assert 'href="moi">Mon compte</a>' in entete and 'href="deconnexion">Déconnexion</a>' in entete
+
+
+# ---------- Personnages ↔ joueurs ----------
+LUA_MES_PERSOS = LUA2 + '\nGuildExportMesPersos = {\n["Grommash"] = "1793300000",\n["Reroll"] = "1793300100",\n}\n'
+
+
+def test_persos_du_compte_wow_associes_a_l_envoi(discord_client):
+    c, connecter = discord_client
+    assert envoyer(c, LUA_MES_PERSOS).status_code == 200
+    d = c.get("/export.json?token=tok").json
+    assert {(p["nom"], p["pseudo"], p["source"]) for p in d["proprietaires"]} == {
+        ("Grommash", "Gael", "addon"), ("Reroll", "Gael", "addon")}
+    # Les entrées GuildExportMesPersos ne sont pas prises pour des personnages
+    assert "Reroll" not in {p["nom"] for p in d["personnages"]}
+    # Classement : Grommash affiche son joueur ; le lien Discord apparaît une fois le compte relié
+    assert '<span class="joueur">@Gael</span>' in c.get("/").text
+    connecter(nick="Gael")
+    assert 'href="https://discord.com/users/42"' in c.get("/").text
+    r = c.get("/moi")
+    assert "<b>Grommash</b><small>détecté par l&#39;addon</small>" in r.text
+
+
+def test_reclamer_et_retirer_un_personnage(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA2)
+    connecter(nick="Gael")
+    r = c.get("/moi")
+    assert '<option>Zuljin</option>' in r.text and '<option>Mok</option>' in r.text
+    r = c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"})
+    assert "Zuljin est associé" in r.text and '<option>Zuljin</option>' not in r.text
+    assert '@Gael</a>' in c.get("/").text
+    # Un autre joueur ne peut pas le prendre
+    c.get("/deconnexion")
+    connecter("43", nick="Thrall")
+    c.post("/moi", data={"action": "creer", "pseudo": "Thrall"})
+    assert c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"}).status_code == 400
+    assert c.post("/moi", data={"action": "reclamer", "nom": "Inconnu"}).status_code == 400
+    c.get("/deconnexion")
+    connecter(nick="Gael")
+    r = c.post("/moi", data={"action": "retirer", "nom": "Zuljin"})
+    assert "Personnage retiré" in r.text and '<option>Zuljin</option>' in r.text
+
+
+def test_l_addon_l_emporte_sur_une_saisie_manuelle(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA2)
+    connecter("43", nick="Thrall")
+    c.post("/moi", data={"action": "creer", "pseudo": "Thrall"})
+    c.post("/moi", data={"action": "reclamer", "nom": "Grommash"})
+    envoyer(c, LUA_MES_PERSOS)  # le fichier du compte WoW de Gael fait foi
+    d = {p["nom"]: p for p in c.get("/export.json?token=tok").json["proprietaires"]}
+    assert d["Grommash"]["pseudo"] == "Gael" and d["Grommash"]["source"] == "addon"
+
+
+def test_perso_au_nom_du_pseudo_et_admin(discord_client, tmp_path):
+    c, connecter = discord_client
+    (tmp_path / "cles.txt").write_text("Gael:abc123\nMok:cle-mok\n", encoding="utf-8")
+    envoyer(c, LUA_MES_PERSOS)
+    assert '<span class="joueur">@Mok</span>' in c.get("/").text  # même nom que le pseudo
+    connecter(ADMIN_ID, nick="Admin")
+    r = c.get("/admin")
+    assert "Reroll" in r.text and "détecté par l&#39;addon" in r.text
+    c.post("/admin", data={"action": "dissocier", "nom": "Grommash"})
+    tableau = c.get("/admin").text.split("Personnages ↔ joueurs")[1].split("</table>")[0]
+    assert '<td class="nom">Grommash</td>' not in tableau and "même nom que le pseudo" in tableau  # Mok
+    # La remise à zéro de la progression garde les associations
+    c.post("/admin", data={"action": "reinitialiser"})
+    assert len(c.get("/export.json?token=tok").json["proprietaires"]) == 1
+
+
+def test_admin_associe_et_l_emporte_sur_l_addon(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA_MES_PERSOS)  # Grommash → Gael (addon)
+    connecter(ADMIN_ID, nick="Admin")
+    r = c.get("/admin")
+    assert '<option>Grommash</option>' in r.text and '<option>Gael</option>' in r.text
+    assert c.post("/admin", data={"action": "associer", "nom": "Inconnu", "pseudo": "Gael"}).status_code == 200
+    assert "Personnage ou joueur inconnu" in c.post(
+        "/admin", data={"action": "associer", "nom": "Grommash", "pseudo": "Personne"}).text
+    c.post("/moi", data={"action": "creer", "pseudo": "Thrall"})  # l'admin se crée un joueur
+    r = c.post("/admin", data={"action": "associer", "nom": "Grommash", "pseudo": "Thrall"})
+    assert "Grommash est associé à Thrall" in r.text and "attribué par un officier" in r.text
+    envoyer(c, LUA_MES_PERSOS)  # l'addon ne remplace pas un choix d'officier
+    d = {p["nom"]: p for p in c.get("/export.json?token=tok").json["proprietaires"]}
+    assert (d["Grommash"]["pseudo"], d["Grommash"]["source"]) == ("Thrall", "admin")
+    assert d["Reroll"]["pseudo"] == "Gael"
+    r = c.get("/moi")  # côté joueur : pas de bouton Retirer sur un choix d'officier
+    assert "<b>Grommash</b><small>attribué par un officier</small>\n </div>" in r.text

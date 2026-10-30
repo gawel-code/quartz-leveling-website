@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.5.1
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.6.0
 
 ## Fonctionnement
 
@@ -33,6 +33,14 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   (*Paramètres → Connexions*), son **BattleTag** est récupéré et affiché sur `/moi` et `/admin` ;
   sinon il peut le saisir lui-même sur `/moi` (marqué « saisi » dans l'admin, non vérifié). Connecté, il
   envoie son fichier sans saisir de clé. Les admins (IDs Discord) passent toujours et ont `/admin`.
+- **Personnages ↔ joueurs** : dans le classement, chaque personnage affiche son joueur
+  (`@Pseudo`), avec un lien vers son profil Discord si son compte est relié. L'association vient,
+  par ordre de fiabilité : de l'addon (≥ 1.2.0, table `GuildExportMesPersos` : les persos du compte
+  WoW qui a écrit le fichier sont associés au pseudo de la clé qui l'envoie), d'un ajout à la main
+  sur `/moi` (« C'est mon personnage »), ou d'un perso qui porte le nom du pseudo. Une future
+  connexion Battle.net (armurerie) pourra fournir une source vérifiée « blizzard ». Dans `/admin`,
+  un officier associe n'importe quel perso à n'importe quel joueur ou le dissocie : son choix
+  l'emporte sur tout et n'est jamais remplacé automatiquement.
 - **Envoi** : chaque membre a une clé personnelle (`cles.txt` côté serveur, ou créée sur le site). Le script
   PowerShell renvoie le fichier dès qu'il change ; le formulaire `/contribuer` permet un envoi manuel.
 - **Fusion** : on garde toujours le niveau le plus haut ; une race connue n'est jamais
@@ -97,9 +105,9 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
+`envois` (journal des envois), `proprietaires` (perso → pseudo, source), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` ne touche
-pas aux comptes. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
+pas aux comptes ni aux associations de personnages. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
 ### Options de l'app Home Assistant
 
@@ -146,6 +154,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; dans l'admin, associer / dissocier n'importe quel perso (choix prioritaire) |
 | 1.5.1 | BattleTag saisi à la main sur « Mon compte » quand Battle.net n'est pas lié à Discord ; boutons « Mon compte » et « Déconnexion » (ou « Connexion Discord ») dans l'en-tête de toutes les pages |
 | 1.5.0 | BattleTag récupéré via les connexions Discord (scope `connections`), affiché sur « Mon compte » et dans l'admin |
 | 1.4.3 | numéro de version en pied de page ; URL des images suffixées `?v=version` (Cloudflare servait encore l'ancien logo) |

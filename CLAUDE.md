@@ -64,7 +64,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 - Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
-  (connexion Discord, voir plus bas).
+  (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
 - Dates (v1.3.0) : une montée de niveau est datée par l'addon quand il l'a vue
@@ -111,6 +111,19 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   Saisie manuelle (v1.5.1) : sans BattleTag Discord, `/moi` propose un champ (action `battletag`,
   `BATTLETAG_VALIDE` = `Nom#1234`, vide = effacer) → colonne `comptes.battletag_saisi` (non vérifiée,
   marquée « saisi » dans `/admin`). Le BattleTag Discord prime à l'affichage ; la saisie est gardée en réserve.
+- Personnages ↔ joueurs (v1.6.0) : table `proprietaires(nom PK, pseudo, source, date)`.
+  `associer()` : sources `admin` (choix d'officier, remplace tout, remplacé seulement par un autre
+  choix d'officier) > `blizzard` > `addon` > `manuel` (une saisie manuelle ne prend jamais le perso
+  d'un autre). `addon` = table `GuildExportMesPersos` du fichier
+  (`analyser_mes_persos()`, addon ≥ 1.2.0) associée au pseudo de la clé à chaque `/envoyer` et
+  `/contribuer`. `proprietaires()` ajoute d'office (source `nom`, non stockée) un perso qui porte le
+  nom d'un pseudo (`cles.txt` ou `comptes`). Classement : `@Pseudo` après le nom, lien
+  `https://discord.com/users/<discord_id>` si le pseudo a un compte relié. `/moi` : « Mes
+  personnages » (retirer les ajouts manuels, « C'est mon personnage » parmi les persos sans joueur).
+  `/admin` : formulaire « Associer » (tout perso connu × tout pseudo de `joueurs()` = `cles.txt` +
+  `comptes`, source `admin`), tableau de toutes les associations (y compris `nom`, non dissociable :
+  l'écraser par un choix d'officier) + « Dissocier ». Conservé par la remise à zéro, inclus dans `/export.json`.
+  Source `blizzard` prévue pour une connexion Battle.net (scope `wow.profile`) quand l'API Forever existera.
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
@@ -146,7 +159,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.5.0 déployée, v1.5.1 en PR)
+## État au 30 octobre 2026 (v1.5.1 mergée, v1.6.0 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -157,8 +170,9 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.4.3 : version en pied de page, images en `?v=version` (vérifié en ligne : pied « v1.4.3 »).
 - ✅ v1.5.0 : BattleTag via les connexions Discord (déployée, vérifiée : scope `connections`,
   migration sans erreur). Chacun doit se **reconnecter** (nouvelle autorisation) pour qu'il soit lu.
-- 🔜 v1.5.1 : saisie manuelle du BattleTag sur `/moi` ; « Mon compte » + « Déconnexion » (ou
-  « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
+- ✅ v1.5.1 (mergée ; déploiement non confirmé) : saisie manuelle du BattleTag sur `/moi` ; « Mon compte » +
+  « Déconnexion » (ou « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
+- 🔜 v1.6.0 : personnages ↔ joueurs (+ addon 1.2.0 : `GuildExportMesPersos`).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
@@ -203,7 +217,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 6. Créer un client API sur develop.battle.net, lancer `tools/verifier_api_blizzard.py` sur un
    perso Classic Era ; vérifier si l'endpoint de liste de guilde existe.
 7. Surveiller la publication de l'espace de noms API Forever ; brancher
-   `lire_api_blizzard()`.
+   `lire_api_blizzard()`. Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
+   compte), associer les persos avec la source `blizzard` (`associer()`).
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
    lien https://quartz.gawel.be/moi (connexion Discord : liaison auto si le nom Discord = pseudo,
    sinon clé en MP ou nouveau pseudo).
