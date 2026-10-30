@@ -157,7 +157,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.4.3 : version en pied de page, images en `?v=version` (vérifié en ligne : pied « v1.4.3 »).
 - ✅ v1.5.0 : BattleTag via les connexions Discord (déployée, vérifiée : scope `connections`,
   migration sans erreur). Chacun doit se **reconnecter** (nouvelle autorisation) pour qu'il soit lu.
-- 🔜 v1.5.1 : saisie manuelle du BattleTag sur `/moi`.
+- 🔜 v1.5.1 : saisie manuelle du BattleTag sur `/moi` ; « Mon compte » + « Déconnexion » (ou
+  « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

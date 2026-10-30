@@ -484,3 +484,14 @@ def test_battletag_saisi_a_la_main(discord_client):
     connecter(nick="Gael")
     r = c.post("/moi", data={"action": "battletag", "battletag": ""})
     assert "BattleTag effacé" in r.text and 'value=""' in r.text
+
+
+def test_mon_compte_et_deconnexion_dans_l_en_tete_de_toutes_les_pages(discord_client):
+    c, connecter = discord_client
+    for page in ("/", "/contribuer", "/moi"):
+        html = c.get(page).text
+        assert 'href="connexion">Connexion Discord</a>' in html and 'href="deconnexion"' not in html
+    connecter(ADMIN_ID)
+    for page in ("/", "/contribuer", "/moi", "/admin"):
+        entete = c.get(page).text.split("</header>")[0]
+        assert 'href="moi">Mon compte</a>' in entete and 'href="deconnexion">Déconnexion</a>' in entete

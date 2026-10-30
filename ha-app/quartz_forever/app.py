@@ -509,7 +509,8 @@ ENTETE = """<header>
 {% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
 <div class="actions">{% if titre %}<a class="cta" href="./">← Retour au classement</a>
 {% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
-{% if discord_actif and not titre %}<a class="cta sec" href="{{ 'moi' if session.discord else 'connexion' }}">{{ "Mon compte" if session.discord else "Connexion Discord" }}</a>{% endif %}</div>
+{% if discord_actif %}{% if session.discord %}<a class="cta sec" href="moi">Mon compte</a><a class="cta sec" href="deconnexion">Déconnexion</a>
+{% else %}<a class="cta sec" href="connexion">Connexion Discord</a>{% endif %}{% endif %}</div>
 </header>"""
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -602,8 +603,7 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <p>Connecte-toi avec ton compte Discord (il faut être sur le serveur de la guilde, avec le rôle de la guilde).</p>
  <div><a class="cta" href="connexion">Connexion Discord</a></div>
 {% else %}
- <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}
- · <a href="deconnexion">Se déconnecter</a></p>
+ <p>Connecté avec Discord : <b>{{ session.discord.nom }}</b>{% if admin %} · <a href="admin">Administration</a>{% endif %}</p>
  {% if compte %}
  <p>Pseudo sur le site : <b>{{ compte.pseudo }}</b>{% if compte.battletag %} · BattleTag : <b>{{ compte.battletag }}</b> (lié à Discord){% endif %}</p>
  {% if not compte.battletag %}
