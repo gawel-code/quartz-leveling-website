@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.6.1
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.7.0
 
 ## Fonctionnement
 
@@ -47,6 +47,9 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   écrasée par `?`. Envoyer un vieux fichier ne fait rien régresser.
 - **Dates réelles** : quand l'addon fournit l'heure d'une montée de niveau, c'est elle qui
   compte (la plus ancienne connue gagne, jamais dans le futur) ; sinon, l'heure de réception.
+- **Contributeurs** : la page d'accueil met en avant les 3 membres qui ont signalé le plus de
+  montées de niveau (premier envoi à les apprendre au site), puis le plus d'envois ; la liste
+  complète (envois, persos lus, dernier envoi) est dans `/admin`. La collecte serveur ne compte pas.
 - **Tableau d'honneur** : les paliers 10, 20, 30, 40, 50 et 60 sont classés **par date
   réelle**. Un envoi tardif ne fait pas perdre son rang : le tableau se remet dans l'ordre.
 
@@ -154,6 +157,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.7.0 | meilleurs contributeurs : top 3 sur la page d'accueil, liste complète dans l'admin |
 | 1.6.1 | « Mon compte » en blocs (profil, clé, personnages) ; personnages en cartes aux couleurs de classe avec emblème, ajout en un clic avec recherche ; admin en blocs pleine largeur, tableau de tous les persos avec choix du joueur sur chaque ligne et filtres |
 | 1.6.0 | personnages reliés à leur joueur et à son profil Discord dans le classement (addon ≥ 1.2.0, ajout à la main sur « Mon compte », même nom que le pseudo) ; dans l'admin, associer / dissocier n'importe quel perso (choix prioritaire) |
 | 1.5.1 | BattleTag saisi à la main sur « Mon compte » quand Battle.net n'est pas lié à Discord ; boutons « Mon compte » et « Déconnexion » (ou « Connexion Discord ») dans l'en-tête de toutes les pages |

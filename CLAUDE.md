@@ -132,6 +132,11 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   (« — aucun — » = supprimer l'association enregistrée), filtres état/texte en JS. Emblèmes de classe
   = SVG maison (`EMBLEMES`, `embleme()`, `CLASSES` gère le féminin), aucune image externe ;
   `couleur()` et `embleme()` exposés à tous les templates ; macro `carte_perso` dans `PERSO`.
+- Contributeurs (v1.7.0) : `contributeurs(con, limite)` agrège `envois` par pseudo (hors `serveur`) :
+  `montees` = somme de `nouveautes` (persos dont le niveau a monté, ou nouveaux, dans l'envoi : la
+  montée est créditée au premier envoi qui l'apprend), `envois`, `lus`, `dernier` ; tri montées,
+  envois, date. Top 3 sur `/` (bloc « Meilleurs contributeurs », caché sans envoi, lien Discord si
+  compte relié), liste complète dans `/admin`. Remis à zéro avec la progression (table `envois`).
 - Variables d'env (posées par run.sh depuis les options de l'app) : `NOM_GUILDE`,
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/data/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
@@ -167,7 +172,7 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.6.0 mergée, v1.6.1 en PR)
+## État au 30 octobre 2026 (v1.6.1 mergée, v1.7.0 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -181,7 +186,8 @@ Home Assistant → rest_command → /collecter (horaire) et /recap (9 h / 21 h) 
 - ✅ v1.5.1 (mergée ; déploiement non confirmé) : saisie manuelle du BattleTag sur `/moi` ; « Mon compte » +
   « Déconnexion » (ou « Connexion Discord ») dans l'en-tête (`ENTETE`) de **toutes** les pages.
 - ✅ v1.6.0 (mergée ; déploiement non confirmé) : personnages ↔ joueurs (+ addon 1.2.0 : `GuildExportMesPersos`, mergé).
-- 🔜 v1.6.1 : refonte visuelle de « Mon compte » et de l'admin (cartes de personnages, emblèmes de classe).
+- ✅ v1.6.1 (mergée ; déploiement non confirmé) : refonte visuelle de « Mon compte » et de l'admin.
+- 🔜 v1.7.0 : meilleurs contributeurs (top 3 sur l'accueil, liste complète dans l'admin).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;

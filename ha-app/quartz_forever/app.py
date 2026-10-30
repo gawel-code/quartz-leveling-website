@@ -311,6 +311,16 @@ def associer(con, pseudo, noms, source):
         con.execute("INSERT OR REPLACE INTO proprietaires VALUES(?,?,?,?)", (nom, pseudo, source, maintenant()))
 
 
+def contributeurs(con, limite=None):
+    """Classement des membres qui envoient des fichiers : montées de niveau signalées (premier
+    à les transmettre), puis nombre d'envois. La collecte serveur n'est pas comptée."""
+    discord_de = {c["pseudo"].casefold(): c["discord_id"] for c in con.execute("SELECT pseudo, discord_id FROM comptes")}
+    lignes = con.execute("""SELECT pseudo, COUNT(*) envois, SUM(nouveautes) montees, SUM(personnages) lus,
+        MAX(date) dernier FROM envois WHERE pseudo != 'serveur' GROUP BY pseudo
+        ORDER BY montees DESC, envois DESC, dernier DESC""" + (f" LIMIT {int(limite)}" if limite else "")).fetchall()
+    return [{**dict(l), "discord": discord_de.get(l["pseudo"].casefold())} for l in lignes]
+
+
 def joueurs(con):
     """Pseudos connus (cles.txt et comptes reliés), triés."""
     return sorted(set(cles_fichier()) | {r[0] for r in con.execute("SELECT pseudo FROM comptes")}, key=str.casefold)
@@ -630,6 +640,14 @@ td .persoligne small{color:var(--doux);font-size:.74rem;display:block;font-weigh
 .danger{border-color:rgba(255,138,122,.3);background:linear-gradient(120deg,rgba(255,138,122,.07),transparent 60%),var(--verre)}
 button.danger-btn{background:linear-gradient(135deg,#ffc2b8,var(--rouge));box-shadow:0 6px 24px rgba(255,138,122,.2)}
 .puces{display:flex;flex-wrap:wrap;gap:6px}
+.contribs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:720px){.contribs{grid-template-columns:1fr}}
+.contrib{display:flex;align-items:center;gap:12px;padding:14px 16px;min-width:0}
+.contrib .m{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 .85rem var(--f-titre);color:var(--nuit)}
+.contrib div{display:flex;flex-direction:column;min-width:0}
+.contrib>div>b{font-family:var(--f-titre);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.contrib>div>b a{color:var(--texte)}.contrib>div>b a:hover{color:var(--cristal)}
+.contrib small{color:var(--doux);font-size:.78rem}.contrib small b{color:var(--texte)}
 </style>
 """
 
@@ -694,6 +712,15 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 {% else %}<tr><td colspan="7">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
 </tbody></table></div>
 </section>
+
+{% if top %}<section class="sec">
+<h2>Meilleurs contributeurs <small>merci pour vos envois !</small></h2>
+<div class="contribs">{% for c in top %}
+ <div class="carte contrib"><span class="m m{{ loop.index }}">{{ loop.index }}</span>
+ <div><b>{% if c.discord %}<a href="https://discord.com/users/{{ c.discord }}" target="_blank" rel="noopener">{{ c.pseudo }}</a>{% else %}{{ c.pseudo }}{% endif %}</b>
+ <small><b class="num">{{ c.montees }}</b> montée{{ "s" if c.montees > 1 }} de niveau signalée{{ "s" if c.montees > 1 }} · {{ c.envois }} envoi{{ "s" if c.envois > 1 }}</small></div></div>
+{% endfor %}</div>
+</section>{% endif %}
 
 <section class="carte fil-carte sec">
 <h2>Dernières montées de niveau</h2>
@@ -840,6 +867,16 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <small>Un choix d'officier l'emporte sur l'addon et les ajouts des joueurs, et n'est jamais remplacé automatiquement.
  « — aucun — » retire l'association enregistrée (un perso au nom d'un pseudo reste relié d'office).</small>
 </section>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">📤</span>Contributeurs <small>{{ contribs|length }}</small></h2></div>
+ <div class="table-wrap"><table><thead><tr><th>#</th><th>Joueur</th><th>Montées signalées</th><th>Envois</th><th>Persos lus</th><th>Dernier envoi</th></tr></thead><tbody>
+ {% for c in contribs %}<tr><td class="rang num">{{ loop.index }}</td>
+ <td class="nom">{% if c.discord %}<a href="https://discord.com/users/{{ c.discord }}" target="_blank" rel="noopener">{{ c.pseudo }}</a>{% else %}{{ c.pseudo }}{% endif %}</td>
+ <td class="num">{{ c.montees }}</td><td class="num">{{ c.envois }}</td><td class="num">{{ c.lus }}</td>
+ <td>{{ c.dernier[:16].replace("T", " ") }}</td></tr>
+ {% else %}<tr><td colspan="6">Aucun envoi pour l'instant.</td></tr>{% endfor %}
+ </tbody></table></div>
+ <small>Une montée est comptée pour le membre dont l'envoi l'a apprise en premier au site. La remise à zéro de la progression remet ce compteur à zéro.</small>
+</section>
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">💬</span>Comptes Discord reliés <small>{{ comptes|length }}</small></h2></div>
  <div class="table-wrap"><table><thead><tr><th>Pseudo</th><th>Discord</th><th>BattleTag</th><th>Clé</th><th>Relié le</th><th></th></tr></thead><tbody>
  {% for c in comptes %}<tr><td class="nom">{{ c.pseudo }}</td><td>{{ c.discord_nom }}</td>
@@ -893,12 +930,13 @@ def index():
         recents = con.execute("SELECT * FROM historique ORDER BY date DESC LIMIT 15").fetchall()
         g24 = gains(con, 24)
         proprios = proprietaires(con, [p["nom"] for p in persos])
+        top = contributeurs(con, 3)
     exploits = {}
     for e in rows:
         exploits.setdefault(e["palier"], []).append(e)
     return render_template_string(
         PAGE, guilde=NOM_GUILDE, persos=persos, paliers=PALIERS, exploits=exploits,
-        medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios,
+        medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios, top=top,
         total24=sum(v for v in g24.values() if v > 0),
         actifs=sum(1 for v in g24.values() if v > 0),
         nb60=sum(1 for p in persos if p["niveau"] == 60),
@@ -1167,10 +1205,11 @@ def route_admin():
                    "source": proprios.get(n, {}).get("source")} for n in tous_persos]
         lignes.sort(key=lambda l: (l["pseudo"] is not None, -(l["info"]["niveau"] if l["info"] else 0), l["nom"].casefold()))
         liste_joueurs = joueurs(con)
+        contribs = contributeurs(con)
     lies = {c["pseudo"].casefold() for c in comptes}
     return render_template_string(
         ADMIN, guilde=NOM_GUILDE, titre="Administration", comptes=comptes, message=message, classe=classe,
-        lignes=lignes, sources=SOURCES, joueurs=liste_joueurs,
+        lignes=lignes, sources=SOURCES, joueurs=liste_joueurs, contribs=contribs,
         sans_compte=sorted((p for p in cles_fichier() if p.casefold() not in lies), key=str.casefold))
 
 
