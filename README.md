@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.2
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.4.3
 
 ## Fonctionnement
 
@@ -125,7 +125,9 @@ Cloudflare Tunnel sur `quartz.gawel.be`. Dans Terminal & SSH :
 
 Le script télécharge `ha-app/quartz_forever` depuis `main` (ou la référence passée en
 argument), le copie dans `/local_apps/quartz_forever/` et met l'app à jour. Il faut
-augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement.
+augmenter `version` dans `ha-app/quartz_forever/config.yaml` à chaque changement : elle
+s'affiche en pied de page et suffixe les URL des images (`logo.png?v=…`), ce qui contourne
+le cache de Cloudflare et des navigateurs.
 La base et `cles.txt` ne sont pas touchés. Détails et pièges connus : voir `CLAUDE.md`.
 
 Côté Home Assistant, `rest_command.quartz_collecter` et `rest_command.quartz_recap`
@@ -142,6 +144,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.4.3 | numéro de version en pied de page ; URL des images suffixées `?v=version` (Cloudflare servait encore l'ancien logo) |
 | 1.4.2 | cristal redétouré (plus de liseré clair), plus grand dans l'en-tête avec un halo diffus |
 | 1.4.1 | liaison automatique au pseudo de `cles.txt` identique à un nom Discord (surnom, nom affiché, utilisateur) |
 | 1.4.0 | connexion Discord : page « Mon compte » (relier son pseudo, voir / régénérer sa clé), envoi sans clé une fois connecté, page admin |
