@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
 from markupsafe import Markup
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 
 # ---------- Configuration ----------
 DB = os.getenv("GUILDE_DB", "guilde.db")
@@ -884,7 +885,7 @@ ENTETE = """<header>
 <div class="actions">{% if titre %}<a class="cta" href="./">← Retour au classement</a>
 {% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
 {% if discord_actif %}{% if session.discord %}<a class="cta sec" href="moi">Mon compte</a><a class="cta sec" href="deconnexion">Déconnexion</a>
-{% else %}<a class="cta sec" href="connexion">Connexion Discord</a>{% endif %}{% endif %}</div>
+{% else %}<a class="cta sec" href="{{ url_connexion() }}">Connexion Discord</a>{% endif %}{% endif %}</div>
 </header>"""
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -904,7 +905,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="legende" id="legende" aria-hidden="true"></div></div>
 <div class="courbe" id="courbe" role="img" aria-label="Courbe de progression des niveaux de la guilde depuis le 4 novembre"></div>
 <div class="infobulle" id="infobulle" hidden></div>
-{% if not connecte and discord_actif %}<small><a href="connexion">Connecte-toi</a> pour voir tes personnages sur la courbe.</small>{% endif %}
+{% if not connecte and discord_actif %}<small><a href="{{ url_connexion() }}">Connecte-toi</a> pour voir tes personnages sur la courbe.</small>{% endif %}
 <details class="donnees"><summary>Voir les données</summary><div class="table-wrap"><table><thead><tr><th>Jour</th><th>Persos</th><th>Moyenne</th>
 <th>Q1</th><th>Médiane</th><th>Q3</th><th>Min</th><th>Max</th>{% for c in donnees_courbe.persos %}<th>{{ c.nom }}</th>{% endfor %}</tr></thead><tbody>
 {% for j in donnees_courbe.jours %}{% set i = loop.index0 %}<tr><td>{{ j[8:] }}/{{ j[5:7] }}</td><td class="num">{{ donnees_courbe.n[i] }}</td>
@@ -938,7 +939,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
 <select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
 {% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
-<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Vers 60</th><th>24 h</th></tr></thead><tbody>
+<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Progression</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
 <tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
 <td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}
@@ -1062,7 +1063,7 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <form class="carte formulaire" method="post" enctype="multipart/form-data">
 {% if pseudo %}<p>Envoi au nom de <b>{{ pseudo }}</b> (connecté avec Discord) · <a href="moi">Mon compte</a></p>
 {% else %}<label for="cle">Ta clé personnelle<input id="cle" type="password" name="cle" required>
-{% if discord_actif %}<small>ou <a href="connexion">connecte-toi avec Discord</a> pour ne plus la saisir</small>{% endif %}</label>{% endif %}
+{% if discord_actif %}<small>ou <a href="{{ url_connexion() }}">connecte-toi avec Discord</a> pour ne plus la saisir</small>{% endif %}</label>{% endif %}
 <label for="fichier">Ton fichier GuildExport.lua<input id="fichier" type="file" name="fichier" accept=".lua" required>
 <small>Il se trouve dans World of Warcraft\\_forever_\\WTF\\Account\\TON_COMPTE\\SavedVariables\\</small></label>
 <div><button type="submit">Envoyer</button></div>
@@ -1083,7 +1084,7 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 {% if not session.discord %}
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🔑</span>Connexion</h2></div>
  <p>Connecte-toi avec ton compte Discord : il faut être sur le serveur de la guilde, avec le rôle de la guilde.</p>
- <div><a class="cta" href="connexion">Connexion Discord</a></div></section>
+ <div><a class="cta" href="{{ url_connexion() }}">Connexion Discord</a></div></section>
 {% elif not compte %}
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">👋</span>Bienvenue {{ session.discord.nom }}</h2>
  {% if admin %}<a class="cta sec" href="admin">Administration</a>{% endif %}</div>
@@ -1238,7 +1239,8 @@ function filtrerAdmin(){var e=document.getElementById("f-etat").value,q=document
 
 @app.context_processor
 def contexte():
-    return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION, "couleur": couleur, "embleme": embleme}
+    return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION, "couleur": couleur, "embleme": embleme,
+            "url_connexion": url_discord}
 
 
 def est_admin():
@@ -1370,21 +1372,44 @@ def route_contribuer():
 
 
 # ---------- Connexion Discord ----------
+# v1.10.1 : le state OAuth est un jeton signé et horodaté, pas une valeur rangée dans la session.
+# Le retour de Discord aboutit ainsi même dans un autre navigateur que celui de départ (l'app
+# Discord mobile rouvre l'URL de retour dans le navigateur par défaut). Les liens « Connexion
+# Discord » pointent directement sur discord.com : un lien touché, et non une redirection, est
+# ce qui permet à iOS / Android d'ouvrir l'app Discord si elle est installée.
+ETAT_VALIDITE = 600  # secondes
+
+
+def signeur_etat():
+    return URLSafeTimedSerializer(app.secret_key, salt="discord-etat")
+
+
+def url_discord():
+    """URL d'autorisation Discord avec un state frais."""
+    return "https://discord.com/oauth2/authorize?" + urlencode({
+        "response_type": "code", "client_id": DISCORD_ID, "scope": "identify guilds.members.read connections",
+        "redirect_uri": URL_SITE + "/auth/discord/callback", "prompt": "none",
+        "state": signeur_etat().dumps(secrets.token_urlsafe(8))})
+
+
+def etat_valide(etat):
+    try:
+        signeur_etat().loads(etat or "", max_age=ETAT_VALIDITE)
+        return True
+    except BadSignature:  # y compris SignatureExpired
+        return False
+
+
 @app.route("/connexion")
 def route_connexion():
     if not DISCORD_SECRET:
         abort(404)
-    session["etat"] = secrets.token_urlsafe(24)
-    return redirect("https://discord.com/oauth2/authorize?" + urlencode({
-        "response_type": "code", "client_id": DISCORD_ID, "scope": "identify guilds.members.read connections",
-        "redirect_uri": URL_SITE + "/auth/discord/callback", "state": session["etat"], "prompt": "none"}))
+    return redirect(url_discord())
 
 
 @app.route("/auth/discord/callback")
 def route_retour_discord():
-    etat = session.pop("etat", None)
-    if (not DISCORD_SECRET or not etat or "code" not in request.args
-            or not hmac.compare_digest(etat.encode(), request.args.get("state", "").encode())):
+    if not DISCORD_SECRET or "code" not in request.args or not etat_valide(request.args.get("state")):
         return page_compte(message="Connexion annulée ou expirée, réessaie.", classe="err"), 400
     try:
         r = requests.post(API_DISCORD + "/oauth2/token", auth=(DISCORD_ID, DISCORD_SECRET), timeout=10, data={

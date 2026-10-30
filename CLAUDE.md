@@ -111,6 +111,14 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   clé de `cles.txt` ; une clé du site **remplace** celle de `cles.txt` pour ce pseudo
   (`contributeur()`). Connecté et relié, `/contribuer` n'exige plus de clé. `/admin` (admins) :
   délier un compte, voir les clés de `cles.txt` sans compte, vider la progression et les associations (pas les comptes).
+  `state` (v1.10.1) : jeton `itsdangerous` signé par la clé de session (sel `discord-etat`),
+  valable `ETAT_VALIDITE` = 600 s, **pas stocké en session** (`url_discord()`, `etat_valide()`) :
+  l'app Discord mobile rouvre l'URL de retour dans le navigateur par défaut, qui n'a pas forcément
+  le cookie de départ. Contrepartie assumée : pas de liaison au navigateur (CSRF de connexion
+  théorique, limité à un compte membre de la guilde). Les liens « Connexion Discord » des templates
+  appellent `url_connexion()` (contexte) → URL discord.com directe : seul un lien touché (pas une
+  redirection) laisse iOS / Android ouvrir l'app ; `/connexion` reste une redirection équivalente.
+  Ouverture de l'app non vérifiée sur téléphone.
   Secret vide = connexion désactivée (404), tout le reste marche comme avant. `URL_SITE`
   (`GUILDE_URL`, défaut https://quartz.gawel.be) sert à l'URL de redirection.
 - BattleTag (v1.5.0) : scope `connections`, `GET /users/@me/connections` à chaque connexion → entrée
@@ -216,7 +224,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   supprimer**) et `quartz.gawel.be → http://local-quartz-forever:8080`.
   Redémarrer Cloudflared coupe le connecteur MCP quelques secondes.
 
-## État au 30 octobre 2026 (v1.10.0 mergée, v1.9.0 déployée)
+## État au 30 octobre 2026 (v1.9.0 déployée, v1.10.0 mergée, v1.10.1 en PR)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -242,6 +250,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   dernière connexion (27/10 18:06), annonces parties sur le canal de test.
 - ✅ v1.10.0 (mergée ; déploiement non confirmé) : rangs de la guilde (n° du roster, noms dans l'admin, colonne sur
   l'accueil), lus par l'API et par l'addon 1.3.0 (mergé, à tester en jeu).
+- 🔜 v1.10.1 (PR ouverte) : connexion Discord par lien direct (app mobile) et `state` signé sans
+  cookie ; « Vers 60 » → « Progression ». À tester sur téléphone (app installée, iOS et Android).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` pointent encore sur
   Firemaw / Progress (les vider, ou y mettre notre guilde quand l'API couvrira Forever, puis
   redémarrer l'app) ; la base contient les 6 persos de Progress + 3 persos de test (Grommash,
