@@ -46,7 +46,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   banniere.jpg = grotte de cristaux en fond d'en-tête, icon.png = cristal 128×128 transparent : icône
   de l'app dans la liste des apps de Home Assistant, lue par le Supervisor dans le dossier de l'app,
   pas dans l'image ; `logo.png` sert aussi de logo sur la fiche de l'app). **C'est le code du serveur.**
-- L'addon WoW **GuildExport** vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
+- L'addon WoW **Quartz Guild Exporter** (dossier et fichier `GuildExport`, nom affiché depuis l'addon 1.3.1) vit dans le dépôt séparé **gawel-code/quartz-leveling-addon**. Format qu'il exporte
   (contrat avec `analyser_export()` du serveur, à garder synchronisé) :
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
   `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`). Rangs
