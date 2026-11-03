@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.11.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.12.0
 
 ## Fonctionnement
 
@@ -89,7 +89,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `repository.yaml` | déclare ce dépôt comme dépôt d'apps Home Assistant |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
-| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era (jeton, races/classes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help`) |
+| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era ou Forever (`--jeu forever`, `--version-static`) : jeton, races/classes, royaumes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help` |
 | `tests/test_app.py` | tests du serveur |
 | `CLAUDE.md` | notes de projet détaillées (état, pièges de déploiement, to-do) |
 
@@ -137,7 +137,8 @@ BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par 
 | `discord_admins` | IDs Discord admins, séparés par des virgules (toujours acceptés, accès à `/admin`) |
 | `bnet_client_id` / `bnet_client_secret` | client API créé sur develop.battle.net ; vide = API Blizzard désactivée |
 | `bnet_region` | région de l'API (`eu`) |
-| `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; à changer pour Forever |
+| `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; `forever` pour WoW Forever |
+| `bnet_version_static` | version de l'espace statique (races, classes), ex. `1.60.1_70399` pour Forever → `static-1.60.1_70399-forever-eu` ; vide = sans version, puis repli sur la version citée par le roster |
 | `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; vides = API désactivée |
 
 **API Blizzard** (v1.9.0) : à chaque `/collecter`, le roster de la guilde (nom, race, classe,
@@ -146,6 +147,12 @@ niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces
 elle est postérieure à la collecte précédente, sinon par l'heure de collecte ; l'addon, plus
 précis, l'emporte s'il donne une date plus ancienne. Homonymes sur des royaumes connectés : le
 plus haut niveau l'emporte. API en panne → repli sur le fichier déposé côté serveur.
+
+**Espaces de noms Forever** (v1.12.0, vérifiés le 03/11/2026) : `profile-forever-eu` (roster, profils),
+`dynamic-forever-eu` (royaumes) et un espace statique **versionné** `static-1.60.1_70399-forever-eu`
+(`static-forever-eu` → 403). Les races et classes sont lues dans l'espace de `bnet_version_static`
+(ou sans version), puis, en cas d'échec, dans celui que citent les liens du roster (il suit les patchs).
+Forever ajoute deux races : « Éolide de l'Ordre suprême » (Alliance) et « Éolide sculpte-vents » (Horde).
 
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
 donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
@@ -191,6 +198,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.12.0 | API Blizzard prête pour WoW Forever : option `bnet_version_static` (espace statique versionné `static-1.60.1_70399-forever-eu`, le non versionné renvoie 403), repli automatique sur la version citée par le roster ; `tools/verifier_api_blizzard.py --jeu forever` (version statique par défaut, royaumes sans nom, version lue dans le roster et le profil) |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |

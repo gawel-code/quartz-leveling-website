@@ -66,7 +66,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - `tools/verifier_api_blizzard.py` : essais de l'API Blizzard (bibliothèque standard seulement) :
   jeton `client_credentials` (`BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`), index races/classes
   (`static-…`), `--royaumes` (`dynamic-…`), `--guilde` (roster → lignes `Nom;Race;Classe;Niveau`,
-  forme attendue de `lire_api_blizzard()`), `--perso` (profil). `--jeu classic1x` par défaut.
+  forme attendue de `lire_api_blizzard()`), `--perso` (profil). `--jeu classic1x` par défaut ;
+  `--jeu forever` (v1.12.0) prend `--version-static 1.60.1_70399` par défaut (`VERSIONS`) ; le script
+  affiche la version statique citée par le roster / le profil.
 - `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
@@ -182,8 +184,12 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   « Exclus ». `/moi` : pastille sur un perso exclu. Vidé par la remise à zéro, dans `/export.json`.
 - API Blizzard (v1.9.0) : `lire_api_blizzard()` → `(persos, dates)`, active si `bnet_actif()` (id,
   secret, royaume, guilde). `bnet_get()` : jeton `client_credentials` gardé dans `_bnet` jusqu'à
-  expiration, `namespace = {profile|static}-{BNET_ESPACE}-{BNET_REGION}`, `fr_FR`, None si ≠ 200.
-  `libelles()` met en cache les index race/classe. Roster → tuples `analyser_export()` ; homonyme =
+  expiration, `namespace = espace_bnet()` = `{profile|dynamic|static}-{BNET_ESPACE}-{BNET_REGION}`, `fr_FR`,
+  None si ≠ 200. Statique versionné (v1.12.0) : `static-{version}-…` (Forever : `static-forever-eu` → 403).
+  `libelles(type_, version_roster)` met en cache les index race/classe : essaie `BNET_VERSION_STATIC`
+  (option `bnet_version_static`, vide = sans version) puis la version citée par les liens du roster
+  (`version_static()`, regex `namespace=static-(.+?)-{ESPACE}-{REGION}`). Repli seulement : sur Classic, le
+  roster cite `static-1.15.7_60013-classic1x-eu`, qui renvoie **404** (03/11). Roster → tuples `analyser_export()` ; homonyme =
   plus haut niveau. Pour un perso nouveau ou qui monte : profil (royaume du membre) → date du niveau
   = `last_login_timestamp` si le profil a le même niveau et si la date ≥ `personnages.maj` (dernière
   vue à l'ancien niveau ; sinon heure de connexion d'une session en cours) ; sinon `dater()` prend
@@ -208,7 +214,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `GUILDE_TOKEN`, `DISCORD_WEBHOOK`, `GUILDE_DB=/config/guilde.db`,
   `GUILDE_CLES=/config/cles.txt`, `GUILDE_EXPORT`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`,
   `DISCORD_SERVEUR_ID`, `DISCORD_ROLE_ID`, `DISCORD_ADMINS`, `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET`,
-  `BNET_REGION` (`eu`), `BNET_ESPACE` (`classic1x`), `BNET_ROYAUME`, `BNET_GUILDE`. Webhook vide = messages
+  `BNET_REGION` (`eu`), `BNET_ESPACE` (`classic1x`), `BNET_VERSION_STATIC` (vide), `BNET_ROYAUME`, `BNET_GUILDE`. Webhook vide = messages
   seulement dans le journal (mode test).
 - Version (v1.4.3) : `VERSION` est lue dans `config.yaml` (copié dans l'image par le Dockerfile),
   affichée en pied de page (`PIED`) et ajoutée aux URL des images (`logo.png?v=…`,
@@ -248,7 +254,11 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 30 octobre 2026 (v1.11.0 déployée, app migrée vers le dépôt d'apps)
+## État au 3 novembre 2026 (v1.11.0 déployée, v1.12.0 en attente)
+- 🕓 v1.12.0 (branche `claude/beautiful-carson-7czwkg`, pas encore mergée) : API prête pour Forever
+  (option `bnet_version_static`, repli sur la version du roster, script `--jeu forever`). Au lancement :
+  options `bnet_espace = forever`, `bnet_version_static = 1.60.1_70399` (facultatif : le repli suffit si
+  le roster cite la version), `bnet_royaume` (slug réel, voir `--jeu forever --royaumes`), `bnet_guilde`.
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -326,8 +336,26 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `earthshaker`, `ashbringer`, `gandling`, `firemaw`) : sans doute des persos inactifs dont Blizzard
   ne publie plus le profil ; repli sur l'heure de collecte, comme prévu. Quotas : 36 000 req/h,
   100 req/s ; une collecte = 1 roster + 1 profil par perso qui monte.
-- Branché en v1.9.0 (voir *Serveur*). À vérifier sur Forever : espace de noms, complétude du
+- Branché en v1.9.0 (voir *Serveur*). À vérifier sur Forever : complétude du
   roster, sens exact de `last_login_timestamp` (connexion ou dernière sauvegarde ?).
+
+## API Blizzard — essais sur Forever du 03/11/2026 (avant lancement)
+- Piste : la veille quotidienne (tâche planifiée « Veille armurerie + API WoW Forever ») a relevé un
+  message de joueur (forum API, sujet 59774, 02/11). Rien d'officiel de Blizzard à cette date.
+- Vérifié avec le client API de Gaël (variables `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET` de
+  l'environnement cloud des sessions Claude ; l'API est joignable depuis la session) :
+  - `static-1.60.1_70399-forever-eu` → 200 ; `static-forever-eu` → **403** ;
+    `dynamic-1.60.1_70399-forever-eu` → 403 ; `dynamic-forever-eu` → 200.
+  - Classes : les 9 de Classic, mêmes id et libellés FR. Races : les 8 de Classic + **95 « Éolide de
+    l'Ordre suprême »** (Alliance) et **96 « Éolide sculpte-vents »** (Horde ; mêmes libellés au
+    masculin et au féminin). Pas de couleur à prévoir (la couleur suit la classe).
+  - Royaumes (`/data/wow/realm/index`, `dynamic-forever-eu`) : 26 royaumes EU provisoires
+    (`camwow-eu4-realm-3-pve`, `…-web`, `…-gmss-1`…), `name` = null, région « CAMWOW Europe » (id 93) ;
+    `connected-realm/index` → 404. Les vrais royaumes viendront sans doute au lancement.
+  - `profile-forever-eu` : roster / guilde / profil inventés → 404 (rien à lire avant le lancement).
+- Non vérifié (forum) : les persos Forever de `/profile/user/wow` ont un `surname` et pas de `realm`.
+  Si c'est le cas, l'URL du roster `/data/wow/guild/{royaume}/{guilde}` pourrait changer : à tester au
+  lancement (`--jeu forever --royaumes`, puis `--royaume <slug> --guilde "Quartz Forever"`).
 
 ## Outils utiles pour Claude (via le connecteur HA)
 - Appeler l'app directement : `ha_manage_app(slug="ee5b467c_quartz_forever", port=8080,
@@ -357,8 +385,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
 6. ~~Client API develop.battle.net + essais Classic Era~~ ✅ fait (30/10) : roster OK avec la race.
-7. Surveiller la publication de l'espace de noms API Forever (`--royaumes`) ; renseigner
-   `bnet_espace` / `bnet_royaume` / `bnet_guilde` (`lire_api_blizzard()` est branchée en v1.9.0). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
+7. Au lancement (5/11) : espaces de noms Forever confirmés le 03/11 (v1.12.0) ; relancer
+   `--jeu forever --royaumes`, tester le roster, puis renseigner `bnet_espace = forever`,
+   `bnet_royaume` / `bnet_guilde` (et `bnet_version_static` si besoin). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
    lien https://quartz.gawel.be/moi (connexion Discord : liaison auto si le nom Discord = pseudo,

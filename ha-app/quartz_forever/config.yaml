@@ -1,5 +1,5 @@
 name: Quartz Forever
-version: "1.11.0"
+version: "1.12.0"
 slug: quartz_forever
 description: Suivi de progression de la guilde Quartz Forever
 url: https://quartz.gawel.be
@@ -24,6 +24,7 @@ options:
   bnet_client_secret: ""
   bnet_region: "eu"
   bnet_espace: "classic1x"
+  bnet_version_static: ""
   bnet_royaume: ""
   bnet_guilde: ""
 schema:
@@ -39,5 +40,6 @@ schema:
   bnet_client_secret: "password?"
   bnet_region: "str?"
   bnet_espace: "str?"
+  bnet_version_static: "str?"
   bnet_royaume: "str?"
   bnet_guilde: "str?"

@@ -31,7 +31,10 @@ API_DISCORD = "https://discord.com/api/v10"
 BNET_ID = os.getenv("BNET_CLIENT_ID", "")
 BNET_SECRET = os.getenv("BNET_CLIENT_SECRET", "")
 BNET_REGION = os.getenv("BNET_REGION") or "eu"
-BNET_ESPACE = os.getenv("BNET_ESPACE") or "classic1x"  # Classic Era ; à changer pour Forever
+BNET_ESPACE = os.getenv("BNET_ESPACE") or "classic1x"  # Classic Era ; « forever » pour Forever
+# Forever (v1.12.0) : l'espace statique n'existe qu'avec la version du jeu (static-1.60.1_70399-forever-eu ;
+# static-forever-eu → 403). Vide : sans version, puis repli sur la version citée par le roster.
+BNET_VERSION_STATIC = os.getenv("BNET_VERSION_STATIC", "")
 BNET_ROYAUME = os.getenv("BNET_ROYAUME", "")
 BNET_GUILDE = os.getenv("BNET_GUILDE", "")
 PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
@@ -488,7 +491,27 @@ def bnet_actif():
     return bool(BNET_ID and BNET_SECRET and BNET_ROYAUME and BNET_GUILDE)
 
 
-def bnet_get(chemin, espace):
+def espace_bnet(espace, version=""):
+    """Espace de noms complet : profile-forever-eu, dynamic-forever-eu, static-1.60.1_70399-forever-eu
+    (version : celle de l'espace statique, ignorée pour profile et dynamic)."""
+    if espace == "static" and version:
+        return f"static-{version}-{BNET_ESPACE}-{BNET_REGION}"
+    return f"{espace}-{BNET_ESPACE}-{BNET_REGION}"
+
+
+def version_static(roster):
+    """Version du jeu lue dans les liens playable_race / playable_class du roster
+    (…?namespace=static-1.60.1_70399-forever-eu → 1.60.1_70399) ; "" si absente."""
+    motif = re.compile(rf"namespace=static-(.+?)-{re.escape(BNET_ESPACE)}-{re.escape(BNET_REGION)}(?:&|$)")
+    for m in roster.get("members", []):
+        for cle in ("playable_race", "playable_class"):
+            trouve = motif.search(m.get("character", {}).get(cle, {}).get("key", {}).get("href", ""))
+            if trouve:
+                return trouve.group(1)
+    return ""
+
+
+def bnet_get(chemin, espace, version=""):
     """GET sur l'API (jeton client_credentials gardé jusqu'à son expiration) ; None si échec."""
     if not _bnet["jeton"] or _bnet["expire"] < datetime.datetime.now().timestamp():
         r = requests.post("https://oauth.battle.net/token", data={"grant_type": "client_credentials"},
@@ -500,7 +523,7 @@ def bnet_get(chemin, espace):
         _bnet["jeton"] = d["access_token"]
         _bnet["expire"] = datetime.datetime.now().timestamp() + d.get("expires_in", 3600) - 60
     r = requests.get(f"https://{BNET_REGION}.api.blizzard.com{chemin}",
-                     params={"namespace": f"{espace}-{BNET_ESPACE}-{BNET_REGION}", "locale": "fr_FR"},
+                     params={"namespace": espace_bnet(espace, version), "locale": "fr_FR"},
                      headers={"Authorization": f"Bearer {_bnet['jeton']}"}, timeout=15)
     if r.status_code != 200:
         print("API Blizzard :", chemin, r.status_code, flush=True)
@@ -508,11 +531,17 @@ def bnet_get(chemin, espace):
     return r.json()
 
 
-def libelles(type_):
-    """{id: nom français} des races ou classes jouables, lu une fois par démarrage."""
+def libelles(type_, version_roster=""):
+    """{id: nom français} des races ou classes jouables, lu une fois par démarrage. Espace statique :
+    l'option bnet_version_static (ou sans version), puis la version citée par le roster. Forever n'a
+    pas d'espace statique sans version (403) ; sur Classic, la version citée par le roster peut ne
+    pas exister (404 vu le 03/11 pour 1.15.7_60013) : elle ne sert que de repli."""
     if not _bnet[type_]:
-        d = bnet_get(f"/data/wow/playable-{type_}/index", "static") or {}
-        _bnet[type_] = {x["id"]: x["name"] for x in d.get("races" if type_ == "race" else "classes", [])}
+        for version in dict.fromkeys([BNET_VERSION_STATIC, version_roster]):
+            d = bnet_get(f"/data/wow/playable-{type_}/index", "static", version) or {}
+            _bnet[type_] = {x["id"]: x["name"] for x in d.get("races" if type_ == "race" else "classes", [])}
+            if _bnet[type_]:
+                break
     return _bnet[type_]
 
 
@@ -527,7 +556,8 @@ def lire_api_blizzard():
         d = bnet_get(f"/data/wow/guild/{slug(BNET_ROYAUME)}/{slug(BNET_GUILDE)}/roster", "profile")
         if not d:
             return [], {}, {}
-        races, classes = libelles("race"), libelles("class")
+        version = version_static(d)
+        races, classes = libelles("race", version), libelles("class", version)
         persos = {}
         for m in d.get("members", []):
             c = m.get("character", {})

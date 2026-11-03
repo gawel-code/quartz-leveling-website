@@ -722,7 +722,8 @@ def blizzard(client, monkeypatch):
     for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
                      "BNET_GUILDE": "Quartz Forever"}.items():
         monkeypatch.setitem(g, cle, val)
-    etat = {"roster": [], "profils": {}, "appels": [], "jetons": 0, "panne": False}
+    etat = {"roster": [], "profils": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
+            "jeu": "-classic1x-eu"}
 
     def post(url, **kw):
         assert url == "https://oauth.battle.net/token" and kw["auth"] == ("id", "s")
@@ -732,7 +733,8 @@ def blizzard(client, monkeypatch):
     def get(url, **kw):
         chemin = url.split("api.blizzard.com")[1]
         etat["appels"].append(chemin)
-        assert kw["params"]["namespace"].endswith("-classic1x-eu")
+        etat["espaces"].append(kw["params"]["namespace"])
+        assert kw["params"]["namespace"].endswith(etat["jeu"])
         if etat["panne"]:
             return Reponse({}, 503)
         if chemin.endswith("/playable-race/index"):
@@ -795,6 +797,54 @@ def test_montee_datee_par_la_derniere_connexion(blizzard):
     with g["db"]() as con:
         d15 = con.execute("SELECT date FROM historique WHERE nom='Grommash' AND niveau=15").fetchone()[0]
     assert d15 > connexion.isoformat()
+
+
+def membre_forever(nom, niveau, version):
+    m = membre(nom, niveau, race=6)
+    for cle, id_ in (("playable_race", 6), ("playable_class", 1)):
+        m["character"][cle]["key"] = {"href": f"https://eu.api.blizzard.com/data/wow/playable-{cle[9:]}/{id_}"
+                                              f"?namespace=static-{version}-forever-eu"}
+    return m
+
+
+def test_espaces_de_noms_forever(blizzard, monkeypatch):
+    """Forever (v1.12.0) : static versionné (static-forever-eu → 403), profile/dynamic sans version.
+    Option bnet_version_static d'abord, puis repli sur la version citée par le roster."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ESPACE", "forever")
+    monkeypatch.setitem(g, "BNET_VERSION_STATIC", "1.60.0_1")  # périmée : 404
+    etat["jeu"] = "-forever-eu"
+    assert g["espace_bnet"]("static", "1.60.1_70399") == "static-1.60.1_70399-forever-eu"
+    assert g["espace_bnet"]("static") == "static-forever-eu"
+    assert g["espace_bnet"]("profile", "1.60.1_70399") == "profile-forever-eu"
+    get = g["requests"].get
+
+    def seulement_la_bonne_version(url, **kw):
+        ns = kw["params"]["namespace"]
+        if ns.startswith("static-") and ns != "static-1.60.1_70399-forever-eu":
+            etat["espaces"].append(ns)
+            return Reponse({}, 404)
+        return get(url, **kw)
+    monkeypatch.setattr(g["requests"], "get", seulement_la_bonne_version)
+    etat["roster"] = [membre_forever("Grommash", 12, "1.60.1_70399")]
+    assert c.get("/collecter?token=tok").json["source"] == "blizzard"
+    assert etat["espaces"].count("static-1.60.0_1-forever-eu") == 2  # races puis classes : repli
+    assert dict(zip(etat["appels"], [e for e in etat["espaces"] if "1.60.0_1" not in e])) == {
+        "/data/wow/guild/firemaw/quartz-forever/roster": "profile-forever-eu",
+        "/data/wow/playable-race/index": "static-1.60.1_70399-forever-eu",
+        "/data/wow/playable-class/index": "static-1.60.1_70399-forever-eu",
+        "/profile/wow/character/firemaw/grommash": "profile-forever-eu"}
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert (persos["Grommash"]["race"], persos["Grommash"]["classe"]) == ("Tauren", "Guerrier")
+
+
+def test_version_static_absente_du_roster(client):
+    g = client.application.view_functions["index"].__globals__
+    assert g["version_static"]({"members": [membre("Grommash", 12)]}) == ""
+    lien = {"key": {"href": "https://eu.api.blizzard.com/data/wow/playable-race/2?namespace=static-classic1x-eu"}}
+    assert g["version_static"]({"members": [{"character": {"playable_race": lien}}]}) == ""
+    assert g["espace_bnet"]("static") == "static-classic1x-eu"
 
 
 def test_homonymes_sur_royaumes_connectes(blizzard):
