@@ -17,7 +17,8 @@ informations partagées sont le nom, la race, la classe et le niveau des membres
 ---
 
 ## Étape 1 — Installer l'addon (obligatoire, 2 minutes)
-1. Télécharge le dossier `GuildExport` (lien donné sur Discord).
+1. Télécharge le dossier `GuildExport` (lien donné sur Discord). C'est bien son nom :
+   en jeu, l'addon s'affiche **Quartz Guild Exporter**.
 2. Copie-le dans `World of Warcraft\_forever_\Interface\AddOns\`
 3. Lance le jeu. Sur l'écran de sélection des personnages, clique sur **AddOns**
    et vérifie que **Quartz Guild Exporter** (en violet) est bien coché.

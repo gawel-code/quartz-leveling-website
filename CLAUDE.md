@@ -29,7 +29,7 @@ concises, pas de pédagogie de base.
 
 ## Architecture
 ```
-WoW (addon GuildExport) → GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
+WoW (addon « Quartz Guild Exporter », dossier GuildExport) → GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
    → envoi-guilde.ps1 (auto) ou formulaire /contribuer (manuel), clé perso par membre
      (clé affichée sur /moi après connexion Discord ; connecté, /contribuer n'en demande pas)
    → app Flask + SQLite, app Home Assistant (HAOS) installée depuis ce dépôt (dépôt d'apps)
@@ -288,6 +288,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   OK), Cloudflared basculé, `secrets.yaml` mis à jour par Gaël (`rest_command.quartz_collecter` →
   200 depuis la nouvelle app, l'ancienne étant arrêtée). Reste : vérifier le site dans un navigateur
   (le proxy de session Claude bloque `quartz.gawel.be`). Ancienne app désinstallée (30/10).
+- ✅ Addon 1.3.1 (mergé le 3/11, doc du site mise à jour) : nom affiché **Quartz Guild Exporter** (violet,
+  icône de cristal) ; dossier, fichier `GuildExport.lua` et tables inchangés (pas d'impact serveur ni `client/`).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
