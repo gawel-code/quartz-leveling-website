@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Installer GuildExport</title>
+<!--
+  Animation (~30 s, en boucle) : installer l'addon GuildExport et envoyer son fichier sur
+  https://quartz.gawel.be/contribuer. Fichier autonome, aucune ressource externe.
+  Clic ou espace = pause / reprise. ?t=12 = image fixe à 12 s. ?rec = pas de lecture
+  (pilotée par window.seek(t), sert au rendu MP4 : tools/rendre_animation.py).
+-->
+<style>
+:root{--nuit:#070b14;--nuit2:#0c1322;--texte:#e6eefb;--doux:#8a9ab5;--pale:#5d6b85;
+--cristal:#5fd8f5;--cristal2:#a7b8ff;--givre:#d9f6ff;--or:#f0c35a;--vert:#5ee3a6;--alerte:#ffb454;
+--trait:rgba(148,196,255,.14);--trait2:rgba(148,196,255,.26);--verre:rgba(148,196,255,.06)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#03060c;overflow:hidden}
+body{font-family:"Segoe UI",Inter,system-ui,sans-serif;color:var(--texte);cursor:pointer}
+#stage{position:absolute;left:0;top:0;width:1280px;height:720px;transform-origin:0 0;overflow:hidden;
+ background:radial-gradient(900px 500px at 80% -10%,rgba(95,216,245,.16),transparent 60%),
+ radial-gradient(700px 500px at 0% 110%,rgba(167,184,255,.12),transparent 60%),linear-gradient(160deg,var(--nuit2),var(--nuit))}
+.abs{position:absolute}
+.f{opacity:0}
+.scene{position:absolute;inset:0;opacity:0}
+.mono{font-family:"JetBrains Mono","DejaVu Sans Mono",monospace}
+.marque{left:36px;top:26px;display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.04em;color:var(--givre);font-size:17px}
+.marque svg{width:22px;height:22px}
+.etapes{right:36px;top:26px;display:flex;gap:8px}
+.etape{position:relative;padding:6px 14px;border-radius:99px;border:1px solid var(--trait);font-size:13px;color:var(--pale)}
+.etape .on{position:absolute;inset:-1px;border-radius:99px;background:linear-gradient(135deg,var(--cristal),var(--cristal2));
+ color:#04101c;font-weight:700;display:flex;align-items:center;justify-content:center;opacity:0}
+.legende{left:0;right:0;bottom:44px;height:96px}
+.leg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:0}
+.leg b{font-size:30px;font-weight:700;color:#fff}
+.leg span{margin-top:6px;font-size:18px;color:var(--doux)}
+.leg code,.chemin{font-family:"JetBrains Mono","DejaVu Sans Mono",monospace;color:var(--givre)}
+#barre{left:0;right:0;bottom:0;height:5px;background:rgba(255,255,255,.05)}
+#barre i{display:block;height:100%;background:linear-gradient(90deg,var(--cristal),var(--cristal2));transform-origin:0 0;transform:scaleX(0)}
+/* Fenêtres */
+.fen{border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+.barre-titre{height:36px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;color:#cfd6e2;background:#1d2230}
+.barre-titre .pts{margin-left:auto;display:flex;gap:16px;color:#7d8597;font-size:14px}
+/* Explorateur */
+.exp{background:#191c24}
+.adresse{margin:10px 14px;height:34px;border-radius:6px;background:#11141b;border:1px solid #2b3140;display:flex;align-items:center;padding:0 12px;font-size:15px;color:#e6e9ef;white-space:nowrap}
+.adresse .sep{color:#6c7486;margin:0 8px}
+.reveal{display:inline-block;clip-path:inset(0 100% 0 0)}
+.entete-liste{margin:6px 14px 0;padding:8px 10px;font-size:12px;color:#7d8597;border-bottom:1px solid #2b3140;display:flex}
+.entete-liste span:last-child{margin-left:auto}
+.ligne{margin:4px 14px;padding:9px 10px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:15px}
+.ligne small{margin-left:auto;color:#7d8597;font-size:13px}
+.ico{width:26px;height:22px;flex:none}
+/* Cartes de fichier */
+.fichier{width:200px;height:170px;border-radius:16px;background:var(--verre);border:1px solid var(--trait2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-size:16px;font-weight:600}
+.fichier svg{width:84px;height:72px}
+.fichier small{font-weight:400;color:var(--doux);font-size:13px}
+/* Jeu (maquette générique) */
+.jeu{background:radial-gradient(600px 300px at 30% 30%,rgba(240,195,90,.10),transparent 70%),linear-gradient(180deg,#151018,#0b0a10);border:2px solid #6b5426;border-radius:14px}
+.jeu .titre{position:absolute;top:18px;left:0;right:0;text-align:center;font-family:Georgia,"DejaVu Serif",serif;font-size:22px;color:var(--or);letter-spacing:.06em}
+.persos{position:absolute;right:26px;top:70px;width:300px;display:flex;flex-direction:column;gap:8px}
+.perso{padding:10px 14px;border:1px solid #4a3a1c;border-radius:8px;background:rgba(0,0,0,.35);font-size:14px}
+.perso b{display:block;color:#f2e2b5;font-size:16px}
+.perso small{color:#a99a77}
+.perso.sel{border-color:var(--or);box-shadow:0 0 0 1px var(--or) inset,0 0 18px rgba(240,195,90,.25)}
+.btn-jeu{position:absolute;padding:10px 22px;border-radius:8px;background:linear-gradient(180deg,#8e1f17,#5a120d);border:1px solid #c79a3a;color:#ffd98a;font-weight:700;font-size:15px}
+.silhouette{position:absolute;left:330px;top:90px;width:200px;height:300px}
+.modal{background:#120f14;border:2px solid #8a6b2c;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+.modal h3{font-family:Georgia,"DejaVu Serif",serif;color:var(--or);font-weight:400;text-align:center;padding:14px;border-bottom:1px solid #3a2e17;font-size:20px}
+.case{display:flex;align-items:center;gap:12px;padding:12px 22px;font-size:16px;color:#f2e2b5}
+.case.grise{color:#6f6656}
+.boite{position:relative;width:22px;height:22px;border:2px solid #a88b4a;border-radius:4px;background:#0b0908;flex:none}
+.boite svg{position:absolute;inset:-4px;width:26px;height:26px}
+.note{padding:10px 22px 14px;font-size:13px;color:#a99a77}
+/* Monde */
+.monde{background:linear-gradient(180deg,#2a3f63 0%,#5b6f8c 45%,#3c4a3a 46%,#22301f 100%);border:2px solid #6b5426;border-radius:14px}
+.chat{position:absolute;left:18px;bottom:18px;width:470px;padding:12px 14px;border-radius:8px;background:rgba(0,0,0,.55);font-size:15px;line-height:1.6}
+.chat .g{color:#40ff40}
+.saisie{margin-top:8px;padding:6px 10px;border:1px solid rgba(255,255,255,.25);border-radius:4px;background:rgba(0,0,0,.6);color:#fff;height:34px}
+.flash{position:absolute;inset:0;background:#000;opacity:0}
+.toast{width:430px;padding:18px 20px;border-radius:14px;background:rgba(7,11,20,.92);border:1px solid var(--trait2);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.toast .t{display:flex;align-items:center;gap:12px;font-weight:700;font-size:17px}
+.toast .chemin{display:block;margin-top:10px;font-size:13px;line-height:1.7;color:var(--doux)}
+.toast .chemin b{color:var(--givre)}
+/* Navigateur */
+.nav{background:var(--nuit)}
+.onglets{height:42px;background:#1d2230;display:flex;align-items:center;gap:10px;padding:0 14px}
+.url{flex:1;height:28px;border-radius:99px;background:#11141b;display:flex;align-items:center;padding:0 14px;font-size:14px;color:#cfd6e2;gap:8px}
+.url svg{width:12px;height:12px}
+.page{position:absolute;inset:42px 0 0 0;background:radial-gradient(600px 300px at 80% 0%,rgba(95,216,245,.12),transparent 60%),var(--nuit2);padding:28px 60px}
+.page h2{font-size:24px;color:var(--givre);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.page h2 svg{width:24px;height:24px}
+.form{width:620px;border-radius:16px;background:var(--verre);border:1px solid var(--trait);padding:22px 26px;display:flex;flex-direction:column;gap:18px;font-size:16px}
+.form a{color:var(--cristal)}
+.form label{display:flex;flex-direction:column;gap:8px;color:var(--doux);font-size:15px}
+.choix{position:relative;display:flex;align-items:center;gap:12px;height:44px;padding:0 6px;border:1px solid var(--trait2);border-radius:10px;color:var(--texte)}
+.choix .bt{padding:6px 14px;border-radius:7px;background:#2a3346;font-size:14px}
+.choix .nom{position:absolute;left:140px}
+.choix small{font-size:12px}
+.envoyer{align-self:flex-start;padding:11px 26px;border-radius:10px;background:linear-gradient(135deg,var(--cristal),var(--cristal2));color:#04101c;font-weight:700}
+.msg{width:620px;padding:12px 16px;border-radius:12px;background:rgba(94,227,166,.12);border:1px solid rgba(94,227,166,.45);color:var(--vert);font-weight:600;opacity:0;height:0;overflow:hidden}
+.dialogue{background:#191c24}
+/* Curseur */
+.curseur{position:absolute;left:0;top:0;width:0;height:0;z-index:50;opacity:0}
+.curseur svg{position:absolute;left:-3px;top:-2px;width:28px;height:28px;transform-origin:3px 2px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))}
+.onde{position:absolute;left:0;top:0;width:54px;height:54px;border-radius:50%;border:3px solid var(--cristal);opacity:0;transform:translate(-50%,-50%)}
+/* Intro / fin */
+.grand{position:absolute;left:0;right:0;text-align:center}
+.grand h1{font-size:54px;letter-spacing:.02em;background:linear-gradient(135deg,#fff,var(--cristal) 60%,var(--cristal2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.grand p{margin-top:14px;font-size:22px;color:var(--doux)}
+.cristal{position:absolute;left:590px;width:100px;height:130px}
+.pilule{display:inline-block;margin-top:22px;padding:12px 26px;border-radius:99px;border:1px solid var(--trait2);background:var(--verre);font-size:24px;color:var(--givre)}
+.pilule b{color:var(--cristal)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+ <defs>
+  <linearGradient id="gc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9f6ff"/><stop offset=".5" stop-color="#5fd8f5"/><stop offset="1" stop-color="#a7b8ff"/></linearGradient>
+  <symbol id="s-cristal" viewBox="0 0 40 52"><path d="M20 1 33 14 28 47 20 51 12 47 7 14Z" fill="url(#gc)"/><path d="M20 1 20 51M7 14 20 20 33 14M12 47 20 20 28 47" stroke="#fff" stroke-opacity=".45" fill="none"/></symbol>
+  <symbol id="s-dossier" viewBox="0 0 26 22"><path d="M1 4a2 2 0 0 1 2-2h7l3 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z" fill="#f2c14e"/><path d="M1 8h24v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z" fill="#ffd56b"/></symbol>
+  <symbol id="s-zip" viewBox="0 0 26 22"><path d="M1 4a2 2 0 0 1 2-2h7l3 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z" fill="#c9a24a"/><path d="M1 8h24v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z" fill="#e5bd5c"/><path d="M11 8h4v13h-4Z" fill="#6b5426"/><path d="M11 10h2v2h-2Zm2 2h2v2h-2Zm-2 2h2v2h-2Zm2 2h2v2h-2Z" fill="#e5bd5c"/></symbol>
+  <symbol id="s-lua" viewBox="0 0 26 22"><path d="M6 1h10l5 5v15H6Z" fill="#d9e4f5"/><path d="M16 1v5h5" fill="#a9b6cc"/><circle cx="13" cy="14" r="4.2" fill="#2c4fd6"/><circle cx="15" cy="12" r="1.3" fill="#d9e4f5"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 26 26"><path d="M5 13.5 10.5 19 21 7" fill="none" stroke="#5ee3a6" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="s-fleche" viewBox="0 0 28 28"><path d="M3 2v20l5.5-5 3.6 8.2 3.4-1.5-3.5-8H19Z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+ </defs>
+</svg>
+
+<div id="stage">
+ <div class="abs marque"><svg><use href="#s-cristal"/></svg>Quartz Forever</div>
+ <div class="abs etapes">
+  <div class="etape" id="e1">1 · Installer<span class="on">1 · Installer</span></div>
+  <div class="etape" id="e2">2 · Activer<span class="on">2 · Activer</span></div>
+  <div class="etape" id="e3">3 · Enregistrer<span class="on">3 · Enregistrer</span></div>
+  <div class="etape" id="e4">4 · Envoyer<span class="on">4 · Envoyer</span></div>
+ </div>
+
+ <!-- A · Intro -->
+ <div class="scene" id="sA">
+  <svg class="cristal" style="top:150px" id="cA"><use href="#s-cristal"/></svg>
+  <div class="grand" style="top:310px"><h1>Suivre ta progression</h1><p>Installer l'addon et envoyer ton fichier, en 4 étapes</p></div>
+ </div>
+
+ <!-- B · Installer l'addon -->
+ <div class="scene" id="sB">
+  <div class="abs fichier f" id="zip" style="left:150px;top:200px"><svg><use href="#s-zip"/></svg>GuildExport.zip<small>lien sur Discord</small></div>
+  <div class="abs fichier f" id="dossier" style="left:150px;top:200px;z-index:5"><svg><use href="#s-dossier"/></svg>GuildExport<small>dossier extrait</small></div>
+  <div class="abs fen exp f" id="exp" style="left:470px;top:110px;width:690px;height:380px">
+   <div class="barre-titre"><svg class="ico" style="width:18px;height:16px"><use href="#s-dossier"/></svg>AddOns<span class="pts"><span>—</span><span>☐</span><span>✕</span></span></div>
+   <div class="adresse"><span class="reveal" id="adrB">World of Warcraft<span class="sep">›</span>_forever_<span class="sep">›</span>Interface<span class="sep">›</span><b>AddOns</b></span></div>
+   <div class="entete-liste"><span>Nom</span><span>Type</span></div>
+   <div class="ligne f" id="ligneB" style="background:rgba(95,216,245,.14);outline:1px solid rgba(95,216,245,.45)"><svg class="ico"><use href="#s-dossier"/></svg>GuildExport<small>Dossier de fichiers</small></div>
+   <div class="abs f" id="astuceB" style="left:24px;right:24px;bottom:18px;font-size:14px;color:var(--alerte)">⚠ Le dossier <b>GuildExport</b> directement dans AddOns, pas GuildExport\GuildExport</div>
+  </div>
+  <div class="curseur" id="cB"><span class="onde"></span><svg><use href="#s-fleche"/></svg></div>
+ </div>
+
+ <!-- C · Activer dans le jeu -->
+ <div class="scene" id="sC">
+  <div class="abs fen jeu" style="left:140px;top:80px;width:1000px;height:470px">
+   <div class="titre">Sélection du personnage</div>
+   <svg class="silhouette" viewBox="0 0 200 300"><ellipse cx="100" cy="285" rx="80" ry="12" fill="rgba(240,195,90,.15)"/><path d="M100 40a28 28 0 1 1 0 .1ZM55 120q45-30 90 0l12 90h-24l-8 80h-22l-3-60-3 60H75l-8-80H43Z" fill="#2a2030" stroke="#6b5426" stroke-width="2"/></svg>
+   <div class="persos">
+    <div class="perso sel"><b>Gael</b><small>Niveau 12 · Orc · Chaman</small></div>
+    <div class="perso"><b>Mokvar</b><small>Niveau 5 · Tauren · Guerrier</small></div>
+    <div class="perso"><b>Zirka</b><small>Niveau 1 · Troll · Mage</small></div>
+   </div>
+   <div class="btn-jeu" id="btnAddons" style="left:24px;bottom:24px">AddOns</div>
+   <div class="btn-jeu" style="left:390px;bottom:24px">Entrer dans le monde</div>
+   <div class="abs modal f" id="modC" style="left:300px;top:80px;width:420px">
+    <h3>AddOns</h3>
+    <div class="case" id="caseC"><span class="boite"><svg id="cocheC" style="opacity:0"><use href="#s-ok"/></svg></span>Guild Export</div>
+    <div class="case grise"><span class="boite"></span>Autres addons…</div>
+    <div class="note">Marqué « obsolète » ? Coche aussi « Charger les addons obsolètes ».</div>
+   </div>
+  </div>
+  <div class="curseur" id="cC"><span class="onde"></span><svg><use href="#s-fleche"/></svg></div>
+ </div>
+
+ <!-- D · Enregistrer le fichier -->
+ <div class="scene" id="sD">
+  <div class="abs fen monde" style="left:140px;top:80px;width:1000px;height:470px">
+   <svg class="abs" style="left:0;top:120px" width="1000" height="110" viewBox="0 0 1000 110"><path d="M0 110 120 30 230 90 360 10 480 80 600 25 740 95 860 40 1000 100V110Z" fill="#45566f" opacity=".7"/></svg>
+   <div class="chat">
+    <div class="g">[Guilde] [Mokvar] : quelqu'un pour les Tarides ?</div>
+    <div class="g">[Guilde] [Zirka] : niveau 10, enfin !</div>
+    <div class="saisie mono"><span class="reveal" id="tapeD">/reload</span></div>
+   </div>
+   <div class="flash" id="flashD"></div>
+   <div class="abs toast f" id="toastD" style="left:520px;top:60px">
+    <div class="t"><svg style="width:30px;height:26px"><use href="#s-lua"/></svg>GuildExport.lua enregistré</div>
+    <span class="chemin" id="cheminD">_forever_ › WTF › Account › TON_COMPTE ›<br>SavedVariables › <b>GuildExport.lua</b></span>
+   </div>
+  </div>
+ </div>
+
+ <!-- E · Envoyer sur le site -->
+ <div class="scene" id="sE">
+  <div class="abs fen nav" style="left:140px;top:72px;width:1000px;height:480px">
+   <div class="onglets"><span style="color:#7d8597;font-size:14px">‹ ›</span><div class="url"><svg viewBox="0 0 12 12"><path d="M3 5V4a3 3 0 0 1 6 0v1h1v6H2V5Zm1.5 0h3V4a1.5 1.5 0 0 0-3 0Z" fill="#5ee3a6"/></svg>quartz.gawel.be/<b style="color:#fff">contribuer</b></div></div>
+   <div class="page">
+    <h2><svg><use href="#s-cristal"/></svg>Envoyer mes données</h2>
+    <div class="form">
+     <div>Envoi au nom de <b>Gael</b> (connecté avec Discord) · <a>Mon compte</a></div>
+     <label>Ton fichier GuildExport.lua
+      <div class="choix"><span class="bt" id="btParcourir">Parcourir…</span><span class="nom" id="nomVide">Aucun fichier sélectionné.</span><span class="nom f" id="nomOk" style="color:#fff;font-weight:600">GuildExport.lua</span></div>
+     </label>
+     <div class="envoyer" id="btEnvoyer">Envoyer</div>
+    </div>
+    <div class="msg" style="margin:14px 0 0" id="msgE">Merci Gael ! 42 personnages lus, 6 mises à jour.</div>
+   </div>
+  </div>
+  <div class="abs fen dialogue f" id="dlgE" style="left:420px;top:190px;width:600px;height:270px">
+   <div class="barre-titre">Ouvrir<span class="pts"><span>✕</span></span></div>
+   <div class="adresse" style="font-size:13px">_forever_<span class="sep">›</span>WTF<span class="sep">›</span>Account<span class="sep">›</span>TON_COMPTE<span class="sep">›</span><b>SavedVariables</b></div>
+   <div class="ligne" id="lgLua"><svg class="ico"><use href="#s-lua"/></svg>GuildExport.lua<small>Fichier LUA</small></div>
+   <div class="ligne" style="color:#7d8597"><svg class="ico" style="opacity:.5"><use href="#s-lua"/></svg>GuildExport.lua.bak<small>Fichier BAK</small></div>
+   <div class="abs" id="btOuvrir" style="right:18px;bottom:16px;padding:7px 22px;border-radius:6px;background:#3b6fd8;font-size:14px">Ouvrir</div>
+  </div>
+  <div class="curseur" id="cE"><span class="onde"></span><svg><use href="#s-fleche"/></svg></div>
+ </div>
+
+ <!-- F · Fin -->
+ <div class="scene" id="sF">
+  <svg class="cristal" style="top:140px"><use href="#s-cristal"/></svg>
+  <div class="grand" style="top:300px"><h1>C'est tout !</h1>
+   <p>Après chaque session : <span class="mono" style="color:var(--givre)">/reload</span> ou déconnexion, puis renvoie le fichier.</p>
+   <div class="pilule">quartz.gawel.be/<b>contribuer</b></div></div>
+ </div>
+
+ <!-- Légendes -->
+ <div class="abs legende">
+  <div class="leg" id="lB"><b>Copie le dossier GuildExport</b><span>dans <code>World of Warcraft\_forever_\Interface\AddOns\</code></span></div>
+  <div class="leg" id="lC"><b>Active l'addon</b><span>Sélection du personnage → <code>AddOns</code> → coche <code>Guild Export</code></span></div>
+  <div class="leg" id="lD"><b>Joue, puis tape /reload ou déconnecte-toi</b><span>Le jeu n'écrit le fichier qu'à ce moment-là</span></div>
+  <div class="leg" id="lE"><b>Envoie le fichier sur le site</b><span>Connecté avec Discord (sinon ta clé de la page <code>Mon compte</code>) → Parcourir → Envoyer</span></div>
+ </div>
+ <div class="abs" id="barre"><i></i></div>
+</div>
+
+<script>
+(function(){
+var T = 30, A = [], stage = document.getElementById("stage");
+function $(s){ return typeof s === "string" ? stage.querySelector(s) : s; }
+function anim(s, t0, t1, kf, easing){
+  A.push($(s).animate(kf, {delay: t0 * 1000, duration: (t1 - t0) * 1000, fill: "forwards", easing: easing || "ease"}));
+}
+function entre(s, t, d){ anim(s, t, t + (d || .45), [{opacity: 0, transform: "translateY(14px)"}, {opacity: 1, transform: "none"}], "ease-out"); }
+function sort(s, t, d){ anim(s, t, t + (d || .35), [{opacity: 1}, {opacity: 0}]); }
+function fond(s, t, d){ anim(s, t, t + (d || .3), [{opacity: 0}, {opacity: 1}]); }
+function tape(s, t0, t1, n){ anim(s, t0, t1, [{clipPath: "inset(0 100% 0 0)"}, {clipPath: "inset(0 0 0 0)"}], "steps(" + n + ",end)"); }
+function scene(s, t0, t1){ fond(s, t0, .4); if (t1) sort(s, t1 - .4, .4); }
+// Centre d'un élément dans le repère de la scène (calculé avant toute animation, échelle 1).
+function pos(s, dx, dy){
+  var r = $(s).getBoundingClientRect(), b = stage.getBoundingClientRect();
+  return [r.left - b.left + r.width / 2 + (dx || 0), r.top - b.top + r.height / 2 + (dy || 0)];
+}
+function curseur(s, pts){
+  var P = pts.map(function(p){ return [p[0], typeof p[1] === "string" ? pos(p[1]) : p[1]]; });
+  var t0 = P[0][0], t1 = P[P.length - 1][0];
+  anim(s, t0, t1, P.map(function(p){ return {offset: (p[0] - t0) / (t1 - t0),
+    transform: "translate(" + p[1][0] + "px," + p[1][1] + "px)", easing: "cubic-bezier(.45,.05,.3,1)"}; }), "linear");
+}
+function clic(s, t){
+  anim(s + " .onde", t, t + .5, [{opacity: .95, transform: "translate(-50%,-50%) scale(.2)"}, {opacity: 0, transform: "translate(-50%,-50%) scale(1.5)"}], "ease-out");
+  anim(s + " svg", t, t + .22, [{transform: "scale(1)"}, {transform: "scale(.8)"}, {transform: "scale(1)"}]);
+}
+function etape(n, t0, t1){ fond("#e" + n + " .on", t0, .3); sort("#e" + n + " .on", t1 - .3, .3); }
+
+// Positions des cibles (avant animation).
+var P = {zip: pos("#zip"), ligne: pos("#ligneB .ico"), addons: pos("#btnAddons"), boite: pos("#caseC .boite"),
+  parcourir: pos("#btParcourir"), lua: pos("#lgLua"), ouvrir: pos("#btOuvrir"), envoyer: pos("#btEnvoyer")};
+
+// A · Intro (0 – 2,8)
+scene("#sA", 0, 2.8);
+anim("#cA", 0, 2.8, [{transform: "translateY(10px) rotate(-6deg)"}, {transform: "translateY(-6px) rotate(4deg)"}], "ease-in-out");
+
+// B · Installer (2,8 – 10,6)
+scene("#sB", 2.8, 10.6); etape(1, 2.8, 10.6); entre("#lB", 3.0); sort("#lB", 10.2);
+entre("#zip", 3.1);
+sort("#zip", 4.4, .4); anim("#dossier", 4.4, 4.9, [{opacity: 0, transform: "scale(.85)"}, {opacity: 1, transform: "scale(1)"}], "ease-out");
+entre("#exp", 4.9);
+tape("#adrB", 5.4, 6.9, 18);
+anim("#cB", 6.4, 6.6, [{opacity: 0}, {opacity: 1}]);
+curseur("#cB", [[6.4, [420, 560]], [7.2, P.zip], [7.4, P.zip], [8.6, [P.ligne[0] + 8, P.ligne[1] + 4]], [10.6, [P.ligne[0] + 8, P.ligne[1] + 4]]]);
+clic("#cB", 7.2);
+// le dossier suit le curseur, réduit, puis se pose dans la liste
+var dx = P.ligne[0] - P.zip[0], dy = P.ligne[1] - P.zip[1];
+anim("#dossier", 7.4, 8.6, [{transform: "translate(0,0) scale(1)"},
+  {transform: "translate(" + dx + "px," + dy + "px) scale(.22)"}], "cubic-bezier(.45,.05,.3,1)");
+anim("#dossier", 8.55, 8.75, [{opacity: 1}, {opacity: 0}]);
+clic("#cB", 8.6);
+fond("#ligneB", 8.6, .25);
+entre("#astuceB", 9.0);
+anim("#cB", 9.6, 9.9, [{opacity: 1}, {opacity: 0}]);
+
+// C · Activer (10,6 – 15,8)
+scene("#sC", 10.6, 15.8); etape(2, 10.6, 15.8); entre("#lC", 10.8); sort("#lC", 15.4);
+anim("#cC", 11.0, 11.2, [{opacity: 0}, {opacity: 1}]);
+curseur("#cC", [[11.0, [760, 600]], [11.9, P.addons], [12.1, P.addons], [12.9, P.boite], [15.8, P.boite]]);
+clic("#cC", 12.0);
+anim("#modC", 12.25, 12.6, [{opacity: 0, transform: "scale(.94)"}, {opacity: 1, transform: "scale(1)"}], "ease-out");
+clic("#cC", 13.1);
+anim("#cocheC", 13.15, 13.4, [{opacity: 0, transform: "scale(.4)"}, {opacity: 1, transform: "scale(1)"}], "cubic-bezier(.3,1.6,.5,1)");
+anim("#caseC", 13.15, 13.5, [{background: "rgba(240,195,90,0)"}, {background: "rgba(240,195,90,.12)"}]);
+anim("#cC", 14.6, 14.9, [{opacity: 1}, {opacity: 0}]);
+
+// D · Enregistrer (15,8 – 21)
+scene("#sD", 15.8, 21); etape(3, 15.8, 21); entre("#lD", 16.0); sort("#lD", 20.6);
+tape("#tapeD", 16.6, 17.6, 7);
+anim("#flashD", 17.9, 18.7, [{opacity: 0}, {opacity: .85, offset: .35}, {opacity: 0}], "ease-in-out");
+anim("#tapeD", 18.1, 18.15, [{opacity: 1}, {opacity: 0}]);
+entre("#toastD", 18.7, .5);
+tape("#cheminD", 19.0, 19.9, 12);
+
+// E · Envoyer (21 – 28)
+scene("#sE", 21, 28); etape(4, 21, 28); entre("#lE", 21.2); sort("#lE", 27.6);
+anim("#cE", 21.4, 21.6, [{opacity: 0}, {opacity: 1}]);
+curseur("#cE", [[21.4, [900, 620]], [22.3, P.parcourir], [22.5, P.parcourir], [23.4, P.lua], [23.8, P.lua], [24.4, P.ouvrir],
+  [24.7, P.ouvrir], [25.5, P.envoyer], [28, P.envoyer]]);
+clic("#cE", 22.4);
+anim("#dlgE", 22.65, 22.95, [{opacity: 0, transform: "translateY(10px)"}, {opacity: 1, transform: "none"}], "ease-out");
+clic("#cE", 23.5);
+anim("#lgLua", 23.55, 23.7, [{background: "rgba(59,111,216,0)"}, {background: "rgba(59,111,216,.45)"}]);
+clic("#cE", 24.5);
+sort("#dlgE", 24.6, .25);
+sort("#nomVide", 24.7, .15); fond("#nomOk", 24.8, .25);
+clic("#cE", 25.6);
+anim("#btEnvoyer", 25.6, 25.85, [{transform: "scale(1)"}, {transform: "scale(.94)"}, {transform: "scale(1)"}]);
+anim("#msgE", 26.0, 26.45, [{opacity: 0, height: "0px", paddingTop: "0px", paddingBottom: "0px"},
+  {opacity: 1, height: "48px", paddingTop: "12px", paddingBottom: "12px"}], "ease-out");
+anim("#cE", 27.0, 27.3, [{opacity: 1}, {opacity: 0}]);
+
+// F · Fin (28 – 30)
+scene("#sF", 28, null);
+anim("#barre i", 0, T, [{transform: "scaleX(0)"}, {transform: "scaleX(1)"}], "linear");
+
+function seek(t){ A.forEach(function(a){ a.pause(); a.currentTime = t * 1000; }); }
+window.seek = seek; window.DUREE = T;
+
+function ajuster(){
+  var k = Math.min(innerWidth / 1280, innerHeight / 720);
+  stage.style.transform = "translate(" + (innerWidth - 1280 * k) / 2 + "px," + (innerHeight - 720 * k) / 2 + "px) scale(" + k + ")";
+}
+ajuster(); addEventListener("resize", ajuster);
+
+var q = new URLSearchParams(location.search);
+if (q.has("rec")) { seek(0); return; }
+if (q.has("t")) { seek(parseFloat(q.get("t")) || 0); return; }
+var debut = performance.now(), arret = false, t = 0;
+function boucle(){ if (!arret) { t = ((performance.now() - debut) / 1000) % (T + 1.5); seek(Math.min(t, T)); } requestAnimationFrame(boucle); }
+function basculer(){ arret = !arret; if (!arret) debut = performance.now() - t * 1000; }
+addEventListener("click", basculer);
+addEventListener("keydown", function(e){ if (e.code === "Space") { e.preventDefault(); basculer(); } });
+requestAnimationFrame(boucle);
+})();
+</script>
+</body>
+</html>

@@ -60,6 +60,12 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   **BOM UTF-8** (sinon accents cassés sous Windows PowerShell 5.1). Variables de test :
   `QUARTZ_SERVEUR`, `QUARTZ_UNE_FOIS`.
 - `docs/README-guilde.md` : mode d'emploi non technique pour la guilde.
+- `docs/animation-installation.html` (+ `.mp4`) : animation ~30 s (installer l'addon → activer → `/reload` →
+  envoi sur `/contribuer`), volontairement **sans** le script `client/` (trop de soucis Windows).
+  Timeline en Web Animations API (`anim()`, `curseur()`, `clic()`), `window.seek(t)` ; `?t=12` = image
+  fixe, `?rec` = pilotage externe. MP4 régénéré par `node tools/rendre_animation.js` (Playwright, ffmpeg,
+  `APERCU="3,8"` = quelques PNG). Maquettes génériques (aucun visuel Blizzard). À refaire si l'URL,
+  le formulaire `/contribuer` ou le dossier de l'addon change.
 - `ha/configuration.yaml` : rest_command à ajouter côté Home Assistant.
 - `repository.yaml` (v1.11.0) : fait du dépôt un dépôt d'apps HA (le Supervisor trouve
   `ha-app/quartz_forever/config.yaml` en parcourant le dépôt).
@@ -360,7 +366,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 7. Surveiller la publication de l'espace de noms API Forever (`--royaumes`) ; renseigner
    `bnet_espace` / `bnet_royaume` / `bnet_guilde` (`lire_api_blizzard()` est branchée en v1.9.0). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).
-8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
+8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`, animation
+   `docs/animation-installation.mp4` (à poster sur Discord avec le lien de l'addon),
    lien https://quartz.gawel.be/moi (connexion Discord : liaison auto si le nom Discord = pseudo,
    sinon clé en MP ou nouveau pseudo).
 9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.

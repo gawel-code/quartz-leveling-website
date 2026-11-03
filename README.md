@@ -86,6 +86,8 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `ha-app/quartz_forever/` | **le serveur** : app locale Home Assistant (`config.yaml`, `Dockerfile`, `run.sh`, `app.py`, images ; `icon.png` = icône de l'app dans Home Assistant) |
 | `client/` | envoi automatique pour les membres (Windows) : `lancer.bat` (double-clic ; demande la clé au premier lancement, trouve le fichier, journal dans `%APPDATA%\QuartzForever\envoi.log`), `changer-cle.bat`, `envoi-guilde.ps1` |
 | `docs/README-guilde.md` | mode d'emploi non technique pour la guilde |
+| `docs/animation-installation.html` / `.mp4` | animation de ~30 s pour la guilde : installer l'addon puis envoyer `GuildExport.lua` sur `/contribuer` (sans le script `client/`). HTML autonome en boucle (clic = pause) ; le MP4 (1920×1080) est à poster sur Discord |
+| `tools/rendre_animation.js` | régénère le MP4 de l'animation (Playwright + ffmpeg : `node tools/rendre_animation.js`) |
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `repository.yaml` | déclare ce dépôt comme dépôt d'apps Home Assistant |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
