@@ -643,6 +643,46 @@ def courbe(con, mes_noms=()):
                                   "niveaux": niv} for n, niv in persos.items()]}
 
 
+def duree(debut, fin):
+    """Durée lisible entre deux dates ISO : « 45 min », « 6 h », « 1 j 12 h »."""
+    minutes = int((datetime.datetime.fromisoformat(fin) - datetime.datetime.fromisoformat(debut)).total_seconds() // 60)
+    jours, heures = minutes // 1440, minutes % 1440 // 60
+    if jours:
+        return f"{jours} j {heures} h" if heures else f"{jours} j"
+    return f"{heures} h" if heures else f"{minutes} min" if minutes else "< 1 min"
+
+
+def fiche(con, nom):
+    """Récapitulatif du leveling d'un personnage (None s'il est inconnu ou exclu)."""
+    perso = con.execute("""SELECT * FROM personnages WHERE nom=?
+                           AND nom NOT IN (SELECT nom FROM inactifs)""", (nom,)).fetchone()
+    if perso is None:
+        return None
+    debut = con.execute("SELECT MIN(date) FROM historique WHERE nom=?", (nom,)).fetchone()[0]
+    rangs = {r["palier"]: r["rang"] for r in con.execute("SELECT palier, rang FROM exploits WHERE nom=?", (nom,))}
+    paliers, avant = [], debut
+    for palier in PALIERS:
+        date = date_atteinte(con, nom, palier) if perso["niveau"] >= palier else None
+        paliers.append({"palier": palier, "date": date, "rang": rangs.get(palier),
+                        "duree": duree(avant, date) if date and avant else None})
+        avant = date
+    classement = [r[0] for r in con.execute("""SELECT nom FROM personnages WHERE nom NOT IN
+                  (SELECT nom FROM inactifs) ORDER BY niveau DESC, nom""")]
+    extremes = con.execute("""SELECT MIN(niveau) n0, MIN(date) d0, MAX(niveau) n1, MAX(date) d1
+                              FROM historique WHERE nom=?""", (nom,)).fetchone()
+    jours = ((datetime.datetime.fromisoformat(extremes["d1"]) - datetime.datetime.fromisoformat(extremes["d0"]))
+             .total_seconds() / 86400) if extremes["d0"] else 0
+    rythme = round((extremes["n1"] - extremes["n0"]) / jours, 1) if jours >= 1 / 24 else None
+    historique, avant = [], None
+    for h in con.execute("SELECT niveau, date FROM historique WHERE nom=? ORDER BY niveau", (nom,)):
+        historique.insert(0, {"niveau": h["niveau"], "date": h["date"], "duree": duree(avant, h["date"]) if avant else None})
+        avant = h["date"]
+    return {"perso": dict(perso), "paliers": paliers, "historique": historique, "courbe": courbe(con, [nom]), "place": classement.index(nom) + 1,
+            "membres": len(classement), "rythme": rythme, "gain24": gains(con, 24).get(nom, 0),
+            "joueur": proprietaires(con, [nom]).get(nom),
+            "nom_rang": None if perso["rang"] is None else noms_rangs(con).get(perso["rang"]) or f"Rang {perso['rang']}"}
+
+
 def recap():
     with db() as con:
         persos = con.execute("""SELECT * FROM personnages WHERE nom NOT IN (SELECT nom FROM inactifs)
@@ -833,6 +873,17 @@ button.perso .plus{font:700 1.1rem var(--f-titre);color:var(--c);opacity:.8}
 @media (max-width:600px){.recherche,.filtres{width:100%}.filtres>*{flex:1}}
 .bloc .table-wrap{margin:0 -22px;padding:0 22px}
 .bloc table{min-width:700px}
+a.lien-perso{color:inherit}a.lien-perso:hover{text-decoration:underline}
+.cta.fiche{padding:4px 10px;font-size:.75rem}
+.identite{padding:16px 18px;font-size:1rem}.identite .perso-id b{font-size:1.25rem}
+.identite .perso-id small{font-size:.85rem;white-space:normal}
+.niv.gros{font-size:1.3rem;min-width:56px;padding:6px 10px}
+.paliers.perso6{grid-template-columns:repeat(6,1fr)}
+@media (max-width:860px){.paliers.perso6{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:520px){.paliers.perso6{grid-template-columns:repeat(2,1fr)}}
+.palier.non{opacity:.5}
+.palier .quand{font-size:.8rem}.palier .rang-palier{font-weight:700;font-size:.85rem}
+.palier .duree{color:var(--doux);font-size:.75rem}
 td .persoligne{display:flex;align-items:center;gap:10px}
 td .persoligne b{font-family:var(--f-titre);font-weight:600;color:var(--c)}
 td .persoligne small{color:var(--doux);font-size:.74rem;display:block;font-weight:500}
@@ -888,94 +939,7 @@ ENTETE = """<header>
 {% else %}<a class="cta sec" href="{{ url_connexion() }}">Connexion Discord</a>{% endif %}{% endif %}</div>
 </header>"""
 
-PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ guilde }} — Progression</title>""" + STYLE + """</head><body><div class="page">
-""" + ENTETE + """
-
-<section class="stats">
- <div class="carte stat"><span>Membres suivis</span><b class="num">{{ persos|length }}</b><em>{{ actifs }} actifs en 24 h</em></div>
- <div class="carte stat"><span>Niveau moyen</span><b class="num">{{ moyenne }}</b><em>&nbsp;</em></div>
- <div class="carte stat"><span>Niveau 60</span><b class="num">{{ nb60 }}</b><em>&nbsp;</em></div>
- <div class="carte stat"><span>Niveaux gagnés en 24 h</span><b class="num">+{{ total24 }}</b><em>&nbsp;</em></div>
-</section>
-
-<section class="carte bloc courbe-carte">
-<div class="bloc-tete"><h2>Progression de la guilde <small>niveau de chaque membre, jour après jour</small></h2>
-<div class="legende" id="legende" aria-hidden="true"></div></div>
-<div class="courbe" id="courbe" role="img" aria-label="Courbe de progression des niveaux de la guilde depuis le 4 novembre"></div>
-<div class="infobulle" id="infobulle" hidden></div>
-{% if not connecte and discord_actif %}<small><a href="{{ url_connexion() }}">Connecte-toi</a> pour voir tes personnages sur la courbe.</small>{% endif %}
-<details class="donnees"><summary>Voir les données</summary><div class="table-wrap"><table><thead><tr><th>Jour</th><th>Persos</th><th>Moyenne</th>
-<th>Q1</th><th>Médiane</th><th>Q3</th><th>Min</th><th>Max</th>{% for c in donnees_courbe.persos %}<th>{{ c.nom }}</th>{% endfor %}</tr></thead><tbody>
-{% for j in donnees_courbe.jours %}{% set i = loop.index0 %}<tr><td>{{ j[8:] }}/{{ j[5:7] }}</td><td class="num">{{ donnees_courbe.n[i] }}</td>
-{% for k in ("moyenne", "q1", "mediane", "q3", "min", "max") %}<td class="num">{{ donnees_courbe[k][i] if donnees_courbe[k][i] is not none else "—" }}</td>{% endfor %}
-{% for c in donnees_courbe.persos %}<td class="num">{{ c.niveaux[i] if c.niveaux[i] is not none else "—" }}</td>{% endfor %}</tr>
-{% else %}<tr><td colspan="8">La courbe démarre le 4 novembre.</td></tr>{% endfor %}</tbody></table></div></details>
-<script type="application/json" id="donnees-courbe">{{ donnees_courbe|tojson }}</script>
-</section>
-
-<section class="sec">
-<h2>Tableau d'honneur <small>les trois premiers à chaque palier</small></h2>
-<div class="carte p60"><h3>Panthéon du niveau 60<small>chaque membre qui atteint 60</small></h3><div class="liste">
-{% for e in exploits.get(60, []) %}
- <div class="heros"><span class="r">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</b>
- <small>{{ classes.get(e.nom, '') }} · {{ e.date[:16].replace("T", " ") }}</small></div></div>
-{% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
-</div></div>
-<div class="paliers">
-{% for p in paliers if p != 60 %}
- <div class="carte palier"><h3>Niveau<b>{{ p }}</b></h3>
- {% for e in exploits.get(p, [])[:3] %}
-  <div class="e"><span class="m m{{ e.rang }}">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}">{{ e.nom }}</b>
-  <small>{{ e.date[:16].replace("T", " ") }}</small></div></div>
- {% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
- </div>
-{% endfor %}
-</div>
-</section>
-
-<section class="sec">
-<div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
-<select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
-{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
-<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Progression</th><th>24 h</th></tr></thead><tbody>
-{% for p in persos %}
-<tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
-<td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span>{{ p.nom }}
-{%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
-<td>{{ p.race }}</td><td>{{ p.classe }}</td>
-{% if avec_rangs %}<td class="rang-guilde">{% if p.rang is not none %}{{ rangs.get(p.rang) or "Rang " ~ p.rang }}{% endif %}</td>{% endif %}
-<td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
-<td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
-<td>{% if g24.get(p.nom, 0) > 0 %}<span class="gain num">+{{ g24[p.nom] }}</span>{% endif %}</td></tr>
-{% else %}<tr><td colspan="{{ 8 if avec_rangs else 7 }}">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
-</tbody></table></div>
-</section>
-
-{% if top %}<section class="sec">
-<h2>Meilleurs contributeurs <small>merci pour vos envois !</small></h2>
-<div class="contribs">{% for c in top %}
- <div class="carte contrib"><span class="m m{{ loop.index }}">{{ loop.index }}</span>
- <div><b>{% if c.discord %}<a href="https://discord.com/users/{{ c.discord }}" target="_blank" rel="noopener">{{ c.pseudo }}</a>{% else %}{{ c.pseudo }}{% endif %}</b>
- <small><b class="num">{{ c.montees }}</b> montée{{ "s" if c.montees > 1 }} de niveau signalée{{ "s" if c.montees > 1 }} · {{ c.envois }} envoi{{ "s" if c.envois > 1 }}</small></div></div>
-{% endfor %}</div>
-</section>{% endif %}
-
-<section class="carte fil-carte sec">
-<h2>Dernières montées de niveau</h2>
-<ul class="fil">
-{% for r in recents %}<li><span class="nv num{{ ' max' if r.niveau == 60 else '' }}">{{ r.niveau }}</span>
-<span><b style="color:{{ couleur(classes.get(r.nom, '')) }}">{{ r.nom }}</b>
-{{ "atteint le niveau max" if r.niveau == 60 else "passe niveau " ~ r.niveau }}</span>
-<small>{{ r.date[:16].replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
-</ul>
-</section>
-
-<footer><img src="logo.png?v={{ version }}" alt="">{{ guilde }} · données collectées par l'addon GuildExport · v{{ version }}</footer>
-</div>
-<script>
-// ---------- Courbe de progression (SVG dessiné à la main, aucune bibliothèque) ----------
+COURBE_JS = """// ---------- Courbe de progression (SVG dessiné à la main, aucune bibliothèque) ----------
 (function(){
  var D=JSON.parse(document.getElementById("donnees-courbe").textContent),
   boite=document.getElementById("courbe"),bulle=document.getElementById("infobulle"),NS="http://www.w3.org/2000/svg",
@@ -1050,10 +1014,153 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  }
  dessiner();var att;window.addEventListener("resize",function(){clearTimeout(att);att=setTimeout(dessiner,120);});
 })();
-function filtrer(c){var n=0;document.querySelectorAll("tbody tr[data-classe]").forEach(function(tr){
+"""
+
+PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ guilde }} — Progression</title>""" + STYLE + """</head><body><div class="page">
+""" + ENTETE + """
+
+<section class="stats">
+ <div class="carte stat"><span>Membres suivis</span><b class="num">{{ persos|length }}</b><em>{{ actifs }} actifs en 24 h</em></div>
+ <div class="carte stat"><span>Niveau moyen</span><b class="num">{{ moyenne }}</b><em>&nbsp;</em></div>
+ <div class="carte stat"><span>Niveau 60</span><b class="num">{{ nb60 }}</b><em>&nbsp;</em></div>
+ <div class="carte stat"><span>Niveaux gagnés en 24 h</span><b class="num">+{{ total24 }}</b><em>&nbsp;</em></div>
+</section>
+
+<section class="carte bloc courbe-carte">
+<div class="bloc-tete"><h2>Progression de la guilde <small>niveau de chaque membre, jour après jour</small></h2>
+<div class="legende" id="legende" aria-hidden="true"></div></div>
+<div class="courbe" id="courbe" role="img" aria-label="Courbe de progression des niveaux de la guilde depuis le 4 novembre"></div>
+<div class="infobulle" id="infobulle" hidden></div>
+{% if not connecte and discord_actif %}<small><a href="{{ url_connexion() }}">Connecte-toi</a> pour voir tes personnages sur la courbe.</small>{% endif %}
+<details class="donnees"><summary>Voir les données</summary><div class="table-wrap"><table><thead><tr><th>Jour</th><th>Persos</th><th>Moyenne</th>
+<th>Q1</th><th>Médiane</th><th>Q3</th><th>Min</th><th>Max</th>{% for c in donnees_courbe.persos %}<th>{{ c.nom }}</th>{% endfor %}</tr></thead><tbody>
+{% for j in donnees_courbe.jours %}{% set i = loop.index0 %}<tr><td>{{ j[8:] }}/{{ j[5:7] }}</td><td class="num">{{ donnees_courbe.n[i] }}</td>
+{% for k in ("moyenne", "q1", "mediane", "q3", "min", "max") %}<td class="num">{{ donnees_courbe[k][i] if donnees_courbe[k][i] is not none else "—" }}</td>{% endfor %}
+{% for c in donnees_courbe.persos %}<td class="num">{{ c.niveaux[i] if c.niveaux[i] is not none else "—" }}</td>{% endfor %}</tr>
+{% else %}<tr><td colspan="8">La courbe démarre le 4 novembre.</td></tr>{% endfor %}</tbody></table></div></details>
+<script type="application/json" id="donnees-courbe">{{ donnees_courbe|tojson }}</script>
+</section>
+
+<section class="sec">
+<h2>Tableau d'honneur <small>les trois premiers à chaque palier</small></h2>
+<div class="carte p60"><h3>Panthéon du niveau 60<small>chaque membre qui atteint 60</small></h3><div class="liste">
+{% for e in exploits.get(60, []) %}
+ <div class="heros"><span class="r">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}"><a class="lien-perso" href="perso/{{ e.nom|urlencode }}">{{ e.nom }}</a></b>
+ <small>{{ classes.get(e.nom, '') }} · {{ e.date[:16].replace("T", " ") }}</small></div></div>
+{% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
+</div></div>
+<div class="paliers">
+{% for p in paliers if p != 60 %}
+ <div class="carte palier"><h3>Niveau<b>{{ p }}</b></h3>
+ {% for e in exploits.get(p, [])[:3] %}
+  <div class="e"><span class="m m{{ e.rang }}">{{ e.rang }}</span><div><b style="color:{{ couleur(classes.get(e.nom, '')) }}"><a class="lien-perso" href="perso/{{ e.nom|urlencode }}">{{ e.nom }}</a></b>
+  <small>{{ e.date[:16].replace("T", " ") }}</small></div></div>
+ {% else %}<span class="vide">Personne pour l'instant…</span>{% endfor %}
+ </div>
+{% endfor %}
+</div>
+</section>
+
+<section class="sec">
+<div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
+<select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
+{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Progression</th><th>24 h</th></tr></thead><tbody>
+{% for p in persos %}
+<tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
+<td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span><a class="lien-perso" href="perso/{{ p.nom|urlencode }}">{{ p.nom }}</a>
+{%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
+<td>{{ p.race }}</td><td>{{ p.classe }}</td>
+{% if avec_rangs %}<td class="rang-guilde">{% if p.rang is not none %}{{ rangs.get(p.rang) or "Rang " ~ p.rang }}{% endif %}</td>{% endif %}
+<td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
+<td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
+<td>{% if g24.get(p.nom, 0) > 0 %}<span class="gain num">+{{ g24[p.nom] }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="{{ 8 if avec_rangs else 7 }}">Aucune donnée pour l'instant. Envoie ton fichier GuildExport.lua !</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+
+{% if top %}<section class="sec">
+<h2>Meilleurs contributeurs <small>merci pour vos envois !</small></h2>
+<div class="contribs">{% for c in top %}
+ <div class="carte contrib"><span class="m m{{ loop.index }}">{{ loop.index }}</span>
+ <div><b>{% if c.discord %}<a href="https://discord.com/users/{{ c.discord }}" target="_blank" rel="noopener">{{ c.pseudo }}</a>{% else %}{{ c.pseudo }}{% endif %}</b>
+ <small><b class="num">{{ c.montees }}</b> montée{{ "s" if c.montees > 1 }} de niveau signalée{{ "s" if c.montees > 1 }} · {{ c.envois }} envoi{{ "s" if c.envois > 1 }}</small></div></div>
+{% endfor %}</div>
+</section>{% endif %}
+
+<section class="carte fil-carte sec">
+<h2>Dernières montées de niveau</h2>
+<ul class="fil">
+{% for r in recents %}<li><span class="nv num{{ ' max' if r.niveau == 60 else '' }}">{{ r.niveau }}</span>
+<span><b style="color:{{ couleur(classes.get(r.nom, '')) }}"><a class="lien-perso" href="perso/{{ r.nom|urlencode }}">{{ r.nom }}</a></b>
+{{ "atteint le niveau max" if r.niveau == 60 else "passe niveau " ~ r.niveau }}</span>
+<small>{{ r.date[:16].replace("T", " ") }}</small></li>{% else %}<li><small>Rien pour l'instant.</small></li>{% endfor %}
+</ul>
+</section>
+
+<footer><img src="logo.png?v={{ version }}" alt="">{{ guilde }} · données collectées par l'addon GuildExport · v{{ version }}</footer>
+</div>
+<script>
+""" + COURBE_JS + """function filtrer(c){var n=0;document.querySelectorAll("tbody tr[data-classe]").forEach(function(tr){
  var ok=!c||tr.dataset.classe===c;tr.style.display=ok?"":"none";if(ok)n++;});
  document.getElementById("compte").textContent=n+" membre"+(n>1?"s":"");}
 </script></body></html>"""
+
+FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<base href="../"><title>{{ perso.nom }} — {{ guilde }}</title>""" + STYLE + """</head><body><div class="page">
+""" + ENTETE + """
+<section class="carte perso identite" style="--c:{{ couleur(perso.classe) }}">
+<span class="embleme">{{ embleme(perso.classe) }}</span>
+<span class="perso-id"><b>{{ perso.nom }}</b><small>{{ perso.race ~ ' · ' if perso.race and perso.race != '?' }}{{ perso.classe }}
+{%- if nom_rang %} · {{ nom_rang }}{% endif %}
+{%- if joueur %} · {% if joueur.discord %}<a class="joueur" href="https://discord.com/users/{{ joueur.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ joueur.pseudo }}">@{{ joueur.pseudo }}</a>{% else %}<span class="joueur">@{{ joueur.pseudo }}</span>{% endif %}{% endif %}</small></span>
+<span class="niv gros num{{ ' max' if perso.niveau == 60 else '' }}">{{ perso.niveau }}</span>
+</section>
+
+<section class="stats">
+ <div class="carte stat"><span>Niveau</span><b class="num">{{ perso.niveau }}<small>/60</small></b>
+ <div class="barre"><i class="{{ 'max' if perso.niveau == 60 else '' }}" style="width:{{ (perso.niveau / 60 * 100)|round|int }}%"></i></div></div>
+ <div class="carte stat"><span>Place au classement</span><b class="num">{{ ordinal(place) }}</b><em>sur {{ membres }} membre{{ "s" if membres > 1 }}</em></div>
+ <div class="carte stat"><span>Rythme moyen</span><b class="num">{{ ("%.1f"|format(rythme)).replace(".", ",") if rythme is not none else "—" }}</b><em>niveaux par jour</em></div>
+ <div class="carte stat"><span>Niveaux gagnés en 24 h</span><b class="num">{{ "+" ~ gain24 if gain24 > 0 else "0" }}</b><em>&nbsp;</em></div>
+</section>
+
+<section class="sec">
+<h2>Paliers <small>date réelle, rang dans la guilde et temps depuis le palier précédent</small></h2>
+<div class="paliers perso6">
+{% for p in paliers %}
+ <div class="carte palier{{ '' if p.date else ' non' }}"><h3>Niveau {{ p.palier }}</h3>
+ {% if p.date %}<span class="quand">{{ date_lisible(p.date) }}</span>
+ {% if p.rang %}<span class="rang-palier">{{ medailles.get(p.rang, "🏆" if p.palier == 60 else "⭐") }} {{ ordinal(p.rang) }} de la guilde</span>{% endif %}
+ {% if p.duree %}<span class="duree">en {{ p.duree }}</span>{% endif %}
+ {% else %}<span class="vide">Pas encore…</span>{% endif %}
+ </div>
+{% endfor %}
+</div>
+</section>
+
+<section class="carte bloc courbe-carte">
+<div class="bloc-tete"><h2>Progression <small>{{ perso.nom }} face au reste de la guilde</small></h2>
+<div class="legende" id="legende" aria-hidden="true"></div></div>
+<div class="courbe" id="courbe" role="img" aria-label="Courbe de progression de {{ perso.nom }} comparée à la guilde"></div>
+<div class="infobulle" id="infobulle" hidden></div>
+<script type="application/json" id="donnees-courbe">{{ courbe|tojson }}</script>
+</section>
+
+<section class="carte bloc">
+<div class="bloc-tete"><h2>Historique des niveaux <small>{{ historique|length }} montée{{ "s" if historique|length > 1 }} datée{{ "s" if historique|length > 1 }}</small></h2></div>
+<div class="table-wrap"><table><thead><tr><th>Niveau</th><th>Date</th><th>Depuis le niveau précédent</th></tr></thead><tbody>
+{% for h in historique %}<tr><td><span class="niv num{{ ' max' if h.niveau == 60 else '' }}">{{ h.niveau }}</span></td>
+<td>{{ date_lisible(h.date) }}</td><td>{{ h.duree or "—" }}</td></tr>
+{% else %}<tr><td colspan="3">Aucune montée de niveau enregistrée.</td></tr>{% endfor %}
+</tbody></table></div>
+<small>Dates de l'addon quand il a vu la montée, sinon date de réception des données.</small>
+</section>
+""" + PIED + """</div>
+<script>""" + COURBE_JS + """</script></body></html>"""
 
 FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1133,6 +1240,7 @@ COMPTE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  {% if mes_persos %}<div class="persos">
  {% for m in mes_persos %}{% set info = infos.get(m.nom) %}
  <div class="perso" style="--c:{{ couleur(info.classe if info else '') }}">{{ carte_perso(m.nom, info) }}
+ {% if info and m.nom not in exclus %}<a class="cta sec fiche" href="perso/{{ m.nom|urlencode }}" title="Fiche de {{ m.nom }}">Fiche</a>{% endif %}
  {% if m.nom in exclus %}<span class="puce exclu" title="Exclu de la progression par un officier">{{ motifs.get(exclus[m.nom], "exclu") }}</span>{% endif %}
  {% if m.source == "manuel" %}<form method="post"><input type="hidden" name="action" value="retirer"><input type="hidden" name="nom" value="{{ m.nom }}">
  <button class="sec retirer" type="submit" title="Retirer {{ m.nom }}" aria-label="Retirer {{ m.nom }}">×</button></form>
@@ -1291,6 +1399,16 @@ def index():
         classes={p["nom"]: p["classe"] for p in persos},
         liste_classes=sorted({p["classe"] for p in persos}),
         couleur=lambda c: COULEURS.get(c, "#e6eefb"))  # texte clair par défaut dans le classement
+
+
+@app.route("/perso/<path:nom>")
+def route_perso(nom):
+    with db() as con:
+        f = fiche(con, nom)
+    if f is None:
+        abort(404)
+    return render_template_string(FICHE, guilde=NOM_GUILDE, titre=nom, ordinal=ordinal, medailles=MEDAILLES,
+                                  date_lisible=date_lisible, **f)
 
 
 def formulaire(**kw):

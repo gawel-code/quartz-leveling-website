@@ -892,3 +892,84 @@ def test_state_expire_ou_signe_ailleurs(discord_client, monkeypatch):
     monkeypatch.setitem(g, "ETAT_VALIDITE", -1)       # tout state est alors périmé
     etat = parse_qs(urlsplit(c.get("/connexion").location).query)["state"][0]
     assert c.get(f"/auth/discord/callback?code=code-ok&state={etat}").status_code == 400
+
+
+# ---------- Fiche d'un personnage ----------
+def test_fiche_personnage_existe_et_404_sinon(client):
+    envoyer(client, LUA2.replace('["Mok"] = "Mok;Tauren;Paladin;5"', '["Mok Tilleul"] = "Mok Tilleul;Tauren;Paladin;5"'))
+    r = client.get("/perso/Zuljin")
+    assert r.status_code == 200
+    assert "Zuljin" in r.text and "Troll" in r.text and "Chaman" in r.text
+    assert client.get("/perso/Mok%20Tilleul").status_code == 200  # noms de famille de Forever
+    assert client.get("/perso/Inconnu").status_code == 404
+
+
+def remplir(g, historique, persos, exploits=()):
+    with g["db"]() as con:
+        con.executemany("INSERT INTO historique VALUES(?,?,?)", historique)
+        con.executemany("INSERT INTO personnages(nom, race, classe, niveau, maj) VALUES(?,?,?,?,?)", persos)
+        con.executemany("INSERT INTO exploits VALUES(?,?,?,?)", exploits)
+
+
+def test_fiche_paliers_dates_rangs_et_durees(client):
+    g = client.application.view_functions["index"].__globals__
+    remplir(g, [("Grommash", 1, "2026-11-05T00:30:00"), ("Grommash", 10, "2026-11-05T06:30:00"),
+                ("Grommash", 20, "2026-11-06T18:30:00"), ("Grommash", 21, "2026-11-06T20:00:00")],
+            [("Grommash", "Orc", "Guerrier", 21, "2026-11-06T20:00:00")],
+            [(10, "Grommash", 2, "2026-11-05T06:30:00"), (20, "Grommash", 1, "2026-11-06T18:30:00")])
+    with g["db"]() as con:
+        f = g["fiche"](con, "Grommash")
+    assert [(p["palier"], p["date"], p["rang"]) for p in f["paliers"]] == [
+        (10, "2026-11-05T06:30:00", 2), (20, "2026-11-06T18:30:00", 1),
+        (30, None, None), (40, None, None), (50, None, None), (60, None, None)]
+    # Durée depuis le palier précédent (le 1ᵉʳ : depuis le premier niveau vu)
+    assert [p["duree"] for p in f["paliers"][:3]] == ["6 h", "1 j 12 h", None]
+
+
+def test_fiche_stats_joueur_rang_et_exclus(client):
+    g = client.application.view_functions["index"].__globals__
+    remplir(g, [("Grommash", 1, "2026-11-05T00:00:00"), ("Grommash", 21, "2026-11-07T00:00:00")],
+            [("Grommash", "Orc", "Guerrier", 21, "2026-11-07T00:00:00"), ("Zuljin", "Troll", "Chaman", 30, "x"),
+             ("Mok", "Tauren", "Paladin", 40, "x")])
+    with g["db"]() as con:
+        con.execute("UPDATE personnages SET rang=2 WHERE nom='Grommash'")
+        con.execute("INSERT INTO rangs VALUES(2, 'Petit Chef')")
+        con.execute("INSERT INTO proprietaires VALUES('Grommash', 'Gael', 'addon', 'x')")
+        g["desactiver"](con, "Mok", "mule")
+        f = g["fiche"](con, "Grommash")
+        assert g["fiche"](con, "Mok") is None  # exclu : pas de fiche publique
+    assert f["place"] == 2 and f["membres"] == 2  # Mok (exclu) ne compte pas
+    assert f["rythme"] == 10.0  # 20 niveaux en 2 jours
+    assert f["joueur"]["pseudo"] == "Gael" and f["nom_rang"] == "Petit Chef"
+    assert client.get("/perso/Mok").status_code == 404
+
+
+def test_fiche_historique_et_courbe(client, monkeypatch):
+    g = client.application.view_functions["index"].__globals__
+    remplir(g, [("Grommash", 5, "2026-11-04T10:00:00"), ("Grommash", 6, "2026-11-04T10:45:00"),
+                ("Grommash", 12, "2026-11-05T22:00:00"), ("Zuljin", 8, "2026-11-05T12:00:00")],
+            [("Grommash", "Orc", "Guerrier", 12, "x"), ("Zuljin", "Troll", "Chaman", 8, "x")])
+    monkeypatch.setitem(g, "aujourdhui", lambda: datetime.date(2026, 11, 5))
+    with g["db"]() as con:
+        f = g["fiche"](con, "Grommash")
+    assert [(h["niveau"], h["duree"]) for h in f["historique"]] == [(12, "1 j 11 h"), (6, "45 min"), (5, None)]
+    assert [p["nom"] for p in f["courbe"]["persos"]] == ["Grommash"]
+    assert f["courbe"]["persos"][0]["niveaux"] == [6, 12] and f["courbe"]["moyenne"] == [6, 10]
+
+
+def test_fiche_rendue_et_liens_vers_les_fiches(discord_client):
+    c, connecter = discord_client
+    envoyer(c, LUA2.replace('["Mok"] = "Mok;Tauren;Paladin;5"', '["Mok Tilleul"] = "Mok Tilleul;Tauren;Paladin;5"'))
+    page = c.get("/perso/Grommash").text
+    assert "Niveau 60" in page and "1ᵉʳ" in page  # palier 60 avec son rang
+    assert 'id="donnees-courbe"' in page and "Historique des niveaux" in page
+    accueil = c.get("/").text
+    classement = accueil.split('id="compte"')[1].split("Meilleurs contributeurs")[0]
+    honneur = accueil.split("Panthéon")[1].split('id="compte"')[0]
+    fil = accueil.split("Dernières montées")[1]
+    for bloc in (classement, honneur, fil):
+        assert 'href="perso/Grommash"' in bloc
+    assert 'href="perso/Mok%20Tilleul"' in classement
+    connecter(nick="Gael")
+    c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"})
+    assert 'href="perso/Zuljin"' in c.get("/moi").text
