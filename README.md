@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.11.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.12.0
 
 ## Fonctionnement
 
@@ -54,6 +54,12 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   ensuite tout seul), jour après jour : niveau moyen, plage où se trouvent 50 % des membres (Q1–Q3)
   et plus haut niveau ; les personnages du membre connecté y sont tracés à la couleur de leur classe.
   Survol : tous les chiffres du jour ; « Voir les données » : le tableau.
+- **Fiche personnage** (`/perso/<nom>`, v1.12.0) : récap du leveling d'un membre : race, classe,
+  rang de guilde, joueur ; place au classement, rythme moyen (niveaux par jour entre le premier et
+  le dernier niveau vus), niveaux gagnés en 24 h ; paliers 10 → 60 avec date réelle, rang dans la
+  guilde et temps depuis le palier précédent ; courbe du perso face à la guilde ; historique daté de
+  chaque niveau. Lien depuis le classement, le tableau d'honneur, le fil d'activité et « Mes
+  personnages » (`/moi`). Un perso inconnu ou exclu (mule, banque) donne une 404.
 - **Mules et banques** : dans `/admin`, un personnage peut être exclu de la progression (mule,
   banque, autre) : il sort du classement, du tableau d'honneur, des annonces, du récap et de la
   courbe ; ses niveaux restent enregistrés et « Réintégrer » lui rend ses paliers, sans annonce.
@@ -102,6 +108,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | Route | Accès | Rôle |
 |---|---|---|
 | `GET /` | public | classement, tableau d'honneur, fil d'activité |
+| `GET /perso/<nom>` | public | fiche d'un personnage (404 si inconnu ou exclu) |
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour` et `source` (`blizzard`, `fichier` ou `null`) |
@@ -191,6 +198,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.12.0 | fiche par personnage `/perso/<nom>` : identité, place, rythme, paliers (date, rang, durée), courbe face à la guilde, historique des niveaux ; liens depuis l'accueil et `/moi` |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |
