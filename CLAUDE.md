@@ -266,7 +266,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 5 novembre 2026 (v1.12.0 déployée, v1.12.1 en attente de merge)
+## État au 5 novembre 2026 (v1.12.1 mergée, déploiement par le connecteur HA)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -319,7 +319,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - ✅ v1.12.0 (mergée le 5/11, PR #37) : fiche par personnage `/perso/<nom>` (voir *Serveur*),
   développée en TDD (5 tests `test_fiche_*`). **Déployée et vérifiée le 5/11** (pied « v1.12.0 », liens
   `perso/…` sur l'accueil, fiche de Gawel Zugzug OK).
-- ⏳ v1.12.1 (PR en attente) : rythme moyen de la fiche seulement après 24 h de données.
+- ✅ v1.12.1 (mergée le 5/11, PR #38) : rythme moyen de la fiche seulement après 24 h de données.
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
