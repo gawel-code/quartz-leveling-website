@@ -51,6 +51,14 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `["Nom"] = "Nom;Race;Classe;Niveau"`. Dates de niveau (v1.3.0) dans la table
   `GuildExportNiveaux` : `["Nom"] = "10@horodatage,11@horodatage"` (`analyser_dates()`). Rangs
   (addon 1.3.0) dans `GuildExportRangs` : `["Nom"] = "3"` (`analyser_rangs()`, 0 = maître de guilde).
+  **Noms de famille** (vu en jeu le 5/11) : sur Forever, un perso s'appelle « Prénom Nom »
+  (« Gawel Zugzug », « Wagyu Steak ») ; les noms contiennent donc des **espaces** (OK pour les
+  expressions du serveur, `[^"]+`). La liste de guilde donne le nom complet, `UnitName()` seulement
+  le prénom : l'addon ≤ 1.3.1 notait races et `GuildExportMesPersos` au prénom (race « ? » sur le
+  site, perso non associé). Corrigé dans l'addon 1.3.2 (nom complet retrouvé par GUID, sinon prénom
+  unique), sans changement de format.
+  Piège vu le 5/11 : envoyer `Interface\AddOns\GuildExport\GuildExport.lua` (le **code** de l'addon,
+  même nom) au lieu du fichier de `WTF\…\SavedVariables\` → « Fichier vide ou invalide » (400).
 - `client/` : envoi automatique pour les membres. `lancer.bat` (double-clic) lance
   `envoi-guilde.ps1` : au 1er lancement demande la clé (validée par un envoi vide → 400 = ok,
   403 = refusée), cherche `_forever_\WTF\Account\*\SavedVariables\GuildExport.lua`
@@ -248,7 +256,7 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 30 octobre 2026 (v1.11.0 déployée, app migrée vers le dépôt d'apps)
+## État au 5 novembre 2026 (v1.11.0 déployée, app migrée vers le dépôt d'apps)
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -290,6 +298,14 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   (le proxy de session Claude bloque `quartz.gawel.be`). Ancienne app désinstallée (30/10).
 - ✅ Addon 1.3.1 (mergé le 3/11, doc du site mise à jour) : nom affiché **Quartz Guild Exporter** (violet,
   icône de cristal) ; dossier, fichier `GuildExport.lua` et tables inchangés (pas d'impact serveur ni `client/`).
+- ✅ Addon 1.3.2 (mergé le 5/11, [release v1.3.2](https://github.com/gawel-code/quartz-leveling-addon/releases/tag/v1.3.2)) :
+  noms de famille de Forever (voir *Arborescence*) ; format inchangé, pas d'impact serveur. Premier
+  fichier réel de Gaël (5/11) : 8 membres, races « ? », `GuildExportMesPersos = {"Gawel"}` → association
+  périmée « Gawel » dans `proprietaires` (à dissocier dans `/admin`). **Vérifié en jeu et en ligne
+  le 5/11** : avec la 1.3.2, « Gawel Zugzug — Orc — Guerrier — Péon — 6 — @Gawel » sur l'accueil.
+- ✅ Addon 1.3.3 (5/11) : reprise des dates de niveau notées au prénom par `PLAYER_LEVEL_UP` (≤ 1.3.1,
+  exactes) sous le nom complet ; `dater()` garde la plus ancienne, l'historique de Gawel Zugzug se
+  corrige au prochain envoi (≈ 1 min plus tôt).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
