@@ -353,8 +353,9 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   de Gaël, auparavant 15 min ; récap 9 h / 21 h ; vérifié le 5/11 : dernière collecte 17 h 30), réactivées
   par `automation.quartz_reactivation_au_lancement` (`input_datetime.quartz_lancement_wow_forever`, 5/11 00:00).
   Depuis le 5/11 (v1.13.0), `/collecter` lit l'API Blizzard (repli sur le fichier si l'API échoue).
-- ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
-  à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
+- ✅ Webhook Discord (option `discord_webhook`) sur le **vrai salon de progression** depuis le lancement
+  (confirmé par Gaël ; l'URL n'est jamais commitée ni recopiée). Les annonces de la collecte par
+  l'API (v1.13.0) y partent aussi, sans « — via ».
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
   `/export.json`, script `client/` sous Windows). Données de test encore en base : voir ⚠️ ci-dessus.
 - ✅ v1.2.0 : nouvelles règles d'annonce ; v1.2.1 : cristal HD détouré + bannière
@@ -418,8 +419,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
    `time_pattern` `/30`, alias « Quartz – collecte toutes les 30 min », entity_id inchangé) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
    réactivées le 5/11 (voir État).
-3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
-   (actuellement canal de test) ; remettre la base à zéro (persos de Progress et de test) ;
+3. ~~Webhook sur le vrai salon~~ ✅ (lancement) ; ~~remise à zéro~~ abandonnée (la base contient les persos
+   réels, voir v1.13.0) ;
    nettoyage de la migration : supprimer `/local_apps/quartz_forever`, retirer `quartz_github_token`
    de `secrets.yaml` (et `/homeassistant/deployer-quartz.sh`), révoquer ce jeton sur GitHub.
 4. ~~Tester de bout en bout~~ ✅ fait (29/10), base remise à zéro ensuite.
