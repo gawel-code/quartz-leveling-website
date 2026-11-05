@@ -301,8 +301,11 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - ✅ Addon 1.3.2 (mergé le 5/11, [release v1.3.2](https://github.com/gawel-code/quartz-leveling-addon/releases/tag/v1.3.2)) :
   noms de famille de Forever (voir *Arborescence*) ; format inchangé, pas d'impact serveur. Premier
   fichier réel de Gaël (5/11) : 8 membres, races « ? », `GuildExportMesPersos = {"Gawel"}` → association
-  périmée « Gawel » dans `proprietaires` (à dissocier dans `/admin`). À vérifier : race de « Gawel
-  Zugzug » sur le site après `/reload` avec la 1.3.2 et renvoi du fichier.
+  périmée « Gawel » dans `proprietaires` (à dissocier dans `/admin`). **Vérifié en jeu et en ligne
+  le 5/11** : avec la 1.3.2, « Gawel Zugzug — Orc — Guerrier — Péon — 6 — @Gawel » sur l'accueil.
+- ✅ Addon 1.3.3 (5/11) : reprise des dates de niveau notées au prénom par `PLAYER_LEVEL_UP` (≤ 1.3.1,
+  exactes) sous le nom complet ; `dater()` garde la plus ancienne, l'historique de Gawel Zugzug se
+  corrige au prochain envoi (≈ 1 min plus tôt).
 - ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
   30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
