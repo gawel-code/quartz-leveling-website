@@ -32,7 +32,7 @@ WoW (addon « Quartz Guild Exporter », dossier GuildExport) → GuildExport.lua
      (clé affichée sur /moi après connexion Discord ; connecté, /contribuer n'en demande pas)
    → app Flask + SQLite, app Home Assistant (HAOS) installée depuis ce dépôt (dépôt d'apps)
    → https://quartz.gawel.be via Cloudflare Tunnel
-Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 h / 21 h) → webhook Discord
+Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11) et /recap (9 h / 21 h) → webhook Discord
 /collecter → API Blizzard (roster de guilde, si options bnet_*) sinon fichier déposé côté serveur
 ```
 
@@ -344,9 +344,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - ✅ `cles.txt` vérifié (30 membres, 0 ligne invalide, 0 CRLF, ni pseudo ni clé en double ;
   pseudos sans espaces ni `|`, accents possibles : `Metam-Zap`, `Patéhenkrout`, `Finwë`…).
   Ligne de test `TestClaude` retirée (clé refusée → 403) ; copie dans `cles.txt.bak`.
-- ⏸️ Automatisations HA (collecte toutes les 15 min depuis le 30/10, récap 9 h / 21 h) **coupées jusqu'au lancement** :
-  `automation.quartz_reactivation_au_lancement` les réactive à la date/heure de
-  `input_datetime.quartz_lancement_wow_forever` (5/11/2026 00:00, changer la date si besoin).
+- ✅ Automatisations HA actives depuis le lancement (collecte **toutes les 30 min** depuis le 5/11 à la demande
+  de Gaël, auparavant 15 min ; récap 9 h / 21 h ; vérifié le 5/11 : dernière collecte 17 h 30), réactivées
+  par `automation.quartz_reactivation_au_lancement` (`input_datetime.quartz_lancement_wow_forever`, 5/11 00:00).
+  Tant que les options `bnet_*` sont vides, `/collecter` lit le fichier déposé côté serveur.
 - ⚠️ Webhook Discord (option `discord_webhook`) **remis sur le canal de test** (29/10) ;
   à rebasculer sur le vrai salon de progression avant le lancement (l'URL n'est jamais commitée)
 - ✅ Test de bout en bout validé (envoi direct + formulaire, fusion, annonces, récap,
@@ -408,10 +409,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 1. ~~Créer `cles.txt` avec les clés des membres.~~ ✅ fait
 2. ~~Automatisations HA~~ ✅ fait (29/10) : `rest_command.quartz_collecter` / `quartz_recap`
    chargés (secrets internes, token de l'app renseigné, appels testés → 200),
-   automatisations `automation.quartz_collecte_horaire` (toutes les 15 min depuis le 30/10 —
-   `time_pattern` `/15`, alias « Quartz – collecte toutes les 15 min », entity_id inchangé) et
+   automatisations `automation.quartz_collecte_horaire` (toutes les 30 min depuis le 5/11 —
+   `time_pattern` `/30`, alias « Quartz – collecte toutes les 30 min », entity_id inchangé) et
    `automation.quartz_recap_discord_9_h_21_h` (9 h / 21 h : collecte puis récap) ;
-   coupées jusqu'au 5/11, réactivation automatique (voir État).
+   réactivées le 5/11 (voir État).
 3. Avant le 5/11 : remettre le vrai salon de progression dans l'option `discord_webhook`
    (actuellement canal de test) ; remettre la base à zéro (persos de Progress et de test) ;
    nettoyage de la migration : supprimer `/local_apps/quartz_forever`, retirer `quartz_github_token`
