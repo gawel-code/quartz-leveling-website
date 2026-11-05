@@ -89,7 +89,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `repository.yaml` | déclare ce dépôt comme dépôt d'apps Home Assistant |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
-| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era ou Forever (`--jeu forever`, `--version-static`) : jeton, races/classes, royaumes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help` |
+| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era ou Forever (`--jeu forever`, `--version-static`) : jeton, races/classes, royaumes, roster de guilde, profil ; `--compte` : connexion Battle.net (`wow.profile`, retour sur `http://localhost:8765/` à déclarer sur develop.battle.net), persos du compte et ce que répondent leurs liens (profil, perso protégé, guilde, roster), réponses brutes dans `compte-<jeu>.json` (non commité) ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help` |
 | `tests/test_app.py` | tests du serveur |
 | `CLAUDE.md` | notes de projet détaillées (état, pièges de déploiement, to-do) |
 
@@ -198,7 +198,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
-| 1.12.0 | API Blizzard prête pour WoW Forever : option `bnet_version_static` (espace statique versionné `static-1.60.1_70399-forever-eu`, le non versionné renvoie 403), repli automatique sur la version citée par le roster ; `tools/verifier_api_blizzard.py --jeu forever` (version statique par défaut, royaumes sans nom, version lue dans le roster et le profil) |
+| 1.12.0 | API Blizzard prête pour WoW Forever : option `bnet_version_static` (espace statique versionné `static-1.60.1_70399-forever-eu`, le non versionné renvoie 403), repli automatique sur la version citée par le roster ; `tools/verifier_api_blizzard.py --jeu forever` (version statique par défaut, royaumes sans nom, version lue dans le roster et le profil) et `--compte` (connexion Battle.net, persos du compte via `/profile/user/wow`) |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |

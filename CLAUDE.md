@@ -21,7 +21,8 @@ concises, pas de pédagogie de base.
 - Guilde **Quartz Forever**, **Horde**, serveur **PvE**.
 - Objectif : site public qui suit la progression des membres (race, classe,
   niveau), tableau d'honneur, annonces Discord.
-- **API Blizzard** : l'espace de noms Forever n'est pas (encore) publié. On
+- **API Blizzard** : les espaces de noms Forever existent (`profile-` / `dynamic-forever-eu`,
+  `static-1.60.1_70399-forever-eu`) mais, au 5/11, ni royaume ni perso n'y sont publiés. On
   collecte donc via un **addon en jeu** dont les membres envoient le fichier
   SavedVariables. `lire_api_blizzard()` (v1.9.0) lit déjà le roster de guilde sur l'API
   (testée en production sur Classic, `classic1x`) : il restera à renseigner l'espace de noms,
@@ -68,7 +69,13 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   (`static-…`), `--royaumes` (`dynamic-…`), `--guilde` (roster → lignes `Nom;Race;Classe;Niveau`,
   forme attendue de `lire_api_blizzard()`), `--perso` (profil). `--jeu classic1x` par défaut ;
   `--jeu forever` (v1.12.0) prend `--version-static 1.60.1_70399` par défaut (`VERSIONS`) ; le script
-  affiche la version statique citée par le roster / le profil.
+  affiche la version statique citée par le roster / le profil. `--compte` (v1.12.0) : OAuth « authorization
+  code » `wow.profile` (`jeton_utilisateur()` : navigateur + mini-serveur sur `http://localhost:8765/`,
+  `--port`, `state` vérifié ; l'adresse doit figurer dans les « Redirect URLs » du client), puis
+  `/profile/user/wow` : chaque perso (nom, `surname`, royaume ou —, id), liens `character` (jeton
+  d'appli) et `protected_character` (jeton utilisateur) suivis, puis guilde + `/roster` s'il y en a une ;
+  `--perso` filtre les persos suivis. Réponses brutes dans `compte-<jeu>.json` (`.gitignore`) ; jeton
+  utilisateur jamais affiché ni écrit. Non testable depuis une session Claude (navigateur de Gaël).
 - `tools/generer_cles.py` : génère/renouvelle les clés des membres dans `cles.txt`.
 - `tests/test_app.py` : tests pytest du serveur (`pytest -q`).
 
@@ -254,9 +261,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 3 novembre 2026 (v1.11.0 déployée, v1.12.0 en attente)
+## État au 5 novembre 2026 (v1.11.0 déployée, v1.12.0 en attente)
 - 🕓 v1.12.0 (branche `claude/beautiful-carson-7czwkg`, pas encore mergée) : API prête pour Forever
-  (option `bnet_version_static`, repli sur la version du roster, script `--jeu forever`). Au lancement :
+  (option `bnet_version_static`, repli sur la version du roster, script `--jeu forever` et `--compte`).
+  Au 5/11, l'API ne publie ni royaume ni perso Forever (voir *essais du 05/11*) : l'addon reste la source. Au lancement :
   options `bnet_espace = forever`, `bnet_version_static = 1.60.1_70399` (facultatif : le repli suffit si
   le roster cite la version), `bnet_royaume` (slug réel, voir `--jeu forever --royaumes`), `bnet_guilde`.
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
@@ -357,6 +365,18 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   Si c'est le cas, l'URL du roster `/data/wow/guild/{royaume}/{guilde}` pourrait changer : à tester au
   lancement (`--jeu forever --royaumes`, puis `--royaume <slug> --guilde "Quartz Forever"`).
 
+## API Blizzard — essais sur Forever du 05/11/2026 (7 h 30, après le lancement)
+- `static-forever-eu` (sans version) → **200** désormais (liens vers `static-1.60.1_70399-forever-eu`).
+- `dynamic-forever-eu` : `realm/index`, `realm/6937`, `connected-realm/index` → **404** (les royaumes
+  provisoires « camwow » ont disparu) ; `region/93` → 200 (« CAMWOW Europe », `patch_string` 1.60.1) ;
+  `search/realm` → 200, 0 résultat. Aucun royaume Forever dans `dynamic-classic1x-eu` (58 royaumes).
+- `profile-forever-eu` sans royaume : `character/gar-gawelle`, `gawel-zugzug` (et variantes),
+  `guild/quartz-forever` (+ `/roster`) → 404 JSON. Avec royaume : impossible sans index des royaumes.
+- `us.api.blizzard.com` bloqué par le proxy des sessions Claude (seule l'API EU est testable d'ici).
+- Forum (sujet 59774) : rien depuis le message du 02/11, aucun employé Blizzard. Lien `protected_character`
+  de `/profile/user/wow` : `/profile/user/wow/protected-character/{realmId}-{characterId}` → d'où `--compte`.
+- Persos de Gaël sur Forever : **Gar Gawelle** et **Gawel Zugzug** (serveur PvE).
+
 ## Outils utiles pour Claude (via le connecteur HA)
 - Appeler l'app directement : `ha_manage_app(slug="ee5b467c_quartz_forever", port=8080,
   path=..., method=...)` — permet `/export.json?token=…`, `POST /reinitialiser?token=…`,
@@ -385,7 +405,9 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
 6. ~~Client API develop.battle.net + essais Classic Era~~ ✅ fait (30/10) : roster OK avec la race.
-7. Au lancement (5/11) : espaces de noms Forever confirmés le 03/11 (v1.12.0) ; relancer
+7. Après le lancement : espaces de noms Forever confirmés le 03/11 (v1.12.0), mais ni royaume ni perso
+   publiés le 05/11. Gaël lance `--jeu forever --compte` (Redirect URL `http://localhost:8765/` à
+   déclarer) et envoie `compte-forever.json` → forme réelle des liens perso / guilde. Relancer
    `--jeu forever --royaumes`, tester le roster, puis renseigner `bnet_espace = forever`,
    `bnet_royaume` / `bnet_guilde` (et `bnet_version_static` si besoin). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).
