@@ -11,6 +11,7 @@ export BNET_CLIENT_ID="$(bashio::config 'bnet_client_id')"
 export BNET_CLIENT_SECRET="$(bashio::config 'bnet_client_secret')"
 export BNET_REGION="$(bashio::config 'bnet_region')"
 export BNET_ESPACE="$(bashio::config 'bnet_espace')"
+export BNET_VERSION_STATIC="$(bashio::config 'bnet_version_static')"
 export BNET_ROYAUME="$(bashio::config 'bnet_royaume')"
 export BNET_GUILDE="$(bashio::config 'bnet_guilde')"
 # v1.11.0 : la base et la clé de session vivent dans /config (/app_configs/<slug>/ côté hôte),

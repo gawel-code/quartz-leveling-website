@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.12.1
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.13.0
 
 ## Fonctionnement
 
@@ -95,7 +95,7 @@ le tableau d'honneur du site peut ensuite le corriger.
 | `ha/configuration.yaml` | `rest_command` et automatisations à ajouter dans Home Assistant |
 | `repository.yaml` | déclare ce dépôt comme dépôt d'apps Home Assistant |
 | `tools/generer_cles.py` | génère ou renouvelle les clés des membres dans `cles.txt` |
-| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era (jeton, races/classes, roster de guilde, profil ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help`) |
+| `tools/verifier_api_blizzard.py` | teste l'API Blizzard sur Classic Era ou Forever (`--jeu forever`, `--version-static`) : jeton, races/classes, royaumes, roster de guilde, profil (`--perso gawel-zugzug` sur Forever) ; `--compte` : connexion Battle.net (`wow.profile`, retour sur `http://localhost:8765/` à déclarer sur develop.battle.net), persos du compte et ce que répondent leurs liens, réponses brutes dans `compte-<jeu>.json` (non commité) ; `BNET_CLIENT_ID` / `BNET_CLIENT_SECRET`, `--help` |
 | `tests/test_app.py` | tests du serveur |
 | `CLAUDE.md` | notes de projet détaillées (état, pièges de déploiement, to-do) |
 
@@ -144,8 +144,9 @@ BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par 
 | `discord_admins` | IDs Discord admins, séparés par des virgules (toujours acceptés, accès à `/admin`) |
 | `bnet_client_id` / `bnet_client_secret` | client API créé sur develop.battle.net ; vide = API Blizzard désactivée |
 | `bnet_region` | région de l'API (`eu`) |
-| `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; à changer pour Forever |
-| `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; vides = API désactivée |
+| `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; `forever` pour WoW Forever |
+| `bnet_version_static` | version de l'espace statique (races, classes), ex. `1.60.1_70399` → `static-1.60.1_70399-forever-eu` ; vide = sans version, puis repli sur la version citée par le roster |
+| `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; `bnet_guilde` vide = API désactivée ; `bnet_royaume` **vide pour Forever** (guildes sans royaume) |
 
 **API Blizzard** (v1.9.0) : à chaque `/collecter`, le roster de la guilde (nom, race, classe,
 niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces normales, sans
@@ -153,6 +154,18 @@ niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces
 elle est postérieure à la collecte précédente, sinon par l'heure de collecte ; l'addon, plus
 précis, l'emporte s'il donne une date plus ancienne. Homonymes sur des royaumes connectés : le
 plus haut niveau l'emporte. API en panne → repli sur le fichier déposé côté serveur.
+
+**WoW Forever** (v1.13.0, réglages : `bnet_espace = forever`, `bnet_royaume` vide, `bnet_guilde =
+Quartz Forever`) : la guilde se lit sans royaume (`/data/wow/guild/quartz-forever/roster`,
+`profile-forever-eu`). Un perso y a un prénom et un nom de famille (`surname`) ; il est enregistré
+sous « Prénom Nom » (« Gawel Zugzug »), **comme l'addon**, ce qui met à jour les fiches existantes
+au lieu de les dupliquer. Le roster étant en retard sur les profils, le profil de chaque membre
+(`/profile/wow/character/gawel-zugzug`) est lu à chaque collecte : niveau le plus haut des deux,
+montée datée par la dernière connexion. Une classe déjà connue n'est jamais remplacée (l'API la
+donne au masculin, l'addon au féminin). Espaces de noms : `profile-` et `dynamic-forever-eu`,
+statique versionné `static-1.60.1_70399-forever-eu` (`static-forever-eu` répond aussi depuis le
+5/11). Forever ajoute deux races : « Éolide de l'Ordre suprême » (Alliance) et « Éolide
+sculpte-vents » (Horde).
 
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
 donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
@@ -198,6 +211,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.13.0 | API Blizzard pour WoW Forever : guilde lue sans royaume, persos enregistrés sous « Prénom Nom » comme l'addon (fusion avec les fiches existantes), profil de chaque membre lu à chaque collecte (niveau plus récent que le roster, date de dernière connexion), classe connue jamais remplacée (garde le féminin) ; option `bnet_version_static` (espace statique versionné) ; `tools/verifier_api_blizzard.py --jeu forever` et `--compte` (connexion Battle.net, persos du compte) |
 | 1.12.1 | fiche personnage : rythme moyen affiché seulement après 24 h de données (5 niveaux en 1 h 30 donnaient « 73,9 niveaux par jour ») |
 | 1.12.0 | fiche par personnage `/perso/<nom>` : identité, place, rythme, paliers (date, rang, durée), courbe face à la guilde, historique des niveaux ; liens depuis l'accueil et `/moi` |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |

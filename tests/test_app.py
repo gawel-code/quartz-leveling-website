@@ -705,8 +705,9 @@ def test_exclus_hors_recap_et_vides_par_la_remise_a_zero(discord_client, monkeyp
 
 
 # ---------- API Blizzard (v1.9.0) ----------
-RACES_API = {"races": [{"id": 2, "name": "Orc"}, {"id": 8, "name": "Troll"}, {"id": 6, "name": "Tauren"}]}
-CLASSES_API = {"classes": [{"id": 1, "name": "Guerrier"}, {"id": 7, "name": "Chaman"}]}
+RACES_API = {"races": [{"id": 2, "name": "Orc"}, {"id": 8, "name": "Troll"}, {"id": 6, "name": "Tauren"},
+                       {"id": 96, "name": "Éolide sculpte-vents"}]}
+CLASSES_API = {"classes": [{"id": 1, "name": "Guerrier"}, {"id": 7, "name": "Chaman"}, {"id": 11, "name": "Druide"}]}
 
 
 def membre(nom, niveau, race=2, classe=1, royaume="firemaw", rang=1):
@@ -722,7 +723,8 @@ def blizzard(client, monkeypatch):
     for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
                      "BNET_GUILDE": "Quartz Forever"}.items():
         monkeypatch.setitem(g, cle, val)
-    etat = {"roster": [], "profils": {}, "appels": [], "jetons": 0, "panne": False}
+    etat = {"roster": [], "profils": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
+            "jeu": "-classic1x-eu"}
 
     def post(url, **kw):
         assert url == "https://oauth.battle.net/token" and kw["auth"] == ("id", "s")
@@ -732,14 +734,15 @@ def blizzard(client, monkeypatch):
     def get(url, **kw):
         chemin = url.split("api.blizzard.com")[1]
         etat["appels"].append(chemin)
-        assert kw["params"]["namespace"].endswith("-classic1x-eu")
+        etat["espaces"].append(kw["params"]["namespace"])
+        assert kw["params"]["namespace"].endswith(etat["jeu"])
         if etat["panne"]:
             return Reponse({}, 503)
         if chemin.endswith("/playable-race/index"):
             return Reponse(RACES_API)
         if chemin.endswith("/playable-class/index"):
             return Reponse(CLASSES_API)
-        if chemin == "/data/wow/guild/firemaw/quartz-forever/roster":
+        if chemin in ("/data/wow/guild/firemaw/quartz-forever/roster", "/data/wow/guild/quartz-forever/roster"):
             return Reponse({"members": etat["roster"]})
         nom = chemin.rsplit("/", 1)[1]
         for n, (niveau, ts) in etat["profils"].items():
@@ -766,10 +769,12 @@ def test_collecte_par_l_api(blizzard, monkeypatch):
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert (persos["Grommash"]["race"], persos["Grommash"]["classe"], persos["Grommash"]["niveau"]) == ("Orc", "Guerrier", 12)
     assert persos["Zuljin"]["race"] == "Troll" and any("Grommash" in m and "10" in m for m in messages)
-    # Rien n'a bougé : pas de profil demandé, jeton et index réutilisés
+    # Rien n'a bougé : roster + profil de chaque membre (v1.13.0), jeton et index réutilisés
     etat["appels"].clear()
     assert c.get("/collecter?token=tok").json["mises_a_jour"] == 0
-    assert etat["appels"] == ["/data/wow/guild/firemaw/quartz-forever/roster"] and etat["jetons"] == 1
+    assert etat["appels"] == ["/data/wow/guild/firemaw/quartz-forever/roster",
+                              "/profile/wow/character/firemaw/grommash",
+                              "/profile/wow/character/firemaw/zuljin"] and etat["jetons"] == 1
 
 
 def test_montee_datee_par_la_derniere_connexion(blizzard):
@@ -795,6 +800,106 @@ def test_montee_datee_par_la_derniere_connexion(blizzard):
     with g["db"]() as con:
         d15 = con.execute("SELECT date FROM historique WHERE nom='Grommash' AND niveau=15").fetchone()[0]
     assert d15 > connexion.isoformat()
+
+
+def membre_forever(nom, niveau, version):
+    m = membre(nom, niveau, race=6)
+    for cle, id_ in (("playable_race", 6), ("playable_class", 1)):
+        m["character"][cle]["key"] = {"href": f"https://eu.api.blizzard.com/data/wow/playable-{cle[9:]}/{id_}"
+                                              f"?namespace=static-{version}-forever-eu"}
+    return m
+
+
+def test_espaces_de_noms_forever(blizzard, monkeypatch):
+    """Forever (v1.13.0) : static versionné (static-forever-eu → 403), profile/dynamic sans version.
+    Option bnet_version_static d'abord, puis repli sur la version citée par le roster."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ESPACE", "forever")
+    monkeypatch.setitem(g, "BNET_VERSION_STATIC", "1.60.0_1")  # périmée : 404
+    etat["jeu"] = "-forever-eu"
+    assert g["espace_bnet"]("static", "1.60.1_70399") == "static-1.60.1_70399-forever-eu"
+    assert g["espace_bnet"]("static") == "static-forever-eu"
+    assert g["espace_bnet"]("profile", "1.60.1_70399") == "profile-forever-eu"
+    get = g["requests"].get
+
+    def seulement_la_bonne_version(url, **kw):
+        ns = kw["params"]["namespace"]
+        if ns.startswith("static-") and ns != "static-1.60.1_70399-forever-eu":
+            etat["espaces"].append(ns)
+            return Reponse({}, 404)
+        return get(url, **kw)
+    monkeypatch.setattr(g["requests"], "get", seulement_la_bonne_version)
+    etat["roster"] = [membre_forever("Grommash", 12, "1.60.1_70399")]
+    assert c.get("/collecter?token=tok").json["source"] == "blizzard"
+    assert etat["espaces"].count("static-1.60.0_1-forever-eu") == 2  # races puis classes : repli
+    assert dict(zip(etat["appels"], [e for e in etat["espaces"] if "1.60.0_1" not in e])) == {
+        "/data/wow/guild/firemaw/quartz-forever/roster": "profile-forever-eu",
+        "/data/wow/playable-race/index": "static-1.60.1_70399-forever-eu",
+        "/data/wow/playable-class/index": "static-1.60.1_70399-forever-eu",
+        "/profile/wow/character/firemaw/grommash": "profile-forever-eu"}
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert (persos["Grommash"]["race"], persos["Grommash"]["classe"]) == ("Tauren", "Guerrier")
+
+
+def membre_sans_royaume(nom, surname, niveau, race=96, classe=1, rang=3):
+    """Membre du roster Forever (vu le 05/11) : surname + slug, pas de realm."""
+    return {"character": {"name": nom, "surname": surname, "slug": f"{nom}-{surname}".lower(), "level": niveau,
+                          "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": rang}
+
+
+def test_roster_forever_sans_royaume(blizzard, monkeypatch):
+    """Forever (v1.13.0) : guilde sans royaume, perso identifié par « Prénom Nom » comme l'addon (le
+    prénom seul est partagé : plusieurs « … Forever ») ; profil /profile/wow/character/<slug>."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    assert g["bnet_actif"]() and g["chemin_guilde"]() == "/data/wow/guild/quartz-forever"
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 7, race=2),
+                      membre_sans_royaume("Anar", "Forever", 14, rang=0),
+                      membre_sans_royaume("Anar", "Lumière", 9)]
+    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 3, "source": "blizzard"}
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert set(persos) == {"Gawel Zugzug", "Anar Forever", "Anar Lumière"}
+    assert (persos["Gawel Zugzug"]["race"], persos["Gawel Zugzug"]["niveau"]) == ("Orc", 7)
+    assert persos["Anar Forever"]["rang"] == 0 and persos["Anar Lumière"]["niveau"] == 9
+    assert "/data/wow/guild/quartz-forever/roster" in etat["appels"]
+    assert "/profile/wow/character/gawel-zugzug" in etat["appels"]
+    assert not any("/firemaw/" in a for a in etat["appels"])
+
+
+def test_api_complete_la_base_de_l_addon(blizzard, monkeypatch):
+    """La base remplie par l'addon (noms « Prénom Nom », races « ? », classes au féminin) est mise à
+    jour, pas dupliquée : race complétée, classe gardée, rang, niveau du profil s'il est plus haut
+    que le roster (en retard), daté par la dernière connexion ; perso inconnu créé."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    lua = ('GuildExportDB = {\n["Cheetah Steak"] = "Cheetah Steak;?;Druidesse;12",\n'
+           '["Jazeel Sorrowbane"] = "Jazeel Sorrowbane;?;Guerrière;21",\n}')
+    assert c.post("/envoyer", data=lua.encode(), headers={"X-Cle": "abc123"}).status_code == 200
+    connexion = datetime.datetime.now().replace(microsecond=0) + datetime.timedelta(minutes=1)
+    etat["roster"] = [membre_sans_royaume("Cheetah", "Steak", 15, race=6, classe=11),
+                      membre_sans_royaume("Jazeel", "Sorrowbane", 18, rang=1),
+                      membre_sans_royaume("Garmain", "Jhin", 2, race=8, classe=1)]
+    etat["profils"] = {"Cheetah-Steak": (17, int(connexion.timestamp()) * 1000)}
+    c.get("/collecter?token=tok")
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert set(persos) == {"Cheetah Steak", "Jazeel Sorrowbane", "Garmain Jhin"}
+    ch, ja = persos["Cheetah Steak"], persos["Jazeel Sorrowbane"]
+    assert (ch["race"], ch["classe"], ch["niveau"]) == ("Tauren", "Druidesse", 17)
+    assert (ja["race"], ja["classe"], ja["niveau"], ja["rang"]) == ("Éolide sculpte-vents", "Guerrière", 21, 1)
+    with g["db"]() as con:
+        d17 = con.execute("SELECT date FROM historique WHERE nom='Cheetah Steak' AND niveau=17").fetchone()[0]
+    assert d17 <= connexion.isoformat()
+
+
+def test_version_static_absente_du_roster(client):
+    g = client.application.view_functions["index"].__globals__
+    assert g["version_static"]({"members": [membre("Grommash", 12)]}) == ""
+    lien = {"key": {"href": "https://eu.api.blizzard.com/data/wow/playable-race/2?namespace=static-classic1x-eu"}}
+    assert g["version_static"]({"members": [{"character": {"playable_race": lien}}]}) == ""
+    assert g["espace_bnet"]("static") == "static-classic1x-eu"
 
 
 def test_homonymes_sur_royaumes_connectes(blizzard):
