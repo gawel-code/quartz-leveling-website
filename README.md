@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.12.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.12.1
 
 ## Fonctionnement
 
@@ -56,7 +56,7 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   Survol : tous les chiffres du jour ; « Voir les données » : le tableau.
 - **Fiche personnage** (`/perso/<nom>`, v1.12.0) : récap du leveling d'un membre : race, classe,
   rang de guilde, joueur ; place au classement, rythme moyen (niveaux par jour entre le premier et
-  le dernier niveau vus), niveaux gagnés en 24 h ; paliers 10 → 60 avec date réelle, rang dans la
+  le dernier niveau vus, affiché après 24 h de données), niveaux gagnés en 24 h ; paliers 10 → 60 avec date réelle, rang dans la
   guilde et temps depuis le palier précédent ; courbe du perso face à la guilde ; historique daté de
   chaque niveau. Lien depuis le classement, le tableau d'honneur, le fil d'activité et « Mes
   personnages » (`/moi`). Un perso inconnu ou exclu (mule, banque) donne une 404.
@@ -198,6 +198,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.12.1 | fiche personnage : rythme moyen affiché seulement après 24 h de données (5 niveaux en 1 h 30 donnaient « 73,9 niveaux par jour ») |
 | 1.12.0 | fiche par personnage `/perso/<nom>` : identité, place, rythme, paliers (date, rang, durée), courbe face à la guilde, historique des niveaux ; liens depuis l'accueil et `/moi` |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
