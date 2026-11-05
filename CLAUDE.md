@@ -278,8 +278,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 5 novembre 2026 (v1.12.1 déployée, v1.13.0 en attente)
-- 🕓 v1.13.0 (branche `claude/beautiful-carson-7czwkg`) : API Blizzard pour Forever. Rejouée contre la
+## État au 5 novembre 2026 (v1.13.0 mergée, déploiement par le connecteur HA)
+- ✅ v1.13.0 (mergée le 5/11, PR #39) : API Blizzard pour Forever. Rejouée contre la
   vraie API sur une copie du classement en ligne (5/11, 15 h) : 0 doublon, 0 création (Cart Forsaken,
   absent du roster, gardé), races « ? » complétées, classes féminines gardées, rangs remplis. **Pas de
   remise à zéro** (Gaël) : la base de l'addon est mise à jour. Mise en service : options
