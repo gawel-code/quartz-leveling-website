@@ -672,7 +672,7 @@ def fiche(con, nom):
                               FROM historique WHERE nom=?""", (nom,)).fetchone()
     jours = ((datetime.datetime.fromisoformat(extremes["d1"]) - datetime.datetime.fromisoformat(extremes["d0"]))
              .total_seconds() / 86400) if extremes["d0"] else 0
-    rythme = round((extremes["n1"] - extremes["n0"]) / jours, 1) if jours >= 1 / 24 else None
+    rythme = round((extremes["n1"] - extremes["n0"]) / jours, 1) if jours >= 1 else None  # moins de 24 h : extrapolation trompeuse
     historique, avant = [], None
     for h in con.execute("SELECT niveau, date FROM historique WHERE nom=? ORDER BY niveau", (nom,)):
         historique.insert(0, {"niveau": h["niveau"], "date": h["date"], "duree": duree(avant, h["date"]) if avant else None})
@@ -1124,7 +1124,7 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <div class="carte stat"><span>Niveau</span><b class="num">{{ perso.niveau }}<small>/60</small></b>
  <div class="barre"><i class="{{ 'max' if perso.niveau == 60 else '' }}" style="width:{{ (perso.niveau / 60 * 100)|round|int }}%"></i></div></div>
  <div class="carte stat"><span>Place au classement</span><b class="num">{{ ordinal(place) }}</b><em>sur {{ membres }} membre{{ "s" if membres > 1 }}</em></div>
- <div class="carte stat"><span>Rythme moyen</span><b class="num">{{ ("%.1f"|format(rythme)).replace(".", ",") if rythme is not none else "—" }}</b><em>niveaux par jour</em></div>
+ <div class="carte stat"><span>Rythme moyen</span><b class="num">{{ ("%.1f"|format(rythme)).replace(".", ",") if rythme is not none else "—" }}</b><em>niveaux par jour{{ " (après 24 h de données)" if rythme is none }}</em></div>
  <div class="carte stat"><span>Niveaux gagnés en 24 h</span><b class="num">{{ "+" ~ gain24 if gain24 > 0 else "0" }}</b><em>&nbsp;</em></div>
 </section>
 

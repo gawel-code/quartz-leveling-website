@@ -973,3 +973,14 @@ def test_fiche_rendue_et_liens_vers_les_fiches(discord_client):
     connecter(nick="Gael")
     c.post("/moi", data={"action": "reclamer", "nom": "Zuljin"})
     assert 'href="perso/Zuljin"' in c.get("/moi").text
+
+
+def test_fiche_rythme_seulement_apres_24_h_de_donnees(client):
+    g = client.application.view_functions["index"].__globals__
+    remplir(g, [("Gawel", 2, "2026-11-05T00:10:00"), ("Gawel", 7, "2026-11-05T01:40:00"),  # 5 niveaux en 1 h 30
+                ("Mok", 1, "2026-11-05T00:00:00"), ("Mok", 13, "2026-11-06T00:00:00")],     # 12 niveaux en 24 h
+            [("Gawel", "Orc", "Guerrier", 7, "x"), ("Mok", "Tauren", "Paladin", 13, "x")])
+    with g["db"]() as con:
+        assert g["fiche"](con, "Gawel")["rythme"] is None  # pas d'extrapolation à 80 niveaux par jour
+        assert g["fiche"](con, "Mok")["rythme"] == 12.0
+    assert "niveaux par jour" in client.get("/perso/Gawel").text  # carte affichée avec « — »
