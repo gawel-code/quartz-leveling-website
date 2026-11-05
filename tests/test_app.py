@@ -741,7 +741,7 @@ def blizzard(client, monkeypatch):
             return Reponse(RACES_API)
         if chemin.endswith("/playable-class/index"):
             return Reponse(CLASSES_API)
-        if chemin == "/data/wow/guild/firemaw/quartz-forever/roster":
+        if chemin in ("/data/wow/guild/firemaw/quartz-forever/roster", "/data/wow/guild/quartz-forever/roster"):
             return Reponse({"members": etat["roster"]})
         nom = chemin.rsplit("/", 1)[1]
         for n, (niveau, ts) in etat["profils"].items():
@@ -837,6 +837,32 @@ def test_espaces_de_noms_forever(blizzard, monkeypatch):
         "/profile/wow/character/firemaw/grommash": "profile-forever-eu"}
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert (persos["Grommash"]["race"], persos["Grommash"]["classe"]) == ("Tauren", "Guerrier")
+
+
+def membre_sans_royaume(nom, surname, niveau, race=96, classe=1, rang=3):
+    """Membre du roster Forever (vu le 05/11) : surname + slug, pas de realm."""
+    return {"character": {"name": nom, "surname": surname, "slug": f"{nom}-{surname}".lower(), "level": niveau,
+                          "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": rang}
+
+
+def test_roster_forever_sans_royaume(blizzard, monkeypatch):
+    """Forever (v1.12.0) : guilde sans royaume, perso identifié par nom-surname (le nom seul est
+    partagé : plusieurs « …-Forever ») ; profil /profile/wow/character/<slug> (404 → date de réception)."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    assert g["bnet_actif"]() and g["chemin_guilde"]() == "/data/wow/guild/quartz-forever"
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 7, race=2),
+                      membre_sans_royaume("Anar", "Forever", 14, rang=0),
+                      membre_sans_royaume("Anar", "Lumière", 9)]
+    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 3, "source": "blizzard"}
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert set(persos) == {"Gawel-Zugzug", "Anar-Forever", "Anar-Lumière"}
+    assert (persos["Gawel-Zugzug"]["race"], persos["Gawel-Zugzug"]["niveau"]) == ("Orc", 7)
+    assert persos["Anar-Forever"]["rang"] == 0 and persos["Anar-Lumière"]["niveau"] == 9
+    assert "/data/wow/guild/quartz-forever/roster" in etat["appels"]
+    assert "/profile/wow/character/gawel-zugzug" in etat["appels"]
+    assert not any("/firemaw/" in a for a in etat["appels"])
 
 
 def test_version_static_absente_du_roster(client):

@@ -190,7 +190,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   niveaux restent suivis. `/admin` : colonne « Progression » (motif + Exclure / Réintégrer), filtre
   « Exclus ». `/moi` : pastille sur un perso exclu. Vidé par la remise à zéro, dans `/export.json`.
 - API Blizzard (v1.9.0) : `lire_api_blizzard()` → `(persos, dates)`, active si `bnet_actif()` (id,
-  secret, royaume, guilde). `bnet_get()` : jeton `client_credentials` gardé dans `_bnet` jusqu'à
+  secret, guilde ; royaume facultatif depuis v1.12.0). `chemin_guilde()` : `/data/wow/guild/{royaume}/{guilde}`,
+  ou `/data/wow/guild/{guilde}` si `BNET_ROYAUME` est vide (Forever). `identite(c)` → (nom en base, chemin
+  du profil) : avec `surname` (Forever) → `Nom-Surname` et `/profile/wow/character/{slug}` ; sinon nom seul
+  et `/profile/wow/character/{royaume}/{nom}`. `bnet_get()` : jeton `client_credentials` gardé dans `_bnet` jusqu'à
   expiration, `namespace = espace_bnet()` = `{profile|dynamic|static}-{BNET_ESPACE}-{BNET_REGION}`, `fr_FR`,
   None si ≠ 200. Statique versionné (v1.12.0) : `static-{version}-…` (Forever : `static-forever-eu` → 403).
   `libelles(type_, version_roster)` met en cache les index race/classe : essaie `BNET_VERSION_STATIC`
@@ -264,9 +267,10 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 ## État au 5 novembre 2026 (v1.11.0 déployée, v1.12.0 en attente)
 - 🕓 v1.12.0 (branche `claude/beautiful-carson-7czwkg`, pas encore mergée) : API prête pour Forever
   (option `bnet_version_static`, repli sur la version du roster, script `--jeu forever` et `--compte`).
-  Au 5/11, l'API ne publie ni royaume ni perso Forever (voir *essais du 05/11*) : l'addon reste la source. Au lancement :
-  options `bnet_espace = forever`, `bnet_version_static = 1.60.1_70399` (facultatif : le repli suffit si
-  le roster cite la version), `bnet_royaume` (slug réel, voir `--jeu forever --royaumes`), `bnet_guilde`.
+  Guilde lue **sans royaume** (`/data/wow/guild/quartz-forever/roster`, 19 membres le 05/11 à 14 h),
+  persos en `Nom-Surname`. Essai réel (base jetable) : `collecter()` → 19 persos, source `blizzard`.
+  À la mise en service : `bnet_espace = forever`, `bnet_royaume` **vide**, `bnet_guilde = Quartz Forever`
+  (`bnet_version_static` facultatif : `static-forever-eu` répond depuis le 05/11).
 - ✅ Connexion Discord (v1.4.0, testée par Gaël) : application Discord **Quartz Forever** (Client ID
   `1565628978633515028`, redirection `https://quartz.gawel.be/auth/discord/callback`), serveur
   `801395490372583426`, rôle `1549720665844613130`, admin = Gaël `161139977328132107` (valeurs par
@@ -306,8 +310,8 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
   OK), Cloudflared basculé, `secrets.yaml` mis à jour par Gaël (`rest_command.quartz_collecter` →
   200 depuis la nouvelle app, l'ancienne étant arrêtée). Reste : vérifier le site dans un navigateur
   (le proxy de session Claude bloque `quartz.gawel.be`). Ancienne app désinstallée (30/10).
-- ⚠️ **À remettre d'équerre avant le 5/11** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le
-  30/10) ; y mettre notre guilde quand l'API couvrira Forever. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
+- ⚠️ **À remettre d'équerre** : `bnet_royaume` / `bnet_guilde` **vides** (vérifié le 30/10) ; après le
+  déploiement de la v1.12.0 : `bnet_guilde = Quartz Forever`, `bnet_espace = forever`, royaume vide. La base contient les 6 persos de Progress + 3 persos de test (Grommash,
   Zuljin, Mokvar) → remise à zéro via `/admin` (les comptes sont conservés).
 - ✅ App installée et démarrée, site en ligne sur https://quartz.gawel.be
 - ✅ Route Cloudflared configurée
@@ -375,7 +379,24 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 - `us.api.blizzard.com` bloqué par le proxy des sessions Claude (seule l'API EU est testable d'ici).
 - Forum (sujet 59774) : rien depuis le message du 02/11, aucun employé Blizzard. Lien `protected_character`
   de `/profile/user/wow` : `/profile/user/wow/protected-character/{realmId}-{characterId}` → d'où `--compte`.
-- Persos de Gaël sur Forever : **Gar Gawelle** et **Gawel Zugzug** (serveur PvE).
+- Persos de Gaël sur Forever : **Gar Gawelle** (hors guilde) et **Gawel Zugzug** (serveur PvE).
+
+## API Blizzard — essais sur Forever du 05/11/2026 (14 h 20) : la guilde est publiée
+- `/data/wow/guild/quartz-forever` (`profile-forever-eu`, **sans royaume**) → 200 : id 80187, Horde,
+  `member_count` 19, `ruleset` « Normal » (id 2, `dynamic-forever-eu`), `created_timestamp` 5/11 0 h 05,
+  liens `roster`, `achievements`, `activity`. `/roster` → 19 membres : `character` = `name`, **`surname`**,
+  **`slug`** (`lendive-forever`), `id`, `level`, `playable_race.id`, `playable_class.id`, `faction` ; pas de
+  `realm`. `rank` 0 (Anar-Forever) à 4. 7 membres ont le surname « Forever » ; d'où la clé `Nom-Surname`.
+- Profils `/profile/wow/character/{slug}` : **200 pour une partie des persos** (souledge-forever,
+  metam-aedui, wagyu-steak, cheetah-steak, anar-forever, erayo-cedartotem…), 404 pour d'autres
+  (lendive-forever, gawel-zugzug…). Profil complet (équipement, quêtes, réputations,
+  `last_login_timestamp`…). **Le roster est en retard sur le profil** (Wagyu 15 au roster, 17 au profil ;
+  Anar 14 / 16) : la date de connexion n'est alors pas retenue (niveaux différents) → date de collecte.
+  Piste : prendre le niveau du profil quand il est plus haut.
+- Première collecte : tous les persos arrivent d'un coup ; les paliers sont classés par date, et seuls
+  les persos à profil lisible ont une date réelle (Souledge « 1ᵉʳ au niveau 10 » à 5 h 56) : classement
+  initial approximatif. Les noms Forever ne correspondent plus aux pseudos (`cles.txt`) ni, a priori,
+  aux noms exportés par l'addon (à vérifier en jeu : `GetGuildRosterInfo()` donne-t-il le surname ?).
 
 ## Outils utiles pour Claude (via le connecteur HA)
 - Appeler l'app directement : `ha_manage_app(slug="ee5b467c_quartz_forever", port=8080,
@@ -405,8 +426,11 @@ Home Assistant → rest_command → /collecter (toutes les 15 min) et /recap (9 
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
 6. ~~Client API develop.battle.net + essais Classic Era~~ ✅ fait (30/10) : roster OK avec la race.
-7. Après le lancement : espaces de noms Forever confirmés le 03/11 (v1.12.0), mais ni royaume ni perso
-   publiés le 05/11. Gaël lance `--jeu forever --compte` (Redirect URL `http://localhost:8765/` à
+7. Guilde Forever lisible depuis le 05/11 après-midi (v1.12.0, sans royaume, `Nom-Surname`) : merger,
+   déployer, régler les options (voir État), remettre la base à zéro avant la première collecte.
+   À voir : niveau du profil plus récent que le roster ; addon et association des persos (le nom de
+   l'addon contient-il le surname ?) ; `proprietaires()` (perso = pseudo) ne marche plus avec `Nom-Surname`.
+   Facultatif : Gaël lance `--jeu forever --compte` (Redirect URL `http://localhost:8765/` à
    déclarer) et envoie `compte-forever.json` → forme réelle des liens perso / guilde. Relancer
    `--jeu forever --royaumes`, tester le roster, puis renseigner `bnet_espace = forever`,
    `bnet_royaume` / `bnet_guilde` (et `bnet_version_static` si besoin). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du

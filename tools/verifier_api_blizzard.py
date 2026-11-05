@@ -6,7 +6,7 @@
 #   python3 tools/verifier_api_blizzard.py --royaume firemaw --guilde "Nom de guilde"
 #   python3 tools/verifier_api_blizzard.py --royaume firemaw --perso Nomduperso
 #   python3 tools/verifier_api_blizzard.py --jeu forever --royaumes
-#   python3 tools/verifier_api_blizzard.py --jeu forever --royaume <slug> --guilde "Quartz Forever"
+#   python3 tools/verifier_api_blizzard.py --jeu forever --guilde "Quartz Forever" --perso gawel-zugzug
 #   python3 tools/verifier_api_blizzard.py --jeu forever --compte [--perso Gawel]
 #
 # --compte : connexion Battle.net (OAuth « authorization code », scope wow.profile) dans le
@@ -114,7 +114,8 @@ def royaumes(api):
 
 
 def guilde(api, royaume, nom, races, classes):
-    code, d = api.get(f"/data/wow/guild/{royaume}/{slug(nom)}/roster", "profile")
+    # Forever : guilde sans royaume (/data/wow/guild/quartz-forever/roster), persos avec surname
+    code, d = api.get("/data/wow/guild/" + (f"{royaume}/" if royaume else "") + f"{slug(nom)}/roster", "profile")
     if code != 200:
         print(f"✗ roster de {nom} sur {royaume} : {code}")
         return
@@ -128,7 +129,8 @@ def guilde(api, royaume, nom, races, classes):
         c = m["character"]
         race = races.get(c.get("playable_race", {}).get("id"), "?")
         classe = classes.get(c.get("playable_class", {}).get("id"), "?")
-        persos.append((c["name"], race, classe, c.get("level", 0)))
+        nom_perso = f"{c['name']}-{c['surname']}" if c.get("surname") else c["name"]  # comme identite()
+        persos.append((nom_perso, race, classe, c.get("level", 0)))
     persos.sort(key=lambda p: -p[3])
     # Même forme que analyser_export() : ce que lire_api_blizzard() devra renvoyer.
     for p in persos[:15]:
@@ -139,7 +141,8 @@ def guilde(api, royaume, nom, races, classes):
 
 
 def perso(api, royaume, nom):
-    code, d = api.get(f"/profile/wow/character/{royaume}/{nom.lower()}", "profile")
+    # Forever : --perso gawel-zugzug (slug nom-surname), sans royaume
+    code, d = api.get("/profile/wow/character/" + (f"{royaume}/" if royaume else "") + nom.lower(), "profile")
     if code != 200:
         print(f"✗ profil de {nom} : {code} (404 = inconnu, ou pas joué depuis longtemps)")
         return
@@ -259,7 +262,7 @@ def main():
     p.add_argument("--jeu", default="classic1x", help="classic1x = Classic Era, forever = WoW Forever")
     p.add_argument("--version-static", help="version de l'espace statique (défaut forever : "
                    f"{VERSIONS['forever']}) ; vide = static-<jeu>-<région>")
-    p.add_argument("--royaume", default="firemaw", help="slug du royaume")
+    p.add_argument("--royaume", help="slug du royaume (défaut : firemaw ; aucun pour forever)")
     p.add_argument("--guilde", help="nom de la guilde (converti en slug)")
     p.add_argument("--perso", help="nom d'un personnage")
     p.add_argument("--royaumes", action="store_true", help="liste les royaumes et s'arrête")
@@ -269,6 +272,8 @@ def main():
     a = p.parse_args()
 
     version = VERSIONS.get(a.jeu, "") if a.version_static is None else a.version_static
+    if a.royaume is None:
+        a.royaume = "" if a.jeu == "forever" else "firemaw"
     api = Api(a.region, a.jeu, version)
     if a.compte:  # --perso filtre alors les persos dont on suit les liens
         compte(api, a.port, a.perso, f"compte-{a.jeu}.json")

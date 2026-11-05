@@ -488,7 +488,24 @@ def slug(texte):
 
 
 def bnet_actif():
-    return bool(BNET_ID and BNET_SECRET and BNET_ROYAUME and BNET_GUILDE)
+    """Royaume facultatif (v1.12.0) : sur Forever, les guildes n'en ont pas."""
+    return bool(BNET_ID and BNET_SECRET and BNET_GUILDE)
+
+
+def chemin_guilde():
+    """Classic : /data/wow/guild/{royaume}/{guilde} ; Forever (royaume vide) : /data/wow/guild/{guilde}."""
+    return "/data/wow/guild/" + (f"{slug(BNET_ROYAUME)}/" if BNET_ROYAUME else "") + slug(BNET_GUILDE)
+
+
+def identite(c):
+    """(nom en base, chemin du profil) d'un membre du roster. Forever : nom + surname, unique
+    (« Gawel-Zugzug », profil /profile/wow/character/gawel-zugzug) ; un nom seul y est partagé
+    par plusieurs joueurs (7 « …-Forever » chez nous le 05/11). Classic : nom + royaume du membre."""
+    nom = c.get("name")
+    if c.get("surname"):
+        return f"{nom}-{c['surname']}", f"/profile/wow/character/{c.get('slug') or slug(nom + '-' + c['surname'])}"
+    royaume = c.get("realm", {}).get("slug") or slug(BNET_ROYAUME)
+    return nom, f"/profile/wow/character/{royaume}/{(nom or '').lower()}"
 
 
 def espace_bnet(espace, version=""):
@@ -553,7 +570,7 @@ def lire_api_blizzard():
     if not bnet_actif():
         return [], {}, {}
     try:
-        d = bnet_get(f"/data/wow/guild/{slug(BNET_ROYAUME)}/{slug(BNET_GUILDE)}/roster", "profile")
+        d = bnet_get(chemin_guilde() + "/roster", "profile")
         if not d:
             return [], {}, {}
         version = version_static(d)
@@ -561,19 +578,22 @@ def lire_api_blizzard():
         persos = {}
         for m in d.get("members", []):
             c = m.get("character", {})
-            nom, niveau = c.get("name"), c.get("level") or 0
-            if not nom or (nom in persos and persos[nom][3] >= niveau):
-                continue  # homonyme sur un royaume connecté : le plus haut niveau l'emporte
+            if not c.get("name"):
+                continue
+            nom, profil = identite(c)
+            niveau = c.get("level") or 0
+            if nom in persos and persos[nom][3] >= niveau:
+                continue  # homonyme sur un royaume connecté (Classic) : le plus haut niveau l'emporte
             persos[nom] = (nom, races.get(c.get("playable_race", {}).get("id"), "?"),
                            classes.get(c.get("playable_class", {}).get("id"), "?"), niveau,
-                           c.get("realm", {}).get("slug") or slug(BNET_ROYAUME), m.get("rank"))
+                           profil, m.get("rank"))
         dates = {}
         with db() as con:
-            for nom, _, _, niveau, royaume, _ in persos.values():
+            for nom, _, _, niveau, chemin_profil, _ in persos.values():
                 row = con.execute("SELECT niveau, maj FROM personnages WHERE nom=?", (nom,)).fetchone()
                 if row and niveau <= row["niveau"]:
                     continue
-                profil = bnet_get(f"/profile/wow/character/{royaume}/{nom.lower()}", "profile") or {}
+                profil = bnet_get(chemin_profil, "profile") or {}  # Forever : 404 au 05/11
                 ts = profil.get("last_login_timestamp")
                 if not ts or profil.get("level") != niveau:
                     continue

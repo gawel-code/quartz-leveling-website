@@ -139,7 +139,7 @@ BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par 
 | `bnet_region` | région de l'API (`eu`) |
 | `bnet_espace` | jeu dans l'espace de noms : `classic1x` (Classic Era, SoD, Anniversary) ; `forever` pour WoW Forever |
 | `bnet_version_static` | version de l'espace statique (races, classes), ex. `1.60.1_70399` pour Forever → `static-1.60.1_70399-forever-eu` ; vide = sans version, puis repli sur la version citée par le roster |
-| `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; vides = API désactivée |
+| `bnet_royaume` / `bnet_guilde` | royaume et guilde lus (noms ou slugs) ; `bnet_guilde` vide = API désactivée ; `bnet_royaume` **vide pour Forever** (guildes sans royaume : `/data/wow/guild/quartz-forever/roster`) |
 
 **API Blizzard** (v1.9.0) : à chaque `/collecter`, le roster de la guilde (nom, race, classe,
 niveau) est lu et fusionné comme un envoi (niveau le plus haut gardé, annonces normales, sans
@@ -150,8 +150,11 @@ plus haut niveau l'emporte. API en panne → repli sur le fichier déposé côt�
 
 **Espaces de noms Forever** (v1.12.0, vérifiés le 03/11/2026) : `profile-forever-eu` (roster, profils),
 `dynamic-forever-eu` (royaumes) et un espace statique **versionné** `static-1.60.1_70399-forever-eu`
-(`static-forever-eu` → 403). Les races et classes sont lues dans l'espace de `bnet_version_static`
+(`static-forever-eu` → 403 avant le lancement, 200 depuis le 05/11). Les races et classes sont lues dans l'espace de `bnet_version_static`
 (ou sans version), puis, en cas d'échec, dans celui que citent les liens du roster (il suit les patchs).
+Sur Forever, guildes et persos n'ont pas de royaume : `bnet_royaume` reste vide, et un perso est
+enregistré sous **`Nom-Surname`** (ex. `Gawel-Zugzug`), car le nom seul est partagé par plusieurs
+joueurs (7 membres « …-Forever » le 05/11) ; son profil est `/profile/wow/character/<slug>`.
 Forever ajoute deux races : « Éolide de l'Ordre suprême » (Alliance) et « Éolide sculpte-vents » (Horde).
 
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
@@ -198,7 +201,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
-| 1.12.0 | API Blizzard prête pour WoW Forever : option `bnet_version_static` (espace statique versionné `static-1.60.1_70399-forever-eu`, le non versionné renvoie 403), repli automatique sur la version citée par le roster ; `tools/verifier_api_blizzard.py --jeu forever` (version statique par défaut, royaumes sans nom, version lue dans le roster et le profil) et `--compte` (connexion Battle.net, persos du compte via `/profile/user/wow`) |
+| 1.12.0 | API Blizzard prête pour WoW Forever : option `bnet_version_static` (espace statique versionné `static-1.60.1_70399-forever-eu` ; le non versionné renvoyait 403 avant le lancement), repli automatique sur la version citée par le roster ; `tools/verifier_api_blizzard.py --jeu forever` (version statique par défaut, royaumes sans nom, version lue dans le roster et le profil) et `--compte` (connexion Battle.net, persos du compte via `/profile/user/wow`) ; guilde Forever lue sans royaume (`bnet_royaume` vide), persos enregistrés sous `Nom-Surname` |
 | 1.11.0 | dépôt déclaré comme dépôt d'apps Home Assistant (`repository.yaml`) pour des mises à jour sans console ; base et clé de session déplacées de `/data` vers `/config` (`/app_configs/<slug>/`), migration automatique au démarrage ; lien vers le site sur la fiche de l'app |
 | 1.10.1 | connexion Discord : liens directs vers discord.com (l'app Discord peut s'ouvrir sur mobile) et `state` signé valable 10 min, indépendant du cookie (le retour marche dans un autre navigateur) ; colonne « Vers 60 » renommée « Progression » ; dans l'admin, mention quand aucun membre n'a encore de rang connu (colonne « Rang » cachée) |
 | 1.10.0 | rangs de la guilde : numéro lu dans le roster de l'API, et dans le fichier de l'addon ≥ 1.3.0 (`GuildExportRangs`), noms définis dans l'admin (conservés par la remise à zéro), colonne « Rang » dans le classement de l'accueil |
