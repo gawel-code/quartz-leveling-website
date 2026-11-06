@@ -1,6 +1,7 @@
 # Quartz Forever — suivi de progression de guilde (WoW Forever)
 import os, re, json, hmac, secrets, sqlite3, datetime, bisect, unicodedata
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
@@ -659,6 +660,20 @@ def libelles(type_, version_roster=""):
     return _bnet[type_]
 
 
+BNET_PARALLELE = 8  # requêtes simultanées (quota Blizzard : 100 par seconde)
+
+
+def lire_profil(chemin_profil):
+    """(profil, {"morts", "spe"} ou None) d'un membre ; un profil non publié (404) n'a pas de
+    statistiques ni de spé : elles ne sont pas demandées."""
+    profil = bnet_get(chemin_profil, "profile") or {}
+    if not profil:
+        return {}, None
+    stats = bnet_get(chemin_profil + "/achievements/statistics", "profile")
+    spes = bnet_get(chemin_profil + "/specializations", "profile")
+    return profil, {"morts": analyser_morts(stats) if stats else None, "spe": analyser_spe(spes) if spes else None}
+
+
 def lire_api_blizzard():
     """Roster de la guilde via l'API → (persos au format d'analyser_export(), dates, rangs). Niveau = le
     plus haut du roster et du profil (le roster Forever est en retard). Une montée de
@@ -689,15 +704,16 @@ def lire_api_blizzard():
                            profil, m.get("rank"))
         dates, details = {}, {}
         with db() as con:
+            # Profil, statistiques et spé de chaque membre, lus en parallèle (v1.15.1 : à la suite, 3
+            # requêtes × 28 membres dépassaient les 10 s du rest_command de Home Assistant).
+            with ThreadPoolExecutor(BNET_PARALLELE) as pool:
+                lus = dict(zip(persos, pool.map(lire_profil, [p[4] for p in persos.values()])))
             for nom, (_, race, classe, niveau, chemin_profil, rang) in list(persos.items()):
                 # Profil de chaque membre (v1.13.0) : le roster Forever est en retard sur le profil
-                # (05/11 : Wagyu 15 au roster, 17 au profil) ; 1 requête par membre et par collecte.
-                profil = bnet_get(chemin_profil, "profile") or {}
-                if profil:  # profil non publié (404) : le reste non plus, inutile de le demander
-                    stats = bnet_get(chemin_profil + "/achievements/statistics", "profile")
-                    spes = bnet_get(chemin_profil + "/specializations", "profile")
-                    details[nom] = {"morts": analyser_morts(stats) if stats else None,
-                                    "spe": analyser_spe(spes) if spes else None}
+                # (05/11 : Wagyu 15 au roster, 17 au profil).
+                profil, detail = lus[nom]
+                if detail:
+                    details[nom] = detail
                 if (profil.get("level") or 0) > niveau:
                     niveau = profil["level"]
                     persos[nom] = (nom, race, classe, niveau, chemin_profil, rang)

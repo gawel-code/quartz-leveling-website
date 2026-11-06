@@ -778,9 +778,37 @@ def test_collecte_par_l_api(blizzard, monkeypatch):
     # Rien n'a bougé : roster + profil de chaque membre (v1.13.0), jeton et index réutilisés
     etat["appels"].clear()
     assert c.get("/collecter?token=tok").json["mises_a_jour"] == 0
-    assert etat["appels"] == ["/data/wow/guild/firemaw/quartz-forever/roster",
-                              "/profile/wow/character/firemaw/grommash",
-                              "/profile/wow/character/firemaw/zuljin"] and etat["jetons"] == 1
+    assert etat["appels"][0] == "/data/wow/guild/firemaw/quartz-forever/roster"  # profils ensuite, en parallèle
+    assert sorted(etat["appels"][1:]) == ["/profile/wow/character/firemaw/grommash",
+                                          "/profile/wow/character/firemaw/zuljin"] and etat["jetons"] == 1
+
+
+def test_profils_lus_en_parallele(blizzard, monkeypatch):
+    """v1.15.1 : 3 requêtes par membre à la suite dépassaient les 10 s du rest_command de HA."""
+    import threading
+    import time
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    etat["roster"] = [membre_sans_royaume(f"Membre{i}", "Forever", 10) for i in range(16)]
+    etat["profils"] = {f"Membre{i}-Forever": (10, 0) for i in range(16)}
+    get, en_cours, pic = g["requests"].get, [0], [0]
+    verrou = threading.Lock()
+
+    def lent(url, **kw):
+        with verrou:
+            en_cours[0] += 1
+            pic[0] = max(pic[0], en_cours[0])
+        time.sleep(0.02)
+        try:
+            return get(url, **kw)
+        finally:
+            with verrou:
+                en_cours[0] -= 1
+    monkeypatch.setattr(g["requests"], "get", lent)
+    assert c.get("/collecter?token=tok").json["mises_a_jour"] == 16
+    assert 1 < pic[0] <= g["BNET_PARALLELE"]
+    assert len([a for a in etat["appels"] if a.endswith("/specializations")]) == 16
 
 
 def test_montee_datee_par_la_derniere_connexion(blizzard):
