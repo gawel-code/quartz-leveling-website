@@ -293,9 +293,10 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 6 novembre 2026 (v1.13.0 déployée, v1.14.0 en attente de merge)
-- ⏳ v1.14.0 (PR en attente) : classement des morts par l'API (voir *Serveur*). Rejouée en local contre
-  la vraie API le 6/11 : 26 persos, 23 avec des statistiques, 180 morts.
+## État au 6 novembre 2026 (v1.14.0 déployée)
+- ✅ v1.14.0 (mergée le 6/11, PR #42) : classement des morts par l'API (voir *Serveur*). Rejouée en local
+  contre la vraie API puis **déployée et vérifiée le 6/11 vers 18 h 45** (`check_updates` + `update`,
+  collecte → `source: blizzard`) : pied « v1.14.0 », « 180 morts dans la guilde », Ooah Perfectoil en tête (21).
 - Profils 404 (6/11) : pas un écart roster/site (mêmes 20 persos le 5/11) ni des persos inactifs (les
   trois niveaux 21 étaient en 404) ; publication différée par Blizzard : Lendive Forever et Gawel
   Zugzug sont passés en 200 ensuite. Plus que 3 profils en 404 le 6/11 (funzie-forever, sept-entrion,
