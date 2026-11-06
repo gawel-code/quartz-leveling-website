@@ -41,11 +41,9 @@ PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
 BATTLETAG_VALIDE = re.compile(r"^[^\W\d_]\w{1,11}#\d{4,6}$")  # Nom#1234 : 2 à 12 caractères, pas d'espace
 PALIERS = [10, 20, 30, 40, 50, 60]
 MEDAILLES = {1: "🥇", 2: "🥈", 3: "🥉"}
-COULEURS = {
-    "Guerrier": "#C69B6D", "Mage": "#3FC7EB", "Prêtre": "#FFFFFF", "Prêtresse": "#FFFFFF",
-    "Voleur": "#FFF468", "Voleuse": "#FFF468", "Druide": "#FF7C0A", "Druidesse": "#FF7C0A",
-    "Chasseur": "#AAD372", "Chasseresse": "#AAD372", "Démoniste": "#8788EE",
-    "Paladin": "#F48CBA", "Chaman": "#2E8FEF", "Chamane": "#2E8FEF",
+COULEURS = {  # par classe de CLASSES : le libellé (masculin de l'API, féminin de l'addon) passe par CLASSES
+    "guerrier": "#C69B6D", "mage": "#3FC7EB", "pretre": "#FFFFFF", "voleur": "#FFF468", "druide": "#FF7C0A",
+    "chasseur": "#AAD372", "demoniste": "#8788EE", "paladin": "#F48CBA", "chaman": "#2E8FEF",
 }
 
 
@@ -148,8 +146,9 @@ def icone_spe(classe, spe, detail=""):
         icone[0], icone[1], titre, titre, Markup(icone[2]))
 
 
-def couleur(classe):
-    return COULEURS.get(classe or "", "#8a9ab5")
+def couleur(classe, defaut="#8a9ab5"):
+    """Couleur de classe du jeu, quel que soit le genre du libellé (« Guerrière » : brun, comme « Guerrier »)."""
+    return COULEURS.get(CLASSES.get(classe or ""), defaut)
 
 
 def embleme(classe):
@@ -1679,7 +1678,7 @@ def index():
         maj=max((p["maj"] for p in persos), default="")[:16].replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
         liste_classes=sorted({p["classe"] for p in persos}),
-        couleur=lambda c: COULEURS.get(c, "#e6eefb"))  # texte clair par défaut dans le classement
+        couleur=lambda c: couleur(c, "#e6eefb"))  # texte clair par défaut dans le classement
 
 
 @app.route("/perso/<path:nom>")

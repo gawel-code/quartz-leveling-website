@@ -309,6 +309,9 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 ## État au 6 novembre 2026 (v1.14.0 déployée, v1.15.0 en attente de merge)
 - ⏳ v1.15.0 (PR en attente) : icône de spécialisation devant la classe (voir *Serveur*). Rejouée en local
   contre la vraie API le 6/11 : 24 persos sur 26 avec une spé (Funzie Forever et Sept Entrion : profil 404).
+  Corrige aussi la couleur des classes au féminin : `COULEURS` est indexé par classe de `CLASSES`
+  (`couleur(classe, defaut)`) ; vu en prod le 6/11 : Jazeel Sorrowbane et Murène Gilehjon (« Guerrière »)
+  en blanc dans le classement (la classe gardée est celle de l'addon, au féminin).
 - ✅ v1.14.0 (mergée le 6/11, PR #42) : classement des morts par l'API (voir *Serveur*). Rejouée en local
   contre la vraie API puis **déployée et vérifiée le 6/11 vers 18 h 45** (`check_updates` + `update`,
   collecte → `source: blizzard`) : pied « v1.14.0 », « 180 morts dans la guilde », Ooah Perfectoil en tête (21).

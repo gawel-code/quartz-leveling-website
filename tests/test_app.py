@@ -991,6 +991,17 @@ def test_pas_de_classement_des_morts_sans_donnees(client):
     assert "Classement des morts" not in client.get("/").text
 
 
+def test_couleur_des_classes_au_feminin(client):
+    """Vu le 06/11 : « Guerrière » (addon) en blanc dans le classement au lieu du brun du guerrier."""
+    g = client.application.view_functions["index"].__globals__
+    for masculin, feminin in (("Guerrier", "Guerrière"), ("Prêtre", "Prêtresse"), ("Voleur", "Voleuse"),
+                              ("Druide", "Druidesse"), ("Chasseur", "Chasseresse"), ("Chaman", "Chamane")):
+        assert g["couleur"](feminin) == g["couleur"](masculin) != g["couleur"]("?")
+    lua = 'GuildExportDB = {\n["Jazeel Sorrowbane"] = "Jazeel Sorrowbane;?;Guerrière;29",\n}'
+    envoyer(client, lua.encode())
+    assert 'style="color:#C69B6D"><span class="dot" style="background:#C69B6D">' in client.get("/").text
+
+
 # ---------- Spécialisations (v1.15.0) ----------
 def arbres(*points, actif=True):
     """Réponse /specializations (forme vue le 06/11) : arbres du groupe actif, talents avec rangs."""

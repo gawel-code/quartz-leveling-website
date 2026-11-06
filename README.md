@@ -226,7 +226,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
-| 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle |
+| 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle ; couleur de classe aussi pour les libellés au féminin de l'addon (« Guerrière » était en blanc) |
 | 1.14.0 | Classement des morts : statistiques de morts lues sur l'API Blizzard à chaque collecte (table `morts`, par catégorie : donjons et raids, en extérieur, autres), classement sur l'accueil, détail sur la fiche ; vidées par la remise à zéro, incluses dans `/export.json` |
 | 1.13.0 | API Blizzard pour WoW Forever : guilde lue sans royaume, persos enregistrés sous « Prénom Nom » comme l'addon (fusion avec les fiches existantes), profil de chaque membre lu à chaque collecte (niveau plus récent que le roster, date de dernière connexion), classe connue jamais remplacée (garde le féminin) ; option `bnet_version_static` (espace statique versionné) ; `tools/verifier_api_blizzard.py --jeu forever` et `--compte` (connexion Battle.net, persos du compte) |
 | 1.12.1 | fiche personnage : rythme moyen affiché seulement après 24 h de données (5 niveaux en 1 h 30 donnaient « 73,9 niveaux par jour ») |
