@@ -87,7 +87,7 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 - Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
   (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0), `inactifs`
-  (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0). `personnages.rang` (n° de rang,
+  (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0), `morts` (v1.14.0). `personnages.rang` (n° de rang,
   v1.10.0) : les `INSERT` dans `personnages` nomment leurs colonnes (ne plus écrire `VALUES(?,?,?,?,?)`).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
@@ -220,6 +220,21 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   les persos de Progress venaient d'une collecte v1.9.0 et l'API était coupée).
   Accueil : colonne « Rang » seulement si un perso a un rang (`avec_rangs`), nom ou « Rang N ».
   L'API ne fournit pas les noms des rangs ni les rôles (tank/soigneur/DPS).
+- Morts (v1.14.0) : `lire_api_blizzard()` → `(persos, dates, rangs, morts)` ; pour chaque profil en 200
+  (seulement : un profil 404 n'a pas de statistiques), `{chemin_profil}/achievements/statistics` →
+  `analyser_morts()` : catégorie id `STAT_MORTS` = 122 « Morts » → `[(stat_id, catégorie, libellé, n)]`,
+  catégorie « Total » pour les stats directes (id 60 = total), sinon nom de la sous-catégorie (125
+  « Donjons et raids » : 321 total, 918 donjons à 5 ; 126 « En extérieur » : 112 noyade, 114 chute…) ;
+  127 « Résurrection » ignorée ; pas de catégorie 122 (jamais mort) → total 0. `enregistrer_morts()`
+  (appelé par `collecter()` après `integrer()`) : table `morts(nom, stat, categorie, libelle, quantite,
+  maj, PK(nom, stat))`, `quantite = MAX(ancienne, nouvelle)`. `classement_morts(con)` → `(catégories,
+  lignes)` hors exclus, tri total décroissant ; valeur d'une catégorie = sa stat « Nombre total… »
+  sinon la somme (`valeur_categorie()`), ordre `ORDRE_MORTS` puis A→Z, + colonne « Autres » = total −
+  catégories (`AUTRES_MORTS` dans le détail ; vu le 6/11 : la plupart des morts sont hors catégorie,
+  Ooah 21 dont 1 en donjon). Accueil : bloc `#morts` (💀 au 1ᵉʳ, détail en `title`), caché sans
+  données ; fiche : bloc `#morts` (détail + place). Vidée par `reinitialiser()`, dans `/export.json`.
+  L'API donne aussi (non exploités) : `experience` (XP dans le niveau), victimes, quêtes, donjons,
+  métiers, voyages, consommables. **Pas de temps de jeu (`/played`)** nulle part dans l'API.
 - Fiche personnage (v1.12.0) : route `/perso/<path:nom>` (nom URL-encodé, espaces des noms de
   famille → `%20` via `|urlencode`), gabarit `FICHE` avec `<base href="../">` (liens relatifs de
   `ENTETE`/`STYLE`). `fiche(con, nom)` → None si inconnu **ou exclu** (404), sinon `perso`,
@@ -278,7 +293,14 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 5 novembre 2026 (v1.13.0 déployée, collecte par l'API Blizzard active)
+## État au 6 novembre 2026 (v1.13.0 déployée, v1.14.0 en attente de merge)
+- ⏳ v1.14.0 (PR en attente) : classement des morts par l'API (voir *Serveur*). Rejouée en local contre
+  la vraie API le 6/11 : 26 persos, 23 avec des statistiques, 180 morts.
+- Profils 404 (6/11) : pas un écart roster/site (mêmes 20 persos le 5/11) ni des persos inactifs (les
+  trois niveaux 21 étaient en 404) ; publication différée par Blizzard : Lendive Forever et Gawel
+  Zugzug sont passés en 200 ensuite. Plus que 3 profils en 404 le 6/11 (funzie-forever, sept-entrion,
+  patéhenkrout-bourguignon).
+- Annonces silencieuses entre 21 et 24 : normal (paliers de 10, puis 25/35/45 ; vérifié le 5/11).
 - ✅ v1.13.0 (mergée le 5/11, PR #39) : API Blizzard pour Forever. Rejouée contre la
   vraie API sur une copie du classement en ligne (5/11, 15 h) : 0 doublon, 0 création (Cart Forsaken,
   absent du roster, gardé), races « ? » complétées, classes féminines gardées, rangs remplis. **Pas de
@@ -427,8 +449,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 5. Vérifier le numéro `## Interface:` de l'addon sur le client Forever ; tester
    l'addon en jeu (race via cible/survol/groupe).
 6. ~~Client API develop.battle.net + essais Classic Era~~ ✅ fait (30/10) : roster OK avec la race.
-7. ~~API Forever en production~~ ✅ fait (5/11, v1.13.0). Reste : surveiller les 9 profils encore en
-   404 (journal de l'app) ; un membre qui quitte la guilde reste en base (ex. Cart Forsaken, absent du
+7. ~~API Forever en production~~ ✅ fait (5/11, v1.13.0). Reste : surveiller les profils encore en
+   404 (journal de l'app ; 3 le 6/11) ; un membre qui quitte la guilde reste en base (ex. Cart Forsaken, absent du
    roster le 5/11). Avec une connexion Battle.net (OAuth `wow.profile`, liste des persos du
    compte), associer les persos avec la source `blizzard` (`associer()`).
 8. **Prochaine étape** — distribuer à la guilde : addon, `client/`, `docs/README-guilde.md`,
@@ -437,4 +459,5 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 9. Plus tard : sauvegarde nuitière de `/export.json` par Home Assistant.
 10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
 11. Idées en attente : maquette
-    artefact pour présenter le projet à la guilde.
+    artefact pour présenter le projet à la guilde ; autres statistiques de l'API (victimes, quêtes,
+    donjons/boss, métiers, `experience` pour un niveau décimal) ; annonce Discord du 1ᵉʳ au classement des morts.

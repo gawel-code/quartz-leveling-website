@@ -723,7 +723,7 @@ def blizzard(client, monkeypatch):
     for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
                      "BNET_GUILDE": "Quartz Forever"}.items():
         monkeypatch.setitem(g, cle, val)
-    etat = {"roster": [], "profils": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
+    etat = {"roster": [], "profils": {}, "morts": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
             "jeu": "-classic1x-eu"}
 
     def post(url, **kw):
@@ -744,6 +744,9 @@ def blizzard(client, monkeypatch):
             return Reponse(CLASSES_API)
         if chemin in ("/data/wow/guild/firemaw/quartz-forever/roster", "/data/wow/guild/quartz-forever/roster"):
             return Reponse({"members": etat["roster"]})
+        if chemin.endswith("/achievements/statistics"):  # v1.14.0 : morts
+            perso = chemin.split("/")[-3]
+            return Reponse(etat["morts"][perso]) if perso in etat["morts"] else Reponse({}, 404)
         nom = chemin.rsplit("/", 1)[1]
         for n, (niveau, ts) in etat["profils"].items():
             if n.lower() == nom:
@@ -789,7 +792,7 @@ def test_montee_datee_par_la_derniere_connexion(blizzard):
     etat["roster"] = [membre("Grommash", 14)]
     etat["profils"] = {"Grommash": (14, int(connexion.timestamp()) * 1000)}
     c.get("/collecter?token=tok")
-    assert etat["appels"][-1] == "/profile/wow/character/firemaw/grommash"
+    assert "/profile/wow/character/firemaw/grommash" in etat["appels"]
     with g["db"]() as con:
         dates = dict(con.execute("SELECT niveau, date FROM historique WHERE nom='Grommash'").fetchall())
     assert dates[14] == connexion.isoformat() and dates[12] <= dates[14]
@@ -918,6 +921,71 @@ def test_api_en_panne_repli_sur_le_fichier(blizzard, tmp_path, monkeypatch):
     monkeypatch.setitem(g, "EXPORT", fichier)
     etat["panne"] = True
     assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 2, "source": "fichier"}
+
+
+# ---------- Morts (v1.14.0) ----------
+def stats_morts(total, *sous):
+    """Réponse /achievements/statistics (forme vue le 06/11) : catégorie 122 « Morts »."""
+    autres = {"id": 130, "name": "Personnage", "statistics": [{"id": 1, "name": "Nombre de campements", "quantity": 3.0}]}
+    morts = {"id": 122, "name": "Morts", "statistics": [{"id": 60, "name": "Nombre total de morts", "quantity": float(total)}],
+             "sub_categories": [{"id": i, "name": n, "statistics": [{"id": sid, "name": sn, "quantity": float(q)}
+                                                                  for sid, sn, q in st]} for i, n, st in sous]}
+    return {"categories": [autres, morts]}
+
+
+DONJONS = (125, "Donjons et raids", [(321, "Nombre total de morts en donjons et raids", 8), (918, "Morts dans des donjons à 5", 3)])
+EXTERIEUR = (126, "En extérieur", [(112, "Morts par noyade", 1), (114, "Morts des suites d’une chute", 2)])
+RESURRECTION = (127, "Résurrection", [(1229, "Ressuscité par des druides", 1)])
+
+
+def test_morts_lues_par_l_api_et_classees(blizzard, monkeypatch):
+    """v1.14.0 : statistiques de morts du profil (catégorie 122) → table morts, classement sur l'accueil
+    (total + une colonne par catégorie), détail sur la fiche. Résurrection ignorée ; jamais mort = 0 ;
+    profil non publié = absent (statistiques pas demandées) ; un compteur ne baisse jamais."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    etat["roster"] = [membre_sans_royaume("Olich", "Ier", 21, classe=7), membre_sans_royaume("Cart", "Forsaken", 12),
+                      membre_sans_royaume("Gawel", "Zugzug", 7, race=2)]
+    etat["profils"] = {"Olich-Ier": (21, 0), "Cart-Forsaken": (12, 0)}
+    etat["morts"] = {"olich-ier": stats_morts(15, DONJONS, EXTERIEUR, RESURRECTION),
+                     "cart-forsaken": {"categories": [{"id": 130, "name": "Personnage", "statistics": []}]}}
+    c.get("/collecter?token=tok")
+    assert "/profile/wow/character/gawel-zugzug/achievements/statistics" not in etat["appels"]
+    lignes = {(m["nom"], m["stat"]): m for m in c.get("/export.json?token=tok").json["morts"]}
+    assert lignes[("Olich Ier", 60)]["quantite"] == 15 and lignes[("Olich Ier", 112)]["categorie"] == "En extérieur"
+    assert lignes[("Cart Forsaken", 60)]["quantite"] == 0
+    assert ("Olich Ier", 1229) not in lignes and not any(n == "Gawel Zugzug" for n, _ in lignes)
+    with g["db"]() as con:
+        categories, cl = g["classement_morts"](con)
+    assert categories == ["Donjons et raids", "En extérieur", "Autres"]
+    assert [(l["nom"], l["total"]) for l in cl] == [("Olich Ier", 15), ("Cart Forsaken", 0)]
+    # Catégorie : sa stat « Nombre total… » sinon la somme ; Autres = le reste (créatures…)
+    assert cl[0]["par_categorie"] == {"Donjons et raids": 8, "En extérieur": 3, "Autres": 4}
+    assert cl[0]["detail"][-1] == (g["AUTRES_MORTS"], 4)
+    page = c.get("/").text
+    assert "Classement des morts" in page and "15 morts dans la guilde" in page
+    assert page.index("Olich Ier", page.index("Classement des morts")) < page.index("Cart Forsaken", page.index("Classement des morts"))
+    fiche = c.get("/perso/Olich%20Ier").text
+    assert "15 au total" in fiche and "Morts par noyade" in fiche and "Ressuscité" not in fiche
+    assert 'id="morts"' not in c.get("/perso/Gawel%20Zugzug").text  # pas de données : pas de bloc
+    # Profil publié en retard : le compteur ne baisse pas
+    etat["morts"]["olich-ier"] = stats_morts(12, DONJONS)
+    c.get("/collecter?token=tok")
+    with g["db"]() as con:
+        assert g["classement_morts"](con)[1][0]["total"] == 15
+    # Perso exclu : hors classement ; remise à zéro : vidé
+    admin(c)
+    c.post("/admin", data={"action": "desactiver", "nom": "Olich Ier", "motif": "mule"})
+    with g["db"]() as con:
+        assert [l["nom"] for l in g["classement_morts"](con)[1]] == ["Cart Forsaken"]
+    c.post("/admin", data={"action": "reinitialiser"})
+    assert c.get("/export.json?token=tok").json["morts"] == []
+
+
+def test_pas_de_classement_des_morts_sans_donnees(client):
+    envoyer(client, LUA1)
+    assert "Classement des morts" not in client.get("/").text
 
 
 # ---------- Rangs de la guilde (v1.10.0) ----------
