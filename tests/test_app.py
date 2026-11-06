@@ -1002,6 +1002,16 @@ def test_couleur_des_classes_au_feminin(client):
     assert 'style="color:#C69B6D"><span class="dot" style="background:#C69B6D">' in client.get("/").text
 
 
+def test_filtre_regroupe_les_classes_au_feminin(client):
+    lua = ('GuildExportDB = {\n["Jazeel Sorrowbane"] = "Jazeel Sorrowbane;?;Guerrière;29",\n'
+           '["Gawel Zugzug"] = "Gawel Zugzug;Orc;Guerrier;16",\n["Tars Tiflette"] = "Tars Tiflette;?;Prêtresse;22",\n}')
+    envoyer(client, lua.encode())
+    page = client.get("/").text
+    options = re.findall(r'<option value="([^"]*)">([^<]*)</option>', page)
+    assert options == [("", "Toutes les classes"), ("guerrier", "Guerrier"), ("pretre", "Prêtre")]
+    assert page.count('data-classe="guerrier"') == 2 and 'data-classe="pretre"' in page
+
+
 # ---------- Spécialisations (v1.15.0) ----------
 def arbres(*points, actif=True):
     """Réponse /specializations (forme vue le 06/11) : arbres du groupe actif, talents avec rangs."""

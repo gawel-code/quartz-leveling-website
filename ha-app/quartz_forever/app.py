@@ -146,6 +146,14 @@ def icone_spe(classe, spe, detail=""):
         icone[0], icone[1], titre, titre, Markup(icone[2]))
 
 
+NOMS_CLASSES = {cle: nom for nom, cle in reversed(list(CLASSES.items()))}  # libellé masculin (1ᵉʳ de CLASSES)
+
+
+def cle_classe(classe):
+    """Classe sans genre (« Guerrière » → guerrier) ; libellé inconnu gardé tel quel."""
+    return CLASSES.get(classe or "", classe or "")
+
+
 def couleur(classe, defaut="#8a9ab5"):
     """Couleur de classe du jeu, quel que soit le genre du libellé (« Guerrière » : brun, comme « Guerrier »)."""
     return COULEURS.get(CLASSES.get(classe or ""), defaut)
@@ -1325,10 +1333,10 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <section class="sec">
 <div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
 <select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
-{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
+{% for cle, nom in liste_classes %}<option value="{{ cle }}">{{ nom }}</option>{% endfor %}</select></div>
 <div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Progression</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
-<tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
+<tr data-classe="{{ cle_classe(p.classe) }}"><td class="rang num">{{ loop.index }}</td>
 <td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span><a class="lien-perso" href="perso/{{ p.nom|urlencode }}">{{ p.nom }}</a>
 {%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
 <td>{{ p.race }}</td><td class="classe">{{ icone_spe(p.classe, p.specialisation, p.talents) }}{{ p.classe }}</td>
@@ -1677,7 +1685,9 @@ def index():
         moyenne=f"{sum(p['niveau'] for p in persos) / len(persos):.1f}" if persos else "—",
         maj=max((p["maj"] for p in persos), default="")[:16].replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
-        liste_classes=sorted({p["classe"] for p in persos}),
+        liste_classes=sorted({(cle_classe(p["classe"]), NOMS_CLASSES.get(cle_classe(p["classe"]), p["classe"]))
+                              for p in persos}, key=lambda c: c[1]),  # « Guerrier » et « Guerrière » regroupés
+        cle_classe=cle_classe,
         couleur=lambda c: couleur(c, "#e6eefb"))  # texte clair par défaut dans le classement
 
 

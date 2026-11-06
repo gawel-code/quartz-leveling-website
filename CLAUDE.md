@@ -312,6 +312,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   Corrige aussi la couleur des classes au féminin : `COULEURS` est indexé par classe de `CLASSES`
   (`couleur(classe, defaut)`) ; vu en prod le 6/11 : Jazeel Sorrowbane et Murène Gilehjon (« Guerrière »)
   en blanc dans le classement (la classe gardée est celle de l'addon, au féminin).
+  Filtre de classe de l'accueil : valeur = `cle_classe()` (clé de `CLASSES`), libellé = `NOMS_CLASSES`
+  (masculin) ; `data-classe` des lignes = la clé (avant : « Guerrier » et « Guerrière » séparés).
 - ✅ v1.14.0 (mergée le 6/11, PR #42) : classement des morts par l'API (voir *Serveur*). Rejouée en local
   contre la vraie API puis **déployée et vérifiée le 6/11 vers 18 h 45** (`check_updates` + `update`,
   collecte → `source: blizzard`) : pied « v1.14.0 », « 180 morts dans la guilde », Ooah Perfectoil en tête (21).
