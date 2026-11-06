@@ -307,8 +307,9 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 6 novembre 2026 (v1.15.0 déployée, v1.15.1 en attente de merge)
-- ⏳ v1.15.1 (PR en attente) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
+## État au 6 novembre 2026 (v1.15.1 déployée)
+- ✅ v1.15.1 (mergée le 6/11, PR #44 ; **déployée et vérifiée vers 19 h 55** : `rest_command.quartz_collecter`
+  → 200 sans timeout, `source: blizzard`, pied « v1.15.1 », icônes de spé présentes, avant le récap de 21 h) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
   la boucle de `lire_api_blizzard()` ne fait plus que la logique), gunicorn `--timeout 120` (`run.sh`).
   Vu le 6/11 après le déploiement de la v1.15.0 : `rest_command.quartz_collecter` → « Timeout when calling
   resource » (10 s par défaut côté HA ; 3 requêtes × 28 membres à la suite ≈ 12 s ; la v1.14.0 prenait
