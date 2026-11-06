@@ -88,7 +88,7 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
   (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0), `inactifs`
   (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0), `morts` (v1.14.0). `personnages.rang` (n° de rang,
-  v1.10.0) : les `INSERT` dans `personnages` nomment leurs colonnes (ne plus écrire `VALUES(?,?,?,?,?)`).
+  v1.10.0), `personnages.specialisation` / `talents` (v1.15.0) : les `INSERT` dans `personnages` nomment leurs colonnes (ne plus écrire `VALUES(?,?,?,?,?)`).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
 - Dates (v1.3.0) : une montée de niveau est datée par l'addon quand il l'a vue
@@ -235,6 +235,19 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   données ; fiche : bloc `#morts` (détail + place). Vidée par `reinitialiser()`, dans `/export.json`.
   L'API donne aussi (non exploités) : `experience` (XP dans le niveau), victimes, quêtes, donjons,
   métiers, voyages, consommables. **Pas de temps de jeu (`/played`)** nulle part dans l'API.
+- Spécialisations (v1.15.0) : 4ᵉ valeur de `lire_api_blizzard()` = `details = {nom: {"morts", "spe"}}`
+  (profil en 200 seulement ; 3 requêtes par membre : profil, statistiques, spés). `{chemin_profil}/specializations`
+  → `analyser_spe()` : groupe `is_active`, arbres = `specializations[]` avec `talents[].talent_rank` (pas de
+  champ « spé active » sur Forever, vu le 6/11) ; spé = arbre au plus de points (égalité : 1ᵉʳ listé),
+  répartition « A 9 · B 8 » ; aucun point → None (rien d'écrit). `enregistrer_spes()` → colonnes
+  `personnages.specialisation` / `talents` (ajoutées par `init_db()`), dernière lecture gagnante.
+  Index Forever (`static-…/playable-specialization/index`, ids propres à Forever : 257 = Protection
+  guerrier) : 27 spés, libellés fr_FR dont « Equilibre » sans accent, « Combat élémentaire »,
+  « Combat farouche », « Magie de l'ombre ». `SPES[(classe CLASSES, normaliser(spé))] = (couleur a,
+  couleur b, SVG)` : icônes maison inspirées des icônes du jeu (fond dégradé radial `--a`/`--b`, liseré
+  doré, motif clair, `.p` = plein) ; `icone_spe(classe, spe, talents)` (contexte des templates) →
+  `<span class="spe" title=…>`, vide si inconnue. Affichée devant la classe : classement, fiche
+  (+ nom de la spé), `carte_perso` (/moi), admin.
 - Fiche personnage (v1.12.0) : route `/perso/<path:nom>` (nom URL-encodé, espaces des noms de
   famille → `%20` via `|urlencode`), gabarit `FICHE` avec `<base href="../">` (liens relatifs de
   `ENTETE`/`STYLE`). `fiche(con, nom)` → None si inconnu **ou exclu** (404), sinon `perso`,
@@ -293,7 +306,9 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 6 novembre 2026 (v1.14.0 déployée)
+## État au 6 novembre 2026 (v1.14.0 déployée, v1.15.0 en attente de merge)
+- ⏳ v1.15.0 (PR en attente) : icône de spécialisation devant la classe (voir *Serveur*). Rejouée en local
+  contre la vraie API le 6/11 : 24 persos sur 26 avec une spé (Funzie Forever et Sept Entrion : profil 404).
 - ✅ v1.14.0 (mergée le 6/11, PR #42) : classement des morts par l'API (voir *Serveur*). Rejouée en local
   contre la vraie API puis **déployée et vérifiée le 6/11 vers 18 h 45** (`check_updates` + `update`,
   collecte → `source: blizzard`) : pied « v1.14.0 », « 180 morts dans la guilde », Ooah Perfectoil en tête (21).
