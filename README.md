@@ -2,17 +2,16 @@
 
 Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) sur
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
-classement des membres, tableau d'honneur des paliers, fil d'activité et annonces Discord.
+classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.13.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.14.0
 
 ## Fonctionnement
 
-L'API Blizzard n'expose pas (encore) les données de WoW Forever. Les données viennent
-donc d'un addon en jeu, dont les membres envoient le fichier de sauvegarde au site.
-Depuis la v1.9.0, le site sait aussi lire lui-même le roster de la guilde sur l'API Blizzard
-à chaque collecte (options `bnet_*`, testé sur Classic Era) : il suffira de renseigner
-l'espace de noms de Forever quand il sera publié.
+Les données viennent de deux sources qui se complètent : l'**API Blizzard** (roster de la guilde
+et profils, lus par le site à chaque collecte, depuis la v1.13.0 pour Forever) et un **addon en
+jeu**, dont les membres envoient le fichier de sauvegarde au site (dates de niveau plus précises,
+races des membres dont le profil n'est pas publié).
 
 ```
 WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la déconnexion / /reload)
@@ -107,7 +106,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 
 | Route | Accès | Rôle |
 |---|---|---|
-| `GET /` | public | classement, tableau d'honneur, fil d'activité |
+| `GET /` | public | classement, tableau d'honneur, classement des morts, fil d'activité |
 | `GET /perso/<nom>` | public | fiche d'un personnage (404 si inconnu ou exclu) |
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
@@ -125,10 +124,10 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
+`envois` (journal des envois), `morts` (statistiques de morts de l'API, v1.14.0), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
 mules, banques), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` vide la
-progression, les envois, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
+progression, les envois, les morts, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
 BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
 
 ### Options de l'app Home Assistant
@@ -166,6 +165,14 @@ donne au masculin, l'addon au féminin). Espaces de noms : `profile-` et `dynami
 statique versionné `static-1.60.1_70399-forever-eu` (`static-forever-eu` répond aussi depuis le
 5/11). Forever ajoute deux races : « Éolide de l'Ordre suprême » (Alliance) et « Éolide
 sculpte-vents » (Horde).
+
+**Morts** (v1.14.0) : pour chaque membre dont le profil est publié, la collecte lit aussi
+`/profile/wow/character/{slug}/achievements/statistics` (une requête de plus par membre) et en garde
+la catégorie « Morts » : total, « Donjons et raids » (total et donjons à 5), « En extérieur »
+(noyade, chute…) ; la sous-catégorie « Résurrection » est ignorée. Un perso jamais mort n'a pas
+cette catégorie : 0. Un compteur ne baisse jamais (profil publié en retard). L'accueil affiche le
+**classement des morts** (total, une colonne par catégorie, « Autres » = total − catégories, surtout
+les créatures en extérieur ; détail au survol du total), la fiche du perso le détail et sa place.
 
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
 donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
@@ -211,6 +218,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.14.0 | Classement des morts : statistiques de morts lues sur l'API Blizzard à chaque collecte (table `morts`, par catégorie : donjons et raids, en extérieur, autres), classement sur l'accueil, détail sur la fiche ; vidées par la remise à zéro, incluses dans `/export.json` |
 | 1.13.0 | API Blizzard pour WoW Forever : guilde lue sans royaume, persos enregistrés sous « Prénom Nom » comme l'addon (fusion avec les fiches existantes), profil de chaque membre lu à chaque collecte (niveau plus récent que le roster, date de dernière connexion), classe connue jamais remplacée (garde le féminin) ; option `bnet_version_static` (espace statique versionné) ; `tools/verifier_api_blizzard.py --jeu forever` et `--compte` (connexion Battle.net, persos du compte) |
 | 1.12.1 | fiche personnage : rythme moyen affiché seulement après 24 h de données (5 niveaux en 1 h 30 donnaient « 73,9 niveaux par jour ») |
 | 1.12.0 | fiche par personnage `/perso/<nom>` : identité, place, rythme, paliers (date, rang, durée), courbe face à la guilde, historique des niveaux ; liens depuis l'accueil et `/moi` |

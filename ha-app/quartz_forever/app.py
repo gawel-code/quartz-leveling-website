@@ -116,6 +116,9 @@ def init_db():
             nom TEXT PRIMARY KEY, pseudo TEXT, source TEXT, date TEXT)""")  # v1.6.0 : perso → joueur
         con.execute("""CREATE TABLE IF NOT EXISTS rangs(
             id INTEGER PRIMARY KEY, nom TEXT)""")  # v1.10.0 : noms des rangs, gardés par la remise à zéro
+        con.execute("""CREATE TABLE IF NOT EXISTS morts(
+            nom TEXT, stat INTEGER, categorie TEXT, libelle TEXT, quantite INTEGER, maj TEXT,
+            PRIMARY KEY(nom, stat))""")  # v1.14.0 : statistiques de morts de l'API Blizzard
         if "rang" not in {c[1] for c in con.execute("PRAGMA table_info(personnages)")}:
             con.execute("ALTER TABLE personnages ADD COLUMN rang INTEGER")  # v1.10.0 : n° lu dans le roster
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(comptes)")}
@@ -569,13 +572,15 @@ def lire_api_blizzard():
     plus haut du roster et du profil (le roster Forever est en retard). Une montée de
     niveau est datée par la dernière connexion du perso (profil), borne haute plus juste que l'heure
     de collecte, si elle est postérieure à la dernière fois qu'on l'a vu à l'ancien niveau (sinon
-    c'est l'heure de connexion d'une session encore en cours). ([], {}, {}) si inactif ou en échec."""
+    c'est l'heure de connexion d'une session encore en cours). 4e valeur (v1.14.0) : {nom: morts} lues
+    dans les statistiques de succès des profils publiés (analyser_morts()).
+    ([], {}, {}, {}) si inactif ou en échec."""
     if not bnet_actif():
-        return [], {}, {}
+        return [], {}, {}, {}
     try:
         d = bnet_get(chemin_guilde() + "/roster", "profile")
         if not d:
-            return [], {}, {}
+            return [], {}, {}, {}
         version = version_static(d)
         races, classes = libelles("race", version), libelles("class", version)
         persos = {}
@@ -590,12 +595,16 @@ def lire_api_blizzard():
             persos[nom] = (nom, races.get(c.get("playable_race", {}).get("id"), "?"),
                            classes.get(c.get("playable_class", {}).get("id"), "?"), niveau,
                            profil, m.get("rank"))
-        dates = {}
+        dates, morts = {}, {}
         with db() as con:
             for nom, (_, race, classe, niveau, chemin_profil, rang) in list(persos.items()):
                 # Profil de chaque membre (v1.13.0) : le roster Forever est en retard sur le profil
                 # (05/11 : Wagyu 15 au roster, 17 au profil) ; 1 requête par membre et par collecte.
                 profil = bnet_get(chemin_profil, "profile") or {}
+                if profil:  # profil non publié (404) : ses statistiques non plus, inutile de les demander
+                    stats = bnet_get(chemin_profil + "/achievements/statistics", "profile")
+                    if stats:
+                        morts[nom] = analyser_morts(stats)
                 if (profil.get("level") or 0) > niveau:
                     niveau = profil["level"]
                     persos[nom] = (nom, race, classe, niveau, chemin_profil, rang)
@@ -609,22 +618,94 @@ def lire_api_blizzard():
                 if row is None or date >= row["maj"]:
                     dates[nom] = {niveau: date}
         rangs = {p[0]: p[5] for p in persos.values() if isinstance(p[5], int)}
-        return [p[:4] for p in persos.values()], dates, rangs
+        return [p[:4] for p in persos.values()], dates, rangs, morts
     except (requests.RequestException, ValueError, KeyError) as e:
         print("API Blizzard : erreur", e, flush=True)
-        return [], {}, {}
+        return [], {}, {}, {}
 
 
 def collecter():
     """Intègre l'API Blizzard si elle répond, sinon le fichier déposé côté serveur.
     Renvoie (nombre de mises à jour, source lue ou None)."""
-    persos, dates, rangs = lire_api_blizzard()
+    persos, dates, rangs, morts = lire_api_blizzard()
     source = "blizzard" if persos else None
     if not persos and EXPORT.exists():
         texte = EXPORT.read_text(encoding="utf-8")
         persos, dates, rangs = analyser_export(texte), analyser_dates(texte), analyser_rangs(texte)
         source = "fichier" if persos else None
-    return (integrer(persos, "serveur", dates, rangs) if persos else 0), source
+    mises_a_jour = integrer(persos, "serveur", dates, rangs) if persos else 0
+    enregistrer_morts(morts)
+    return mises_a_jour, source
+
+
+# ---------- Morts (v1.14.0) ----------
+STAT_MORTS = 122       # catégorie « Morts » des statistiques de succès
+STAT_RESURRECTION = 127  # sous-catégorie « Résurrection » : ce ne sont pas des morts
+STAT_TOTAL_MORTS = 60  # « Nombre total de morts »
+AUTRES_MORTS = "Autres morts (créatures en extérieur…)"  # total moins les catégories de Blizzard
+ORDRE_MORTS = ["Donjons et raids", "En extérieur"]  # colonnes du classement ; autres catégories ensuite (A→Z)
+
+
+def analyser_morts(stats):
+    """Statistiques de morts d'un profil (/achievements/statistics) → [(id, catégorie, libellé, nombre)].
+    Catégorie « Total » pour le total, sinon le nom de la sous-catégorie (« Donjons et raids »,
+    « En extérieur »…). Un perso jamais mort n'a pas de catégorie « Morts » : total à 0."""
+    cat = next((c for c in stats.get("categories", []) if c.get("id") == STAT_MORTS), None)
+    if cat is None:
+        return [(STAT_TOTAL_MORTS, "Total", "Nombre total de morts", 0)]
+    res = [(s["id"], "Total", s["name"], int(s.get("quantity") or 0)) for s in cat.get("statistics", [])]
+    for sous in cat.get("sub_categories", []):
+        if sous.get("id") != STAT_RESURRECTION:
+            res += [(s["id"], sous["name"], s["name"], int(s.get("quantity") or 0)) for s in sous.get("statistics", [])]
+    return res
+
+
+def enregistrer_morts(morts):
+    """{nom: analyser_morts()} → table morts. Un compteur ne baisse jamais (profil publié en retard)."""
+    if not morts:
+        return
+    with db() as con:
+        for nom, lignes in morts.items():
+            for stat, categorie, libelle, quantite in lignes:
+                con.execute("""INSERT INTO morts(nom, stat, categorie, libelle, quantite, maj) VALUES(?,?,?,?,?,?)
+                    ON CONFLICT(nom, stat) DO UPDATE SET categorie=excluded.categorie, libelle=excluded.libelle,
+                    quantite=MAX(quantite, excluded.quantite), maj=excluded.maj""",
+                            (nom, stat, categorie, libelle, quantite, maintenant()))
+
+
+def valeur_categorie(stats):
+    """Morts d'une catégorie : sa statistique « Nombre total… » si elle en a une (les autres en sont
+    le détail : « Morts dans des donjons à 5 » ⊂ « Nombre total de morts en donjons et raids »),
+    sinon la somme (« En extérieur » : noyade + chute…)."""
+    total = [s["quantite"] for s in stats if s["libelle"].startswith("Nombre total")]
+    return total[0] if total else sum(s["quantite"] for s in stats)
+
+
+def classement_morts(con):
+    """(catégories en colonnes, lignes triées par total décroissant) ; persos exclus ignorés. Dernière
+    colonne « Autres » = total − catégories (Blizzard ne classe que donjons/raids et chute, noyade…).
+    Ligne : nom, classe, total, par_categorie {catégorie: nombre}, detail [(libellé, nombre)]."""
+    lignes, ordre = {}, {}
+    for r in con.execute("""SELECT m.*, p.classe FROM morts m JOIN personnages p ON p.nom = m.nom
+                            WHERE m.nom NOT IN (SELECT nom FROM inactifs) ORDER BY m.stat"""):
+        l = lignes.setdefault(r["nom"], {"nom": r["nom"], "classe": r["classe"], "total": 0, "stats": {}})
+        if r["categorie"] == "Total":
+            l["total"] = max(l["total"], r["quantite"]) if r["stat"] == STAT_TOTAL_MORTS else l["total"]
+        else:
+            l["stats"].setdefault(r["categorie"], []).append(dict(r))
+            ordre[r["categorie"]] = True
+    categories = sorted(ordre, key=lambda c: (ORDRE_MORTS.index(c) if c in ORDRE_MORTS else len(ORDRE_MORTS), c))
+    res = []
+    for l in lignes.values():
+        par_categorie = {c: valeur_categorie(s) for c, s in l["stats"].items()}
+        autres = max(0, l["total"] - sum(par_categorie.values()))  # surtout les créatures en extérieur
+        detail = [(s["libelle"], s["quantite"]) for c in categories for s in l["stats"].get(c, [])]
+        if autres and detail:
+            detail.append((AUTRES_MORTS, autres))
+        res.append({"nom": l["nom"], "classe": l["classe"], "total": l["total"],
+                    "par_categorie": {**par_categorie, "Autres": autres}, "detail": detail})
+    res.sort(key=lambda l: (-l["total"], l["nom"]))
+    return (categories + ["Autres"] if res else []), res
 
 
 # ---------- Récapitulatif ----------
@@ -735,7 +816,11 @@ def fiche(con, nom):
     for h in con.execute("SELECT niveau, date FROM historique WHERE nom=? ORDER BY niveau", (nom,)):
         historique.insert(0, {"niveau": h["niveau"], "date": h["date"], "duree": duree(avant, h["date"]) if avant else None})
         avant = h["date"]
-    return {"perso": dict(perso), "paliers": paliers, "historique": historique, "courbe": courbe(con, [nom]), "place": classement.index(nom) + 1,
+    categories, cl_morts = classement_morts(con)
+    place_morts = next((i for i, l in enumerate(cl_morts, 1) if l["nom"] == nom), None)
+    morts = cl_morts[place_morts - 1] if place_morts else None
+    return {"morts": morts, "place_morts": place_morts, "nb_morts": len(cl_morts),
+            "perso": dict(perso), "paliers": paliers, "historique": historique, "courbe": courbe(con, [nom]), "place": classement.index(nom) + 1,
             "membres": len(classement), "rythme": rythme, "gain24": gains(con, 24).get(nom, 0),
             "joueur": proprietaires(con, [nom]).get(nom),
             "nom_rang": None if perso["rang"] is None else noms_rangs(con).get(perso["rang"]) or f"Rang {perso['rang']}"}
@@ -1139,6 +1224,18 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 </tbody></table></div>
 </section>
 
+{% if morts %}<section class="sec" id="morts">
+<h2>Classement des morts <small>{{ morts|sum(attribute="total") }} morts dans la guilde · statistiques Blizzard</small></h2>
+<div class="carte table-wrap"><table class="morts"><thead><tr><th>#</th><th>Personnage</th><th>Morts</th>
+{% for c in categories_morts %}<th>{{ c }}</th>{% endfor %}</tr></thead><tbody>
+{% for m in morts %}<tr><td class="rang num">{{ "💀" if loop.first and m.total > 0 else loop.index }}</td>
+<td class="nom" style="color:{{ couleur(m.classe) }}"><span class="dot" style="background:{{ couleur(m.classe) }}"></span><a class="lien-perso" href="perso/{{ m.nom|urlencode }}">{{ m.nom }}</a></td>
+<td><b class="num"{% if m.detail %} title="{% for l, n in m.detail %}{{ l }} : {{ n }}{{ "&#10;"|safe if not loop.last }}{% endfor %}"{% endif %}>{{ m.total }}</b></td>
+{% for c in categories_morts %}<td class="num">{{ m.par_categorie.get(c) or "" }}</td>{% endfor %}</tr>
+{% endfor %}</tbody></table></div>
+<small>Lu sur le profil Blizzard de chaque perso : un profil pas encore publié n'apparaît pas.</small>
+</section>{% endif %}
+
 {% if top %}<section class="sec">
 <h2>Meilleurs contributeurs <small>merci pour vos envois !</small></h2>
 <div class="contribs">{% for c in top %}
@@ -1207,6 +1304,13 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <div class="infobulle" id="infobulle" hidden></div>
 <script type="application/json" id="donnees-courbe">{{ courbe|tojson }}</script>
 </section>
+
+{% if morts %}<section class="carte bloc" id="morts">
+<div class="bloc-tete"><h2>Morts <small>{{ morts.total }} au total · {{ ordinal(place_morts) }} sur {{ nb_morts }} au <a href="./#morts">classement des morts</a></small></h2></div>
+{% if morts.detail %}<div class="table-wrap"><table><thead><tr><th>Statistique</th><th>Nombre</th></tr></thead><tbody>
+{% for l, n in morts.detail %}<tr><td>{{ l }}</td><td class="num">{{ n }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<span class="vide">{{ "Aucune mort, bravo !" if morts.total == 0 else "Pas de détail par catégorie." }}</span>{% endif %}
+</section>{% endif %}
 
 <section class="carte bloc">
 <div class="bloc-tete"><h2>Historique des niveaux <small>{{ historique|length }} montée{{ "s" if historique|length > 1 }} datée{{ "s" if historique|length > 1 }}</small></h2></div>
@@ -1441,6 +1545,7 @@ def index():
                     if compte and a["pseudo"].casefold() == compte["pseudo"].casefold()]
         donnees_courbe = courbe(con, mes_noms)
         rangs = noms_rangs(con)
+        categories_morts, morts = classement_morts(con)
     exploits = {}
     for e in rows:
         exploits.setdefault(e["palier"], []).append(e)
@@ -1448,7 +1553,7 @@ def index():
         PAGE, guilde=NOM_GUILDE, persos=persos, paliers=PALIERS, exploits=exploits,
         medailles=MEDAILLES, recents=recents, g24=g24, proprios=proprios, top=top, rangs=rangs,
         avec_rangs=any(p["rang"] is not None for p in persos),
-        donnees_courbe=donnees_courbe, connecte=bool(compte),
+        donnees_courbe=donnees_courbe, connecte=bool(compte), morts=morts, categories_morts=categories_morts,
         total24=sum(v for v in g24.values() if v > 0),
         actifs=sum(1 for v in g24.values() if v > 0),
         nb60=sum(1 for p in persos if p["niveau"] == 60),
@@ -1509,7 +1614,7 @@ def reinitialiser():
     with db() as con, sqlite3.connect(DB + ".avant-reset") as copie:
         con.backup(copie)
         return {t: con.execute(f"DELETE FROM {t}").rowcount
-                for t in ("personnages", "historique", "exploits", "envois", "proprietaires", "inactifs")}
+                for t in ("personnages", "historique", "exploits", "envois", "proprietaires", "inactifs", "morts")}
 
 
 @app.route("/envoyer", methods=["POST"])
@@ -1810,6 +1915,7 @@ def route_export():
             "proprietaires": [dict(r) for r in con.execute("SELECT * FROM proprietaires ORDER BY nom")],
             "inactifs": [dict(r) for r in con.execute("SELECT * FROM inactifs ORDER BY nom")],
             "rangs": [dict(r) for r in con.execute("SELECT * FROM rangs ORDER BY id")],
+            "morts": [dict(r) for r in con.execute("SELECT * FROM morts ORDER BY nom, stat")],
         }
     return app.response_class(
         json.dumps(donnees, ensure_ascii=False, indent=2), mimetype="application/json",
