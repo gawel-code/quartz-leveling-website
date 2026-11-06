@@ -236,7 +236,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   L'API donne aussi (non exploités) : `experience` (XP dans le niveau), victimes, quêtes, donjons,
   métiers, voyages, consommables. **Pas de temps de jeu (`/played`)** nulle part dans l'API.
 - Spécialisations (v1.15.0) : 4ᵉ valeur de `lire_api_blizzard()` = `details = {nom: {"morts", "spe"}}`
-  (profil en 200 seulement ; 3 requêtes par membre : profil, statistiques, spés). `{chemin_profil}/specializations`
+  (profil en 200 seulement ; 3 requêtes par membre : profil, statistiques, spés, lues en parallèle par
+  `lire_profil()` depuis la v1.15.1 : garder la collecte sous les 10 s du `rest_command`). `{chemin_profil}/specializations`
   → `analyser_spe()` : groupe `is_active`, arbres = `specializations[]` avec `talents[].talent_rank` (pas de
   champ « spé active » sur Forever, vu le 6/11) ; spé = arbre au plus de points (égalité : 1ᵉʳ listé),
   répartition « A 9 · B 8 » ; aucun point → None (rien d'écrit). `enregistrer_spes()` → colonnes
@@ -306,9 +307,16 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 6 novembre 2026 (v1.14.0 déployée, v1.15.0 en attente de merge)
-- ⏳ v1.15.0 (PR en attente) : icône de spécialisation devant la classe (voir *Serveur*). Rejouée en local
+## État au 6 novembre 2026 (v1.15.0 déployée, v1.15.1 en attente de merge)
+- ⏳ v1.15.1 (PR en attente) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
+  la boucle de `lire_api_blizzard()` ne fait plus que la logique), gunicorn `--timeout 120` (`run.sh`).
+  Vu le 6/11 après le déploiement de la v1.15.0 : `rest_command.quartz_collecter` → « Timeout when calling
+  resource » (10 s par défaut côté HA ; 3 requêtes × 28 membres à la suite ≈ 12 s ; la v1.14.0 prenait
+  déjà ~8 s). La collecte se termine quand même côté serveur, mais l'automatisation du récap (collecte puis
+  récap, sans `continue_on_error`) s'arrête sur l'erreur. En local via le proxy de session : 59 s → 10 s.
+- ✅ v1.15.0 (mergée le 6/11, PR #43) : icône de spécialisation devant la classe (voir *Serveur*). Rejouée en local
   contre la vraie API le 6/11 : 24 persos sur 26 avec une spé (Funzie Forever et Sept Entrion : profil 404).
+  **Déployée et vérifiée le 6/11 vers 19 h 35** : pied « v1.15.0 », 24 icônes, Jazeel en brun, filtre sans doublons.
   Corrige aussi la couleur des classes au féminin : `COULEURS` est indexé par classe de `CLASSES`
   (`couleur(classe, defaut)`) ; vu en prod le 6/11 : Jazeel Sorrowbane et Murène Gilehjon (« Guerrière »)
   en blanc dans le classement (la classe gardée est celle de l'addon, au féminin).

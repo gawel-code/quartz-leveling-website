@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.15.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.15.1
 
 ## Fonctionnement
 
@@ -226,6 +226,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.15.1 | Collecte plus rapide : profil, statistiques et spé de chaque membre lus en parallèle (8 requêtes simultanées) ; à la suite, la collecte dépassait les 10 s du `rest_command` de Home Assistant (erreur, récap de 9 h / 21 h bloqué) ; gunicorn `--timeout 120` |
 | 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle ; couleur de classe aussi pour les libellés au féminin de l'addon (« Guerrière » était en blanc) ; filtre de classe du classement sans doublons masculin / féminin |
 | 1.14.0 | Classement des morts : statistiques de morts lues sur l'API Blizzard à chaque collecte (table `morts`, par catégorie : donjons et raids, en extérieur, autres), classement sur l'accueil, détail sur la fiche ; vidées par la remise à zéro, incluses dans `/export.json` |
 | 1.13.0 | API Blizzard pour WoW Forever : guilde lue sans royaume, persos enregistrés sous « Prénom Nom » comme l'addon (fusion avec les fiches existantes), profil de chaque membre lu à chaque collecte (niveau plus récent que le roster, date de dernière connexion), classe connue jamais remplacée (garde le féminin) ; option `bnet_version_static` (espace statique versionné) ; `tools/verifier_api_blizzard.py --jeu forever` et `--compte` (connexion Battle.net, persos du compte) |

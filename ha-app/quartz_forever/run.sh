@@ -30,4 +30,4 @@ export PYTHONPATH=/app
 cd /data
 python3 -c "import app; app.init_db()"
 bashio::log.info "Quartz Forever démarré sur le port 8080"
-exec gunicorn -w 1 -b 0.0.0.0:8080 app:app
+exec gunicorn -w 1 --timeout 120 -b 0.0.0.0:8080 app:app
