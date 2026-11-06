@@ -1,10 +1,10 @@
 # Quartz Forever — suivi de progression de guilde (WoW Forever)
-import os, re, json, hmac, secrets, sqlite3, datetime, bisect
+import os, re, json, hmac, secrets, sqlite3, datetime, bisect, unicodedata
 from pathlib import Path
 from urllib.parse import urlencode
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
 # ---------- Configuration ----------
@@ -41,11 +41,9 @@ PSEUDO_VALIDE = re.compile(r"^[^\s:|#]{2,24}$")
 BATTLETAG_VALIDE = re.compile(r"^[^\W\d_]\w{1,11}#\d{4,6}$")  # Nom#1234 : 2 à 12 caractères, pas d'espace
 PALIERS = [10, 20, 30, 40, 50, 60]
 MEDAILLES = {1: "🥇", 2: "🥈", 3: "🥉"}
-COULEURS = {
-    "Guerrier": "#C69B6D", "Mage": "#3FC7EB", "Prêtre": "#FFFFFF", "Prêtresse": "#FFFFFF",
-    "Voleur": "#FFF468", "Voleuse": "#FFF468", "Druide": "#FF7C0A", "Druidesse": "#FF7C0A",
-    "Chasseur": "#AAD372", "Chasseresse": "#AAD372", "Démoniste": "#8788EE",
-    "Paladin": "#F48CBA", "Chaman": "#2E8FEF", "Chamane": "#2E8FEF",
+COULEURS = {  # par classe de CLASSES : le libellé (masculin de l'API, féminin de l'addon) passe par CLASSES
+    "guerrier": "#C69B6D", "mage": "#3FC7EB", "pretre": "#FFFFFF", "voleur": "#FFF468", "druide": "#FF7C0A",
+    "chasseur": "#AAD372", "demoniste": "#8788EE", "paladin": "#F48CBA", "chaman": "#2E8FEF",
 }
 
 
@@ -67,8 +65,98 @@ CLASSES = {"Guerrier": "guerrier", "Guerrière": "guerrier", "Mage": "mage", "Pr
            "Démoniste": "demoniste", "Paladin": "paladin", "Chaman": "chaman", "Chamane": "chaman"}
 
 
-def couleur(classe):
-    return COULEURS.get(classe or "", "#8a9ab5")
+# Icônes de spécialisation (v1.15.0) : dessinées pour le site, inspirées des icônes du jeu (fond
+# dégradé aux couleurs de l'icône d'origine, motif clair au trait ; .p = motif plein). Clé :
+# (classe de CLASSES, nom de la spé sans accents ni casse, tel que l'API le donne en fr_FR).
+_D = '<circle class="p" cx="%s" cy="%s" r="%s"/>'
+SPES = {
+    ("guerrier", "armes"): ("#9a5a3a", "#2a140c",  # Frappe mortelle : épée sanglante
+        '<path d="M5 19 15 9M15 9l3.5-4.5.9.9L15 9M8 13l3 3M4.5 19.5l2-2"/><path class="p" d="M17 14c0 0 1.6 2 1.6 2.9a1.6 1.6 0 0 1-3.2 0c0-.9 1.6-2.9 1.6-2.9z"/>'),
+    ("guerrier", "fureur"): ("#c8321e", "#3d0906",  # Rage intérieure : visage hurlant
+        '<path d="M6.5 8.5l3.5 1.6M17.5 8.5 14 10.1M8 15.5c1.2-1.8 2.5-2.5 4-2.5s2.8.7 4 2.5c-1.2 1.6-2.5 2.5-4 2.5s-2.8-.9-4-2.5z"/><path d="M4 5l2 2M20 5l-2 2M12 3v2"/>'),
+    ("guerrier", "protection"): ("#6c7c8c", "#1c232b",  # Bouclier
+        '<path d="M12 3.5l7 2.6v5.4c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6.1z"/><path d="M12 6.5v12M5.6 11.5h12.8"/>'),
+    ("paladin", "sacre"): ("#f0c95a", "#6b4a12",  # Horion sacré : éclat de lumière
+        _D % (12, 12, 3.2) + '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
+    ("paladin", "protection"): ("#3d62a8", "#121d38",  # Aura de dévotion : bouclier béni
+        '<path d="M12 3.5l7 2.6v5.4c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6.1z"/><path d="M12 7v9.5M8.5 10.5h7"/>'),
+    ("paladin", "vindicte"): ("#e08a2e", "#4a1f06",  # Aura de lumière : épée solaire
+        '<path d="M12 3v13M9.3 13.5h5.4M12 16v4.5"/><path d="M6 6.5l2 1.5M18 6.5l-2 1.5M4.5 11h2.5M19.5 11H17"/>'),
+    ("chasseur", "maitrise des betes"): ("#7d8c3a", "#24300f",  # Dressage : patte
+        _D % (6.8, 10.3, 1.7) + _D % (10.2, 6.8, 1.7) + _D % (13.8, 6.8, 1.7) + _D % (17.2, 10.3, 1.7)
+        + '<path class="p" d="M12 11.2c-3 0-5 3.6-5 5.6 0 1.5 1.4 2.1 2.6 1.6.9-.4 1.6-.6 2.4-.6s1.5.2 2.4.6c1.2.5 2.6-.1 2.6-1.6 0-2-2-5.6-5-5.6z"/>'),
+    ("chasseur", "precision"): ("#9a7a42", "#2e2010",  # Tir précis : cible et flèche
+        '<circle cx="10" cy="14" r="6"/><circle cx="10" cy="14" r="2.3"/><path d="M10 14 20 4M20 4h-4M20 4v4"/>'),
+    ("chasseur", "survie"): ("#4f7a62", "#122620",  # Frappe rapide : lames croisées
+        '<path d="M5 5l11 11M19 5 8 16M14.5 17.5l3-3M9.5 17.5l-3-3M17 17l2.5 2.5M7 17l-2.5 2.5"/>'),
+    ("voleur", "assassinat"): ("#4a8a2e", "#0f2a0a",  # Poison : dague et goutte
+        '<path d="M9 3v11M6.5 14h5M9 14v3.5M8 20.5h2"/><path class="p" d="M16.5 10s2.6 3.2 2.6 4.6a2.6 2.6 0 0 1-5.2 0c0-1.4 2.6-4.6 2.6-4.6z"/>'),
+    ("voleur", "combat"): ("#9a402e", "#2a0f0a",  # Attaque sournoise : épées croisées
+        '<path d="M4 4l12 12M20 4 8 16M13.5 18.5l4-4M6.5 14.5l4 4M17 17l2.5 2.5M7 17l-2.5 2.5"/>'),
+    ("voleur", "finesse"): ("#46466e", "#0e0e1c",  # Camouflage : œil dans l'ombre
+        '<path d="M3 13c3-3.6 6-5 9-5s6 1.4 9 5c-3 3.6-6 5-9 5s-6-1.4-9-5z"/>' + _D % (12, 13, 2.2) + '<path d="M4 7.5c5-3 11-3 16 0"/>'),
+    ("pretre", "discipline"): ("#b8b8e0", "#34346a",  # Mot de pouvoir : Bouclier
+        '<circle cx="12" cy="12" r="8"/><path d="M7.5 9.5a5 5 0 0 1 3.5-3"/><path d="M12 9v6M9 12h6"/>'),
+    ("pretre", "sacre"): ("#f2e6b0", "#7a6a2a",  # Lumière sacrée : rayons
+        '<path d="M12 4v16M7.5 9h9"/><path d="M5 4.5l2 2M19 4.5l-2 2M4 13h2M18 13h2"/>'),
+    ("pretre", "magie de l'ombre"): ("#6a2e9a", "#14061f",  # Mot de l'ombre : Douleur (spirale)
+        '<path d="M12 12a1 1 0 1 1 2 0 3 3 0 1 1-6 0 5 5 0 1 1 10 0 7 7 0 1 1-14 0"/>'),
+    ("chaman", "combat elementaire"): ("#3466c0", "#0b1a3a",  # Éclair
+        '<path class="p" d="M13.5 2.5 5.5 14h5.5l-1.5 7.5 8.5-12h-5.8z"/>'),
+    ("chaman", "amelioration"): ("#2e8c9c", "#0a2a30",  # Bouclier de foudre : orbe
+        '<circle cx="12" cy="12" r="8"/><path d="M13 7.5l-3.5 5h3l-1 4 3.5-5h-3z"/><path d="M4.5 9.5c4-1 11-1 15 0"/>'),
+    ("chaman", "restauration"): ("#2e9ab8", "#0a2a3a",  # Vague de soins : goutte
+        '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/><path d="M8.5 14.5c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0"/>'),
+    ("mage", "arcane"): ("#9050dc", "#1f0a3d",  # Sentinelle magique : étoile arcanique
+        '<path class="p" d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z"/>' + _D % (18.5, 5.5, 1)),
+    ("mage", "feu"): ("#e85a28", "#4a0f05",  # Boule de feu : comète
+        _D % (15, 9, 4) + '<path d="M12 12.5 4.5 20M15 13 9 19.5M11 9 4 15.5"/>'),
+    ("mage", "givre"): ("#5ab8ec", "#0f2a4a",  # Éclair de givre : flocon
+        '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M10 4.5l2 2 2-2M10 19.5l2-2 2 2"/>'),
+    ("demoniste", "affliction"): ("#58782e", "#121f08",  # Voile mortel : crâne
+        '<path d="M6.5 13.5a5.5 5.5 0 1 1 11 0v2.5h-2v3h-7v-3h-2z"/>' + _D % (9.6, 12.5, 1.4) + _D % (14.4, 12.5, 1.4) + '<path d="M11 19v-2M13 19v-2"/>'),
+    ("demoniste", "demonologie"): ("#8a2e9a", "#1f0824",  # Métamorphose : tête cornue
+        '<path d="M5 3.5c0 4.5 2.5 6.5 4.5 7M19 3.5c0 4.5-2.5 6.5-4.5 7"/><path d="M7.5 12.5a4.5 4.5 0 0 0 9 0c0-1.5-1.5-2.5-4.5-2.5s-4.5 1-4.5 2.5z"/><path d="M10 13.5h.5M13.5 13.5h.5M10 17h4"/>'),
+    ("demoniste", "destruction"): ("#c8481e", "#3a0a05",  # Pluie de feu
+        _D % (8, 17, 2.2) + _D % (16.5, 14, 2.2) + _D % (11, 8, 1.8) + '<path d="M9.5 15.5 14 6M18 12.5 21 6M12.2 6.8 14.5 2.5"/>'),
+    ("druide", "equilibre"): ("#3c50b8", "#0a0f33",  # Météores : lune et étoile
+        '<path class="p" d="M14.5 4a8 8 0 1 0 5.5 12 6.5 6.5 0 0 1-5.5-12z"/><path d="M18 4v3M16.5 5.5h3"/>'),
+    ("druide", "combat farouche"): ("#9a6430", "#2a1608",  # Forme d'ours : griffures
+        '<path d="M7 4c1.2 5 1.2 11-1 16M12 3c1.2 6 1.2 12-1 18M17 4c1.2 5 1.2 11-1 16"/>'),
+    ("druide", "restauration"): ("#3c9e4c", "#0a2a10",  # Toucher guérisseur : feuille
+        '<path d="M5 19C5 10 11 5 20 4c-1 9-6 15-15 15zM5 19l8-8"/><path d="M13.5 15.5l2.5 2.5M9.5 11.5 7 9"/>'),
+}
+
+
+def normaliser(texte):
+    return unicodedata.normalize("NFD", (texte or "").casefold()).encode("ascii", "ignore").decode().strip()
+
+
+def icone_spe(classe, spe, detail=""):
+    """Icône de la spécialisation (Markup vide si inconnue) ; detail = répartition des talents (infobulle :
+    « Protection — 7 points », « Equilibre — Equilibre 9 · Restauration 8 »)."""
+    icone = SPES.get((CLASSES.get(classe or ""), normaliser(spe)))
+    if not icone:
+        return Markup("")
+    if detail and " · " not in detail:  # un seul arbre : « Protection — 7 points »
+        detail = detail.rsplit(" ", 1)[-1] + " points"
+    titre = escape(spe + (f" — {detail}" if detail else ""))
+    return Markup('<span class="spe" style="--a:%s;--b:%s" title="%s" role="img" aria-label="%s">'
+                  '<svg viewBox="0 0 24 24" aria-hidden="true">%s</svg></span>') % (
+        icone[0], icone[1], titre, titre, Markup(icone[2]))
+
+
+NOMS_CLASSES = {cle: nom for nom, cle in reversed(list(CLASSES.items()))}  # libellé masculin (1ᵉʳ de CLASSES)
+
+
+def cle_classe(classe):
+    """Classe sans genre (« Guerrière » → guerrier) ; libellé inconnu gardé tel quel."""
+    return CLASSES.get(classe or "", classe or "")
+
+
+def couleur(classe, defaut="#8a9ab5"):
+    """Couleur de classe du jeu, quel que soit le genre du libellé (« Guerrière » : brun, comme « Guerrier »)."""
+    return COULEURS.get(CLASSES.get(classe or ""), defaut)
 
 
 def embleme(classe):
@@ -119,8 +207,12 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS morts(
             nom TEXT, stat INTEGER, categorie TEXT, libelle TEXT, quantite INTEGER, maj TEXT,
             PRIMARY KEY(nom, stat))""")  # v1.14.0 : statistiques de morts de l'API Blizzard
-        if "rang" not in {c[1] for c in con.execute("PRAGMA table_info(personnages)")}:
+        colonnes = {c[1] for c in con.execute("PRAGMA table_info(personnages)")}
+        if "rang" not in colonnes:
             con.execute("ALTER TABLE personnages ADD COLUMN rang INTEGER")  # v1.10.0 : n° lu dans le roster
+        if "specialisation" not in colonnes:  # v1.15.0 : arbre de talents principal (API) et répartition
+            con.execute("ALTER TABLE personnages ADD COLUMN specialisation TEXT")
+            con.execute("ALTER TABLE personnages ADD COLUMN talents TEXT")
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(comptes)")}
         if "battletag" not in colonnes:
             con.execute("ALTER TABLE comptes ADD COLUMN battletag TEXT")  # v1.5.0 : lu sur Discord
@@ -572,8 +664,8 @@ def lire_api_blizzard():
     plus haut du roster et du profil (le roster Forever est en retard). Une montée de
     niveau est datée par la dernière connexion du perso (profil), borne haute plus juste que l'heure
     de collecte, si elle est postérieure à la dernière fois qu'on l'a vu à l'ancien niveau (sinon
-    c'est l'heure de connexion d'une session encore en cours). 4e valeur (v1.14.0) : {nom: morts} lues
-    dans les statistiques de succès des profils publiés (analyser_morts()).
+    c'est l'heure de connexion d'une session encore en cours). 4e valeur : {nom: {"morts": analyser_morts()
+    (v1.14.0), "spe": analyser_spe() (v1.15.0)}} lus pour les profils publiés.
     ([], {}, {}, {}) si inactif ou en échec."""
     if not bnet_actif():
         return [], {}, {}, {}
@@ -595,16 +687,17 @@ def lire_api_blizzard():
             persos[nom] = (nom, races.get(c.get("playable_race", {}).get("id"), "?"),
                            classes.get(c.get("playable_class", {}).get("id"), "?"), niveau,
                            profil, m.get("rank"))
-        dates, morts = {}, {}
+        dates, details = {}, {}
         with db() as con:
             for nom, (_, race, classe, niveau, chemin_profil, rang) in list(persos.items()):
                 # Profil de chaque membre (v1.13.0) : le roster Forever est en retard sur le profil
                 # (05/11 : Wagyu 15 au roster, 17 au profil) ; 1 requête par membre et par collecte.
                 profil = bnet_get(chemin_profil, "profile") or {}
-                if profil:  # profil non publié (404) : ses statistiques non plus, inutile de les demander
+                if profil:  # profil non publié (404) : le reste non plus, inutile de le demander
                     stats = bnet_get(chemin_profil + "/achievements/statistics", "profile")
-                    if stats:
-                        morts[nom] = analyser_morts(stats)
+                    spes = bnet_get(chemin_profil + "/specializations", "profile")
+                    details[nom] = {"morts": analyser_morts(stats) if stats else None,
+                                    "spe": analyser_spe(spes) if spes else None}
                 if (profil.get("level") or 0) > niveau:
                     niveau = profil["level"]
                     persos[nom] = (nom, race, classe, niveau, chemin_profil, rang)
@@ -618,7 +711,7 @@ def lire_api_blizzard():
                 if row is None or date >= row["maj"]:
                     dates[nom] = {niveau: date}
         rangs = {p[0]: p[5] for p in persos.values() if isinstance(p[5], int)}
-        return [p[:4] for p in persos.values()], dates, rangs, morts
+        return [p[:4] for p in persos.values()], dates, rangs, details
     except (requests.RequestException, ValueError, KeyError) as e:
         print("API Blizzard : erreur", e, flush=True)
         return [], {}, {}, {}
@@ -627,15 +720,40 @@ def lire_api_blizzard():
 def collecter():
     """Intègre l'API Blizzard si elle répond, sinon le fichier déposé côté serveur.
     Renvoie (nombre de mises à jour, source lue ou None)."""
-    persos, dates, rangs, morts = lire_api_blizzard()
+    persos, dates, rangs, details = lire_api_blizzard()
     source = "blizzard" if persos else None
     if not persos and EXPORT.exists():
         texte = EXPORT.read_text(encoding="utf-8")
         persos, dates, rangs = analyser_export(texte), analyser_dates(texte), analyser_rangs(texte)
         source = "fichier" if persos else None
     mises_a_jour = integrer(persos, "serveur", dates, rangs) if persos else 0
-    enregistrer_morts(morts)
+    enregistrer_morts({n: d["morts"] for n, d in details.items() if d.get("morts") is not None})
+    enregistrer_spes({n: d["spe"] for n, d in details.items() if d.get("spe")})
     return mises_a_jour, source
+
+
+# ---------- Spécialisations (v1.15.0) ----------
+def analyser_spe(reponse):
+    """/specializations (Forever, comme Classic : arbres de talents du groupe actif avec leurs talents
+    et rangs) → (spé principale = arbre le plus fourni, répartition « Discipline 6 · Magie de l'ombre 6 »),
+    None sans talent."""
+    groupe = next((g for g in reponse.get("specialization_groups", []) if g.get("is_active")), None)
+    arbres = [(a["specialization"]["name"], sum(t.get("talent_rank", 0) for t in a.get("talents", [])))
+              for a in (groupe or {}).get("specializations", []) if a.get("specialization", {}).get("name")]
+    arbres = [a for a in arbres if a[1] > 0]
+    if not arbres:
+        return None
+    principale = max(arbres, key=lambda a: a[1])[0]  # égalité : le premier arbre listé
+    return principale, " · ".join(f"{n} {pts}" for n, pts in arbres)
+
+
+def enregistrer_spes(spes):
+    """{nom: (spé, répartition)} → personnages (la dernière lecture l'emporte)."""
+    if not spes:
+        return
+    with db() as con:
+        for nom, (spe, talents) in spes.items():
+            con.execute("UPDATE personnages SET specialisation=?, talents=? WHERE nom=?", (spe, talents, nom))
 
 
 # ---------- Morts (v1.14.0) ----------
@@ -1001,6 +1119,12 @@ background:color-mix(in srgb,var(--c) 22%,var(--nuit2));border:1px solid color-m
 box-shadow:0 0 14px color-mix(in srgb,var(--c) 25%,transparent)}
 .embleme svg{width:22px;height:22px;fill:none;stroke:var(--c);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .embleme.mini{width:26px;height:26px;border-radius:8px}.embleme.mini svg{width:15px;height:15px}
+.spe{display:inline-grid;place-items:center;width:1.75em;height:1.75em;border-radius:6px;vertical-align:-.55em;margin-right:.45em;
+ background:radial-gradient(circle at 30% 25%,var(--a),var(--b) 85%);border:1px solid rgba(232,200,120,.55);
+ box-shadow:inset 0 0 0 1px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
+.spe svg{width:78%;height:78%;fill:none;stroke:#fff4dc;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+ filter:drop-shadow(0 0 1.5px rgba(0,0,0,.7))}
+.spe svg .p{fill:#fff4dc;stroke:none}
 .perso-id{display:flex;flex-direction:column;min-width:0;flex:1}
 .perso-id b{font-family:var(--f-titre);font-weight:600;color:var(--c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .perso-id small{color:var(--doux);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1209,13 +1333,13 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <section class="sec">
 <div class="barre-outils"><h2>Classement <small id="compte">{{ persos|length }} membres</small></h2>
 <select id="filtre" aria-label="Filtrer par classe" onchange="filtrer(this.value)"><option value="">Toutes les classes</option>
-{% for c in liste_classes %}<option>{{ c }}</option>{% endfor %}</select></div>
+{% for cle, nom in liste_classes %}<option value="{{ cle }}">{{ nom }}</option>{% endfor %}</select></div>
 <div class="carte table-wrap"><table><thead><tr><th>#</th><th>Personnage</th><th>Race</th><th>Classe</th>{% if avec_rangs %}<th>Rang</th>{% endif %}<th>Niveau</th><th>Progression</th><th>24 h</th></tr></thead><tbody>
 {% for p in persos %}
-<tr data-classe="{{ p.classe }}"><td class="rang num">{{ loop.index }}</td>
+<tr data-classe="{{ cle_classe(p.classe) }}"><td class="rang num">{{ loop.index }}</td>
 <td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span><a class="lien-perso" href="perso/{{ p.nom|urlencode }}">{{ p.nom }}</a>
 {%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
-<td>{{ p.race }}</td><td>{{ p.classe }}</td>
+<td>{{ p.race }}</td><td class="classe">{{ icone_spe(p.classe, p.specialisation, p.talents) }}{{ p.classe }}</td>
 {% if avec_rangs %}<td class="rang-guilde">{% if p.rang is not none %}{{ rangs.get(p.rang) or "Rang " ~ p.rang }}{% endif %}</td>{% endif %}
 <td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
 <td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
@@ -1269,7 +1393,7 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 """ + ENTETE + """
 <section class="carte perso identite" style="--c:{{ couleur(perso.classe) }}">
 <span class="embleme">{{ embleme(perso.classe) }}</span>
-<span class="perso-id"><b>{{ perso.nom }}</b><small>{{ perso.race ~ ' · ' if perso.race and perso.race != '?' }}{{ perso.classe }}
+<span class="perso-id"><b>{{ perso.nom }}</b><small>{{ perso.race ~ ' · ' if perso.race and perso.race != '?' }}{{ icone_spe(perso.classe, perso.specialisation, perso.talents) }}{{ perso.classe }}{{ ' ' ~ perso.specialisation if perso.specialisation }}
 {%- if nom_rang %} · {{ nom_rang }}{% endif %}
 {%- if joueur %} · {% if joueur.discord %}<a class="joueur" href="https://discord.com/users/{{ joueur.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ joueur.pseudo }}">@{{ joueur.pseudo }}</a>{% else %}<span class="joueur">@{{ joueur.pseudo }}</span>{% endif %}{% endif %}</small></span>
 <span class="niv gros num{{ ' max' if perso.niveau == 60 else '' }}">{{ perso.niveau }}</span>
@@ -1341,7 +1465,7 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 # Carte d'un personnage : emblème de classe, nom à la couleur de la classe, race, classe, niveau.
 PERSO = """{% macro carte_perso(nom, info) -%}
 <span class="embleme">{{ embleme(info.classe if info else '') }}</span>
-<span class="perso-id"><b>{{ nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span>
+<span class="perso-id"><b>{{ nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ icone_spe(info.classe, info.specialisation, info.talents) }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span>
 {%- if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}
 {%- endmacro %}"""
 
@@ -1441,7 +1565,7 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  {% for l in lignes %}{% set info = l.info %}
  <tr data-texte="{{ (l.nom ~ ' ' ~ (l.pseudo or ''))|lower }}" data-etat="{{ 'lie' if l.pseudo else 'libre' }}{{ ' exclu' if l.inactif }}"{{ ' class="exclu"'|safe if l.inactif }}>
  <td><span class="persoligne" style="--c:{{ couleur(info.classe if info else '') }}"><span class="embleme mini">{{ embleme(info.classe if info else '') }}</span>
- <span><b>{{ l.nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span></span></td>
+ <span><b>{{ l.nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ icone_spe(info.classe, info.specialisation, info.talents) }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span></span></td>
  <td>{% if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}</td>
  <td><select name="pseudo" form="a{{ loop.index }}" aria-label="Joueur de {{ l.nom }}"><option value="">— aucun —</option>
  {% for j in joueurs %}<option{{ ' selected' if l.pseudo == j }}>{{ j }}</option>{% endfor %}</select></td>
@@ -1512,6 +1636,7 @@ function filtrerAdmin(){var e=document.getElementById("f-etat").value,q=document
 @app.context_processor
 def contexte():
     return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION, "couleur": couleur, "embleme": embleme,
+            "icone_spe": icone_spe,
             "url_connexion": url_discord}
 
 
@@ -1560,8 +1685,10 @@ def index():
         moyenne=f"{sum(p['niveau'] for p in persos) / len(persos):.1f}" if persos else "—",
         maj=max((p["maj"] for p in persos), default="")[:16].replace("T", " "),
         classes={p["nom"]: p["classe"] for p in persos},
-        liste_classes=sorted({p["classe"] for p in persos}),
-        couleur=lambda c: COULEURS.get(c, "#e6eefb"))  # texte clair par défaut dans le classement
+        liste_classes=sorted({(cle_classe(p["classe"]), NOMS_CLASSES.get(cle_classe(p["classe"]), p["classe"]))
+                              for p in persos}, key=lambda c: c[1]),  # « Guerrier » et « Guerrière » regroupés
+        cle_classe=cle_classe,
+        couleur=lambda c: couleur(c, "#e6eefb"))  # texte clair par défaut dans le classement
 
 
 @app.route("/perso/<path:nom>")

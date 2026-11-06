@@ -723,7 +723,7 @@ def blizzard(client, monkeypatch):
     for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
                      "BNET_GUILDE": "Quartz Forever"}.items():
         monkeypatch.setitem(g, cle, val)
-    etat = {"roster": [], "profils": {}, "morts": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
+    etat = {"roster": [], "profils": {}, "morts": {}, "spes": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
             "jeu": "-classic1x-eu"}
 
     def post(url, **kw):
@@ -744,6 +744,9 @@ def blizzard(client, monkeypatch):
             return Reponse(CLASSES_API)
         if chemin in ("/data/wow/guild/firemaw/quartz-forever/roster", "/data/wow/guild/quartz-forever/roster"):
             return Reponse({"members": etat["roster"]})
+        if chemin.endswith("/specializations"):  # v1.15.0 : spécialisation
+            perso = chemin.split("/")[-2]
+            return Reponse(etat["spes"][perso]) if perso in etat["spes"] else Reponse({}, 404)
         if chemin.endswith("/achievements/statistics"):  # v1.14.0 : morts
             perso = chemin.split("/")[-3]
             return Reponse(etat["morts"][perso]) if perso in etat["morts"] else Reponse({}, 404)
@@ -986,6 +989,90 @@ def test_morts_lues_par_l_api_et_classees(blizzard, monkeypatch):
 def test_pas_de_classement_des_morts_sans_donnees(client):
     envoyer(client, LUA1)
     assert "Classement des morts" not in client.get("/").text
+
+
+def test_couleur_des_classes_au_feminin(client):
+    """Vu le 06/11 : « Guerrière » (addon) en blanc dans le classement au lieu du brun du guerrier."""
+    g = client.application.view_functions["index"].__globals__
+    for masculin, feminin in (("Guerrier", "Guerrière"), ("Prêtre", "Prêtresse"), ("Voleur", "Voleuse"),
+                              ("Druide", "Druidesse"), ("Chasseur", "Chasseresse"), ("Chaman", "Chamane")):
+        assert g["couleur"](feminin) == g["couleur"](masculin) != g["couleur"]("?")
+    lua = 'GuildExportDB = {\n["Jazeel Sorrowbane"] = "Jazeel Sorrowbane;?;Guerrière;29",\n}'
+    envoyer(client, lua.encode())
+    assert 'style="color:#C69B6D"><span class="dot" style="background:#C69B6D">' in client.get("/").text
+
+
+def test_filtre_regroupe_les_classes_au_feminin(client):
+    lua = ('GuildExportDB = {\n["Jazeel Sorrowbane"] = "Jazeel Sorrowbane;?;Guerrière;29",\n'
+           '["Gawel Zugzug"] = "Gawel Zugzug;Orc;Guerrier;16",\n["Tars Tiflette"] = "Tars Tiflette;?;Prêtresse;22",\n}')
+    envoyer(client, lua.encode())
+    page = client.get("/").text
+    options = re.findall(r'<option value="([^"]*)">([^<]*)</option>', page)
+    assert options == [("", "Toutes les classes"), ("guerrier", "Guerrier"), ("pretre", "Prêtre")]
+    assert page.count('data-classe="guerrier"') == 2 and 'data-classe="pretre"' in page
+
+
+# ---------- Spécialisations (v1.15.0) ----------
+def arbres(*points, actif=True):
+    """Réponse /specializations (forme vue le 06/11) : arbres du groupe actif, talents avec rangs."""
+    return {"specialization_groups": [{"is_active": actif, "specializations": [
+        {"specialization": {"name": nom, "id": i}, "talents": [{"talent": {"name": "t"}, "talent_rank": r} for r in rangs]}
+        for i, (nom, rangs) in enumerate(points)]}]}
+
+
+def test_analyser_spe(client):
+    g = client.application.view_functions["index"].__globals__
+    assert g["analyser_spe"](arbres(("Protection", [5, 2]))) == ("Protection", "Protection 7")
+    assert g["analyser_spe"](arbres(("Equilibre", [5, 4]), ("Restauration", [3, 5]))) == (
+        "Equilibre", "Equilibre 9 · Restauration 8")
+    assert g["analyser_spe"](arbres(("Discipline", [6]), ("Magie de l'ombre", [6]))) == (
+        "Discipline", "Discipline 6 · Magie de l'ombre 6")  # égalité : premier arbre
+    assert g["analyser_spe"](arbres(("Armes", [0]))) is None
+    assert g["analyser_spe"](arbres(("Armes", [3]), actif=False)) is None
+    assert g["analyser_spe"]({}) is None
+
+
+def test_toutes_les_spes_ont_une_icone(client):
+    """Les 27 spés de l'index Forever (libellés fr_FR du 06/11, classe au masculin ou au féminin)."""
+    g = client.application.view_functions["index"].__globals__
+    index = {"Guerrier": ["Armes", "Fureur", "Protection"], "Paladin": ["Sacré", "Protection", "Vindicte"],
+             "Chasseresse": ["Maîtrise des bêtes", "Précision", "Survie"], "Voleur": ["Assassinat", "Combat", "Finesse"],
+             "Prêtresse": ["Discipline", "Sacré", "Magie de l'ombre"],
+             "Chaman": ["Combat élémentaire", "Amélioration", "Restauration"], "Mage": ["Arcane", "Feu", "Givre"],
+             "Démoniste": ["Affliction", "Démonologie", "Destruction"], "Druidesse": ["Equilibre", "Combat farouche", "Restauration"]}
+    vus = set()
+    for classe, spes in index.items():
+        for spe in spes:
+            icone = str(g["icone_spe"](classe, spe, spe + " 5"))
+            assert f'title="{html.escape(spe, quote=True).replace("&#x27;", "&#39;")} — 5 points"' in icone
+            assert icone.startswith('<span class="spe"') and "<svg" in icone, (classe, spe)
+            vus.add(icone)
+    assert len(vus) == 27
+    assert str(g["icone_spe"]("Guerrier", "Sacré")) == "" and str(g["icone_spe"]("?", None)) == ""
+    assert "Magie de l&#39;ombre — Discipline 6 · Magie de l&#39;ombre 6" in str(
+        g["icone_spe"]("Prêtre", "Magie de l'ombre", "Discipline 6 · Magie de l'ombre 6"))
+
+
+def test_spe_lue_par_l_api_et_affichee(blizzard, monkeypatch):
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 16, race=2), membre_sans_royaume("Olich", "Ier", 21, classe=7)]
+    etat["profils"] = {"Gawel-Zugzug": (16, 0)}
+    etat["spes"] = {"gawel-zugzug": arbres(("Protection", [5, 2]))}
+    c.get("/collecter?token=tok")
+    assert "/profile/wow/character/olich-ier/specializations" not in etat["appels"]  # profil 404
+    persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
+    assert (persos["Gawel Zugzug"]["specialisation"], persos["Gawel Zugzug"]["talents"]) == ("Protection", "Protection 7")
+    assert persos["Olich Ier"]["specialisation"] is None
+    page = c.get("/").text
+    assert page.count('class="spe"') == 1 and 'title="Protection — 7 points"' in page
+    fiche = c.get("/perso/Gawel%20Zugzug").text
+    assert 'class="spe"' in fiche and "Guerrier Protection" in fiche
+    # Changement de spé : la dernière lecture l'emporte
+    etat["spes"]["gawel-zugzug"] = arbres(("Armes", [5, 5]), ("Protection", [7]))
+    c.get("/collecter?token=tok")
+    assert 'title="Armes — Armes 10 · Protection 7"' in c.get("/").text
 
 
 # ---------- Rangs de la guilde (v1.10.0) ----------

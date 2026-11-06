@@ -4,7 +4,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
 classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité et annonces Discord.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.14.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.15.0
 
 ## Fonctionnement
 
@@ -174,6 +174,14 @@ cette catégorie : 0. Un compteur ne baisse jamais (profil publié en retard). L
 **classement des morts** (total, une colonne par catégorie, « Autres » = total − catégories, surtout
 les créatures en extérieur ; détail au survol du total), la fiche du perso le détail et sa place.
 
+**Spécialisations** (v1.15.0) : la collecte lit aussi `/profile/wow/character/{slug}/specializations`
+(une requête de plus par membre au profil publié). Comme sur Classic, l'API donne les arbres de talents
+du groupe actif avec le rang de chaque talent : la spé retenue est l'arbre le plus fourni (égalité : le
+premier listé), la répartition est gardée pour l'infobulle (« Equilibre — Equilibre 9 · Restauration 8 »,
+« Protection — 7 points »). Une icône dessinée pour le site, inspirée de l'icône de la spé en jeu
+(27 spés : bouclier pour Protection, patte pour Maîtrise des bêtes, lune pour Équilibre…), s'affiche
+devant la classe dans le classement, la fiche (« Guerrier Protection »), « Mon compte » et l'admin.
+
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
 donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
 classement de la page d'accueil affiche une colonne « Rang » dès qu'un rang est connu (« Rang N »
@@ -218,6 +226,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle ; couleur de classe aussi pour les libellés au féminin de l'addon (« Guerrière » était en blanc) ; filtre de classe du classement sans doublons masculin / féminin |
 | 1.14.0 | Classement des morts : statistiques de morts lues sur l'API Blizzard à chaque collecte (table `morts`, par catégorie : donjons et raids, en extérieur, autres), classement sur l'accueil, détail sur la fiche ; vidées par la remise à zéro, incluses dans `/export.json` |
 | 1.13.0 | API Blizzard pour WoW Forever : guilde lue sans royaume, persos enregistrés sous « Prénom Nom » comme l'addon (fusion avec les fiches existantes), profil de chaque membre lu à chaque collecte (niveau plus récent que le roster, date de dernière connexion), classe connue jamais remplacée (garde le féminin) ; option `bnet_version_static` (espace statique versionné) ; `tools/verifier_api_blizzard.py --jeu forever` et `--compte` (connexion Battle.net, persos du compte) |
 | 1.12.1 | fiche personnage : rythme moyen affiché seulement après 24 h de données (5 niveaux en 1 h 30 donnaient « 73,9 niveaux par jour ») |
