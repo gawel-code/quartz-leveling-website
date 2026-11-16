@@ -244,11 +244,24 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `personnages.specialisation` / `talents` (ajoutées par `init_db()`), dernière lecture gagnante.
   Index Forever (`static-…/playable-specialization/index`, ids propres à Forever : 257 = Protection
   guerrier) : 27 spés, libellés fr_FR dont « Equilibre » sans accent, « Combat élémentaire »,
-  « Combat farouche », « Magie de l'ombre ». `SPES[(classe CLASSES, normaliser(spé))] = (couleur a,
-  couleur b, SVG)` : icônes maison inspirées des icônes du jeu (fond dégradé radial `--a`/`--b`, liseré
-  doré, motif clair, `.p` = plein) ; `icone_spe(classe, spe, talents)` (contexte des templates) →
-  `<span class="spe" title=…>`, vide si inconnue. Affichée devant la classe : classement, fiche
-  (+ nom de la spé), `carte_perso` (/moi), admin.
+  « Combat farouche », « Magie de l'ombre ». Icônes maison de la v1.15.0 (`SPES`, `icone_spe()`)
+  **supprimées en v1.17.0** au profit des icônes officielles (voir ci-dessous).
+- Icônes officielles (v1.17.0) : `completer_icones_officielles()` (appelée par `rafraichir_metiers()`, donc
+  en tâche de fond ; `metiers_a_lire()` est vrai tant que la table est vide) : médias des classes de
+  `libelles("class")` (`/data/wow/media/playable-class/{id}`), index des spés puis fiche de chaque spé
+  (`playable_class.id` : les noms se répètent, Protection, Restauration, Sacré) et
+  `/data/wow/media/playable-specialization/{id}`. Table `icones_officielles(cle, icone)` : `classe:guerrier`,
+  `spe:guerrier:protection` (`normaliser()` du nom, comme `personnages.specialisation`), `spe-id:257` (spé
+  déjà lue : pas relue ; l'index n'est relu que s'il manque une classe ou aucune spé). Téléchargement commun
+  `telecharger_icones()` (recettes aussi), `icone_media()`, `bnet_static()`. Affichage : `icone_perso(classe,
+  spe, talents, taille)` (contexte) → `<img class="ic-off {taille}">` (spé, infobulle « Protection — 7 points »,
+  sinon classe) ; sans image : rien en taille `ligne` (classement), emblème SVG maison (`embleme()`) en
+  `embleme` (fiche, `carte_perso`) et `mini` (admin). Cache `_icones_off` (icônes présentes sur le disque),
+  remis à None après téléchargement. Vérifié contre l'API le 16/11 : 9 classes, 27 spés, toutes les spés de
+  la base ont leur icône.
+- Classement (v1.17.0) : `ORDRE_CLASSEMENT` = niveau décroissant, puis date du premier passage à ce niveau
+  (`MIN(historique.date)` pour `niveau >= personnages.niveau`, `'9999'` sans historique), puis nom ; utilisé
+  par l'accueil, `fiche()` (place) et `recap()`.
 - Métiers (v1.16.0) : `/profile/wow/character/{slug}/professions` (`primaries` / `secondaries`, `tiers[0]` :
   `skill_points`, `max_skill_points`, `known_recipes[]`) ; **noms en anglais même en fr_FR** → libellés des
   métiers en dur (`METIERS`, ids de l'index Forever : 129 = Secourisme, 185 Cuisine, 356 Pêche…), recettes
@@ -330,15 +343,20 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 16 novembre 2026 (v1.16.0 mergée, déploiement en cours)
+## État au 16 novembre 2026 (v1.17.0 mergée, déploiement en cours)
+- ✅ v1.17.0 (mergée le 16/11, PR #46) : ordre d'arrivée à niveau égal + icônes officielles de spé et de classe (voir
+  *Serveur*). Demandé par Gaël le 16/11 (les 60 étaient classés par nom). Les icônes arrivent par la lecture en
+  tâche de fond : au déploiement, la 1ʳᵉ `/collecter` la lance (table vide), ou « Relire les métiers » dans l'admin.
 - ✅ v1.16.0 (mergée le 16/11, PR #45) : métiers (voir *Serveur*). Conçue avec Gaël le 16/11 (questions/réponses) :
   onglets = fabrication + Cuisine + Secourisme (pas la récolte), icônes servies par le site, liens + infobulles
   Wowhead, qualité en couleur, composants repliables, mules/banques comprises, photo du jour. Rejouée en local
   contre la vraie API le 16/11 : 40 profils `/professions` sur 42 (jazeel-moonveil, lendy-forever en 404),
   176 métiers, 2 616 recettes connues, 620 fiches de recettes (85 sans objet : enchantements, « Désenchanter »),
   1ʳᵉ lecture ≈ 170 s, suivantes ≈ 13 s ; page `/metiers` ≈ 800 Ko. Icônes non testées (proxy de session :
-  `render.worldofwarcraft.com` et Wowhead bloqués) : **à vérifier après déploiement** (dossier
-  `/app_configs/ee5b467c_quartz_forever/icones/`, journal « Métiers lus : … »).
+  `render.worldofwarcraft.com` et Wowhead bloqués). **Déployée et vérifiée le 16/11 vers 12 h** : pied
+  « v1.16.0 », collecte → `metiers: true` sans timeout, journal « Métiers lus : 40 profils sur 42 », 176 métiers
+  et 2 616 recettes en base, `/icone/4777839.jpg` servie, `/metiers` sans session → Discord ; page connectée et
+  infobulles Wowhead vérifiées par Gaël. Objet 11811 en 404 (recette sans qualité, en blanc).
 - ✅ v1.15.1 (mergée, PR #44 ; **pied « v1.15.1 » vérifié en ligne le 16/11**) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
   la boucle de `lire_api_blizzard()` ne fait plus que la logique), gunicorn `--timeout 120` (`run.sh`).
   Vu le 6/11 après le déploiement de la v1.15.0 : `rest_command.quartz_collecter` → « Timeout when calling
