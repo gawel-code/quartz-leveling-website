@@ -1,8 +1,8 @@
 # Quartz Forever — suivi de progression de guilde (WoW Forever)
-import os, re, json, hmac, secrets, sqlite3, datetime, bisect, unicodedata
+import os, re, json, hmac, secrets, sqlite3, datetime, bisect, unicodedata, threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import requests
 from flask import Flask, render_template_string, request, abort, jsonify, send_file, session, redirect
 from markupsafe import Markup, escape
@@ -208,6 +208,17 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS morts(
             nom TEXT, stat INTEGER, categorie TEXT, libelle TEXT, quantite INTEGER, maj TEXT,
             PRIMARY KEY(nom, stat))""")  # v1.14.0 : statistiques de morts de l'API Blizzard
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS metiers(
+            nom TEXT, metier INTEGER, nom_api TEXT, type TEXT, competence INTEGER, maximum INTEGER, maj TEXT,
+            PRIMARY KEY(nom, metier));
+        CREATE TABLE IF NOT EXISTS recettes_connues(
+            nom TEXT, recette INTEGER, metier INTEGER, nom_api TEXT, PRIMARY KEY(nom, recette));
+        CREATE TABLE IF NOT EXISTS recettes(
+            id INTEGER PRIMARY KEY, nom TEXT, objet INTEGER, nom_objet TEXT, quantite INTEGER, qualite TEXT,
+            icone INTEGER, icone_url TEXT, composants TEXT);
+        CREATE TABLE IF NOT EXISTS reglages(cle TEXT PRIMARY KEY, valeur TEXT);
+        """)  # v1.16.0 : métiers et recettes connues (API, une fois par jour), fiches de recettes en cache
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(personnages)")}
         if "rang" not in colonnes:
             con.execute("ALTER TABLE personnages ADD COLUMN rang INTEGER")  # v1.10.0 : n° lu dans le roster
@@ -748,6 +759,241 @@ def collecter():
     return mises_a_jour, source
 
 
+# ---------- Métiers (v1.16.0) ----------
+# Libellés français (index /data/wow/profession de Forever) ; le profil les donne en anglais même en fr_FR.
+METIERS = {171: "Alchimie", 197: "Couture", 333: "Enchantement", 164: "Forge", 202: "Ingénierie",
+           165: "Travail du cuir", 185: "Cuisine", 129: "Secourisme",
+           186: "Minage", 182: "Herboristerie", 393: "Dépeçage", 356: "Pêche"}
+FABRICATION = [171, 197, 333, 164, 202, 165, 185, 129]  # onglets de /metiers, dans cet ordre
+QUALITES = {"POOR": "#9d9d9d", "COMMON": "#ffffff", "UNCOMMON": "#1eff00", "RARE": "#0070dd",
+            "EPIC": "#a335ee", "LEGENDARY": "#ff8000"}  # couleurs du jeu ; ordre = rareté croissante
+HEURE_METIERS = 5          # lecture quotidienne : première collecte après 5 h
+METIERS_EN_FOND = True     # lecture dans un thread (les tests la font en direct)
+_verrou_metiers = threading.Lock()
+
+
+def nom_metier(id_, nom_api=""):
+    return METIERS.get(id_) or nom_api or f"Métier {id_}"
+
+
+def fabrication(id_):
+    """Métier dont on affiche les recettes ; la récolte (minage, pêche…) n'a que des recettes techniques."""
+    return id_ in FABRICATION or id_ not in METIERS
+
+
+def analyser_metiers(reponse):
+    """/professions → [{metier, nom_api, type, competence, maximum, recettes: [(id, nom anglais)]}]."""
+    res = []
+    for cle, type_ in (("primaries", "primaire"), ("secondaries", "secondaire")):
+        for m in reponse.get(cle, []):
+            tiers = m.get("tiers") or []
+            res.append({"metier": m["profession"]["id"], "nom_api": m["profession"].get("name", ""), "type": type_,
+                        "competence": max((t.get("skill_points") or 0 for t in tiers), default=m.get("skill_points") or 0),
+                        "maximum": max((t.get("max_skill_points") or 0 for t in tiers), default=m.get("max_skill_points") or 0),
+                        "recettes": [(r["id"], r.get("name", "")) for t in tiers for r in t.get("known_recipes", [])]})
+    return res
+
+
+def reglage(con, cle, valeur=None):
+    if valeur is not None:
+        con.execute("INSERT INTO reglages VALUES(?,?) ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur", (cle, valeur))
+    r = con.execute("SELECT valeur FROM reglages WHERE cle=?", (cle,)).fetchone()
+    return r[0] if r else None
+
+
+def metiers_a_lire():
+    """Vrai si les métiers n'ont pas été lus depuis la dernière borne de HEURE_METIERS h."""
+    if not bnet_actif():
+        return False
+    now = datetime.datetime.now()
+    borne = now.replace(hour=HEURE_METIERS, minute=0, second=0, microsecond=0)
+    if now < borne:
+        borne -= datetime.timedelta(days=1)
+    with db() as con:
+        lu = reglage(con, "metiers_lus")
+    return lu is None or lu < borne.isoformat(timespec="seconds")
+
+
+def lancer_metiers():
+    """Lance la lecture des métiers (en tâche de fond : ~40 profils et, la 1ʳᵉ fois, ~650 fiches de
+    recettes ne tiennent pas dans les 10 s du rest_command). False si l'API est inactive ou si une
+    lecture est déjà en cours."""
+    if not bnet_actif() or _verrou_metiers.locked():
+        return False
+    if METIERS_EN_FOND:
+        threading.Thread(target=rafraichir_metiers, daemon=True).start()
+    else:
+        rafraichir_metiers()
+    return True
+
+
+def rafraichir_metiers():
+    if not _verrou_metiers.acquire(blocking=False):
+        return
+    try:
+        roster = bnet_get(chemin_guilde() + "/roster", "profile")
+        if not roster:
+            return
+        membres = dict(identite(m["character"]) for m in roster.get("members", []) if m.get("character", {}).get("name"))
+        with ThreadPoolExecutor(BNET_PARALLELE) as pool:
+            lus = dict(zip(membres, pool.map(lambda ch: bnet_get(ch + "/professions", "profile"), membres.values())))
+        enregistrer_metiers(list(membres), {n: analyser_metiers(r) for n, r in lus.items() if r is not None})
+        completer_recettes(version_static(roster))
+        print(f"Métiers lus : {sum(r is not None for r in lus.values())} profils sur {len(lus)}", flush=True)
+    except (requests.RequestException, ValueError, KeyError, sqlite3.Error) as e:
+        print("Métiers : erreur", e, flush=True)
+    finally:
+        _verrou_metiers.release()
+
+
+def enregistrer_metiers(roster, metiers):
+    """Photo du jour : un perso absent du roster est retiré ; un profil non publié (absent de
+    metiers) garde ses dernières données ; les autres sont remplacés."""
+    with db() as con:
+        for table in ("metiers", "recettes_connues"):
+            con.execute(f"DELETE FROM {table} WHERE nom NOT IN ({','.join('?' * len(roster))})", roster)
+        for nom, liste in metiers.items():
+            con.execute("DELETE FROM metiers WHERE nom=?", (nom,))
+            con.execute("DELETE FROM recettes_connues WHERE nom=?", (nom,))
+            for m in liste:
+                con.execute("INSERT INTO metiers VALUES(?,?,?,?,?,?,?)", (nom, m["metier"], m["nom_api"], m["type"],
+                            m["competence"], m["maximum"], maintenant()))
+                con.executemany("INSERT OR IGNORE INTO recettes_connues VALUES(?,?,?,?)",
+                                [(nom, i, m["metier"], n) for i, n in m["recettes"]])
+        reglage(con, "metiers_lus", maintenant())
+
+
+def dossier_icones():
+    return Path(DB).with_name("icones")
+
+
+def lire_recette(id_, versions):
+    """Fiche statique d'une recette en français : nom, objet fabriqué (qualité), composants, icône."""
+    for v in versions:
+        r = bnet_get(f"/data/wow/recipe/{id_}", "static", v)
+        if r:
+            break
+    else:
+        return None
+    objet = r.get("crafted_item") or {}
+    item = bnet_get(f"/data/wow/item/{objet['id']}", "static", v) if objet.get("id") else None
+    media = bnet_get(f"/data/wow/media/recipe/{id_}", "static", v) or {}
+    icone = next((a for a in media.get("assets", []) if a.get("key") == "icon"), {})
+    composants = [(c["reagent"].get("name", ""), c.get("quantity", 1)) for c in r.get("reagents", []) if c.get("reagent")]
+    quantite = (r.get("crafted_quantity") or {}).get("value") or (r.get("crafted_quantity") or {}).get("minimum") or 1
+    return (id_, r.get("name"), objet.get("id"), objet.get("name"), int(quantite),
+            ((item or {}).get("quality") or {}).get("type"), icone.get("file_data_id"), icone.get("value"),
+            json.dumps(composants, ensure_ascii=False))
+
+
+def completer_recettes(version_roster=""):
+    """Lit les fiches des recettes connues pas encore en cache (une recette ne change pas) puis
+    télécharge les icônes manquantes dans <dossier de la base>/icones/."""
+    with db() as con:  # recettes des métiers de fabrication seulement (pas les fontes du minage…)
+        ids = sorted({r[0] for r in con.execute("""SELECT recette, metier FROM recettes_connues
+                      WHERE recette NOT IN (SELECT id FROM recettes)""") if fabrication(r[1])})
+    versions = list(dict.fromkeys([BNET_VERSION_STATIC, version_roster]))
+    with ThreadPoolExecutor(BNET_PARALLELE) as pool:
+        fiches = [f for f in pool.map(lambda i: lire_recette(i, versions), ids) if f]
+    with db() as con:
+        con.executemany("INSERT OR REPLACE INTO recettes VALUES(?,?,?,?,?,?,?,?,?)", fiches)
+        icones = {r[0]: r[1] for r in con.execute("SELECT DISTINCT icone, icone_url FROM recettes WHERE icone IS NOT NULL")}
+    dossier = dossier_icones()
+    dossier.mkdir(exist_ok=True)
+    manquantes = [(i, u) for i, u in icones.items() if u and not (dossier / f"{i}.jpg").exists()]
+
+    def telecharger(icone):
+        i, url = icone
+        try:
+            r = requests.get(url, timeout=15)
+            if r.status_code == 200 and r.content:
+                (dossier / f"{i}.jpg").write_bytes(r.content)
+        except requests.RequestException as e:
+            print("Icône", i, e, flush=True)
+    with ThreadPoolExecutor(BNET_PARALLELE) as pool:
+        list(pool.map(telecharger, manquantes))
+
+
+def lien_wowhead(r):
+    """Fiche Wowhead (Forever, en français) de l'objet fabriqué ; sans objet (enchantements) : recherche par nom."""
+    if r.get("objet"):
+        return f"https://www.wowhead.com/forever/fr/item={r['objet']}"
+    return "https://www.wowhead.com/forever/fr/search?q=" + quote(r.get("nom") or "")
+
+
+def icones_presentes():
+    """Icônes déjà téléchargées (une icône manquante n'est pas affichée : pas d'image cassée)."""
+    try:
+        return {int(f.stem) for f in dossier_icones().glob("*.jpg") if f.stem.isdigit()}
+    except OSError:
+        return set()
+
+
+def recette_affichee(r, icones=frozenset()):
+    """Ligne de recettes LEFT JOIN recettes_connues → dict pour les gabarits (repli sur le nom anglais)."""
+    qualite = r["qualite"] or "COMMON"
+    d = {"id": r["recette"], "nom": r["nom"] or r["nom_api"], "objet": r["objet"], "nom_objet": r["nom_objet"],
+         "quantite": r["quantite"] or 1, "qualite": qualite, "couleur": QUALITES.get(qualite, "#ffffff"),
+         "rarete": list(QUALITES).index(qualite) if qualite in QUALITES else 1,
+         "icone": r["icone"] if r["icone"] in icones else None,
+         "composants": json.loads(r["composants"]) if r["composants"] else []}
+    d["titre"] = d["nom_objet"] or d["nom"]
+    d["wowhead"] = lien_wowhead(d)
+    return d
+
+
+SQL_RECETTES = """SELECT k.nom AS perso, k.recette, k.metier, k.nom_api, r.* FROM recettes_connues k
+                  LEFT JOIN recettes r ON r.id = k.recette"""
+
+
+def tri_recettes(recettes):
+    return sorted(recettes, key=lambda r: (-r["rarete"], normaliser(r["titre"])))
+
+
+def metiers_guilde(con):
+    """Onglets de /metiers : métiers de fabrication avec leurs recettes et, pour chacune, les artisans
+    (du plus compétent au moins compétent). Les persos exclus (banques, mules) restent : ils fabriquent."""
+    persos = {r["nom"]: r for r in con.execute("SELECT nom, classe FROM personnages")}
+    exclus = inactifs(con)
+    competences = {(r["nom"], r["metier"]): r for r in con.execute("SELECT * FROM metiers")}
+    joueurs_ = proprietaires(con, list({n for n, _ in competences}))
+    icones, onglets = icones_presentes(), {}
+    for r in con.execute(SQL_RECETTES):
+        if not fabrication(r["metier"]):
+            continue
+        m = competences.get((r["perso"], r["metier"]))
+        o = onglets.setdefault(r["metier"], {"id": r["metier"], "nom": nom_metier(r["metier"], m["nom_api"] if m else ""),
+                                              "recettes": {}, "artisans": set()})
+        rec = o["recettes"].setdefault(r["recette"], {**recette_affichee(r, icones), "artisans": []})
+        info = persos.get(r["perso"])
+        rec["artisans"].append({"nom": r["perso"], "classe": info["classe"] if info else "",
+                                "competence": m["competence"] if m else None, "maximum": m["maximum"] if m else None,
+                                "joueur": joueurs_.get(r["perso"]), "exclu": exclus.get(r["perso"])})
+        o["artisans"].add(r["perso"])
+    res = []
+    for id_ in sorted(onglets, key=lambda i: (FABRICATION.index(i) if i in FABRICATION else len(FABRICATION), i)):
+        o = onglets[id_]
+        for rec in o["recettes"].values():
+            rec["artisans"].sort(key=lambda a: (-(a["competence"] or 0), a["nom"]))
+        res.append({"id": id_, "nom": o["nom"], "artisans": len(o["artisans"]), "recettes": tri_recettes(o["recettes"].values())})
+    return res
+
+
+def metiers_perso(con, nom):
+    """Métiers d'un perso pour sa fiche : {"primaires": [...], "secondaires": [...]} ; recettes pour les
+    métiers de fabrication seulement."""
+    recettes, icones = {}, icones_presentes()
+    for r in con.execute(SQL_RECETTES + " WHERE k.nom=?", (nom,)):
+        recettes.setdefault(r["metier"], []).append(recette_affichee(r, icones))
+    res = {"primaires": [], "secondaires": []}
+    for m in con.execute("SELECT * FROM metiers WHERE nom=? ORDER BY competence DESC", (nom,)):
+        res["primaires" if m["type"] == "primaire" else "secondaires"].append({
+            "id": m["metier"], "nom": nom_metier(m["metier"], m["nom_api"]), "competence": m["competence"],
+            "maximum": m["maximum"], "fabrication": fabrication(m["metier"]),
+            "recettes": tri_recettes(recettes.get(m["metier"], [])) if fabrication(m["metier"]) else []})
+    return res
+
+
 # ---------- Spécialisations (v1.15.0) ----------
 def analyser_spe(reponse):
     """/specializations (Forever, comme Classic : arbres de talents du groupe actif avec leurs talents
@@ -1206,6 +1452,40 @@ border-radius:10px;padding:8px 10px;font-size:.78rem;color:var(--doux);box-shado
 .contrib>div>b{font-family:var(--f-titre);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .contrib>div>b a{color:var(--texte)}.contrib>div>b a:hover{color:var(--cristal)}
 .contrib small{color:var(--doux);font-size:.78rem}.contrib small b{color:var(--texte)}
+/* Métiers (v1.16.0) */
+[hidden]{display:none!important}
+.onglets{display:flex;flex-wrap:wrap;gap:6px}
+.onglets button{background:var(--verre);color:var(--texte);border:1px solid var(--trait);box-shadow:none;padding:7px 12px;font-size:.82rem}
+.onglets button small{color:var(--doux);font:500 .72rem var(--f-corps);margin-left:4px}
+.onglets button[aria-selected=true]{background:linear-gradient(135deg,var(--givre),var(--cristal));color:var(--nuit);border-color:transparent}
+.onglets button[aria-selected=true] small{color:var(--nuit)}
+.recherche-metiers{flex:1 1 220px;max-width:340px;background:rgba(7,11,20,.6);color:var(--texte);border:1px solid var(--trait2);
+border-radius:12px;padding:9px 12px;font:500 .9rem var(--f-corps)}
+.recettes{display:flex;flex-direction:column;gap:8px}
+.recette{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;padding:10px 12px;border:1px solid var(--trait);
+border-radius:12px;background:rgba(7,11,20,.35);min-width:0}
+.ic-objet{width:36px;height:36px;border-radius:7px;border:1px solid var(--q,var(--trait2));display:block;background:var(--nuit2)}
+.ic-objet.petite{width:22px;height:22px;border-radius:5px;flex:0 0 auto}
+.r-corps{display:flex;flex-direction:column;gap:6px;min-width:0}
+.r-nom{font-weight:600;overflow-wrap:anywhere}.r-nom:hover{text-decoration:underline}
+.r-nom small,.r-sous{color:var(--doux);font-weight:500;font-size:.76rem}
+.artisans{display:flex;flex-wrap:wrap;gap:6px}
+.artisan{--c:#8a9ab5;display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--c);
+border:1px solid color-mix(in srgb,var(--c) 35%,transparent);border-radius:999px;padding:2px 9px;background:rgba(7,11,20,.5)}
+.artisan .num{color:var(--doux);font-weight:500}
+.artisan .puce{font-size:.66rem;padding:0 6px}
+.recette details summary,.metier details summary{cursor:pointer;color:var(--doux);font-size:.78rem}
+.recette details ul{margin:4px 0 0;padding-left:18px;color:var(--doux);font-size:.8rem}
+.titre-metier{display:none;font-size:1rem}
+.cherche .titre-metier{display:block}
+.metiers-perso{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.metier{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--trait);border-radius:12px;background:rgba(7,11,20,.35);min-width:0}
+.metier .m-tete{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.metier .m-tete b{font-family:var(--f-titre);font-weight:600}
+.metier .barre{width:100%}
+.metier.secondaire{padding:10px 12px}
+.recettes-perso{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;max-height:360px;overflow:auto}
+.recettes-perso li{display:flex;align-items:center;gap:8px;font-size:.84rem;min-width:0}
 </style>
 """
 
@@ -1218,7 +1498,7 @@ ENTETE = """<header>
 {% if maj %}<span class="tag live">Mis à jour {{ maj }}</span>{% endif %}</div></div>
 <div class="actions">{% if titre %}<a class="cta" href="./">← Retour au classement</a>
 {% else %}<a class="cta" href="contribuer">Envoyer mes données</a>{% endif %}
-{% if discord_actif %}{% if session.discord %}<a class="cta sec" href="moi">Mon compte</a><a class="cta sec" href="deconnexion">Déconnexion</a>
+{% if discord_actif %}{% if session.discord %}<a class="cta sec" href="metiers">Métiers</a><a class="cta sec" href="moi">Mon compte</a><a class="cta sec" href="deconnexion">Déconnexion</a>
 {% else %}<a class="cta sec" href="{{ url_connexion() }}">Connexion Discord</a>{% endif %}{% endif %}</div>
 </header>"""
 
@@ -1403,9 +1683,68 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  document.getElementById("compte").textContent=n+" membre"+(n>1?"s":"");}
 </script></body></html>"""
 
+RECETTE = """{% macro lien_recette(r, petite=False) -%}
+<a class="r-nom" href="{{ r.wowhead }}" target="_blank" rel="noopener" style="color:{{ r.couleur }}">{{ r.titre }}{% if r.quantite > 1 %} <small>×{{ r.quantite }}</small>{% endif %}</a>
+{%- endmacro %}
+{% macro icone_recette(r, petite=False) -%}
+{% if r.icone %}<img class="ic-objet{{ ' petite' if petite }}" style="--q:{{ r.couleur }}" src="icone/{{ r.icone }}.jpg" alt="" loading="lazy" width="36" height="36">
+{%- else %}<span class="ic-objet{{ ' petite' if petite }}" style="--q:{{ r.couleur }}"></span>{% endif %}
+{%- endmacro %}"""
+
+# Infobulles Wowhead au survol des liens (sans renommer les liens ni ajouter d'icônes : le site a les siennes).
+WOWHEAD_JS = """<script>const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};</script>
+<script src="https://wow.zamimg.com/js/tooltips.js" async></script>"""
+
+METIERS_PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Métiers — {{ guilde }}</title>""" + STYLE + WOWHEAD_JS + """</head><body>""" + RECETTE + """<div class="page">
+""" + ENTETE + """
+<section class="carte bloc">
+<div class="bloc-tete"><h2>Recettes connues dans la guilde <small>{{ "lues " ~ lu if lu else "pas encore lues" }} · mises à jour une fois par jour</small></h2>
+<input class="recherche-metiers" id="recherche" type="search" placeholder="Qui sait fabriquer…" aria-label="Chercher une recette, un objet, un composant ou un artisan"></div>
+{% if onglets %}
+<div class="onglets" role="tablist" id="onglets" hidden>{% for o in onglets %}
+<button type="button" role="tab" data-onglet="m-{{ o.id }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ o.nom }}<small>{{ o.recettes|length }} · {{ o.artisans }} artisan{{ "s" if o.artisans > 1 }}</small></button>{% endfor %}</div>
+<div id="panneaux">{% for o in onglets %}
+<section class="panneau sec" id="m-{{ o.id }}" role="tabpanel"><h3 class="titre-metier">{{ o.nom }}</h3><div class="recettes">
+{% for r in o.recettes %}<div class="recette" data-q="{{ normaliser(r.titre ~ ' ' ~ r.nom ~ ' ' ~ (r.artisans|map(attribute='nom')|join(' ')) ~ ' ' ~ (r.composants|map('first')|join(' '))) }}">
+{{ icone_recette(r) }}<div class="r-corps"><span>{{ lien_recette(r) }}{% if r.nom_objet and r.nom != r.nom_objet %} <span class="r-sous">· {{ r.nom }}</span>{% endif %}</span>
+<div class="artisans">{% for a in r.artisans %}<{{ 'a href="perso/' ~ (a.nom|urlencode) ~ '"' if not a.exclu else 'span' }} class="artisan" style="--c:{{ couleur(a.classe) }}"
+ title="{{ a.nom }}{{ ' (@' ~ a.joueur.pseudo ~ ')' if a.joueur }}{{ ' — ' ~ a.competence ~ '/' ~ a.maximum if a.competence is not none }}">{{ a.nom }}{% if a.competence is not none %} <span class="num">{{ a.competence }}</span>{% endif %}{% if a.exclu %} <span class="puce">{{ a.exclu }}</span>{% endif %}</{{ 'a' if not a.exclu else 'span' }}>{% endfor %}</div>
+{% if r.composants %}<details><summary>Composants</summary><ul>{% for n, q in r.composants %}<li>{{ q }} × {{ n }}</li>{% endfor %}</ul></details>{% endif %}
+</div></div>{% endfor %}
+</div></section>{% endfor %}</div>
+<p class="vide" id="aucun" hidden>Aucune recette ne correspond.</p>
+{% else %}<div class="vide-etat">Les métiers n'ont pas encore été lus : ils le sont une fois par jour par l'API Blizzard.</div>{% endif %}
+<small>Métiers de fabrication, Cuisine et Secourisme. Liens et infobulles : Wowhead. Le nombre à côté d'un artisan est sa compétence.</small>
+</section>
+""" + PIED + """</div>
+<script>
+(function(){
+ var onglets=document.getElementById("onglets");if(!onglets)return;
+ var boutons=onglets.querySelectorAll("button"),panneaux=document.querySelectorAll(".panneau"),
+  champ=document.getElementById("recherche"),aucun=document.getElementById("aucun"),actif=boutons[0].dataset.onglet;
+ function norm(t){return t.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().trim();}
+ function afficher(){
+  var q=norm(champ.value),total=0;
+  document.getElementById("panneaux").classList.toggle("cherche",!!q);
+  onglets.hidden=!!q;
+  panneaux.forEach(function(p){var n=0;
+   p.querySelectorAll(".recette").forEach(function(r){var ok=!q||r.dataset.q.indexOf(q)>=0;r.hidden=!ok;if(ok)n++;});
+   p.hidden=q?n===0:p.id!==actif;total+=q?n:0;});
+  aucun.hidden=!q||total>0;}
+ boutons.forEach(function(b){b.addEventListener("click",function(){actif=b.dataset.onglet;
+  boutons.forEach(function(x){x.setAttribute("aria-selected",x===b?"true":"false");});
+  try{history.replaceState(null,"","#"+actif);}catch(e){}afficher();});});
+ var h=location.hash.slice(1);boutons.forEach(function(b){if(b.dataset.onglet===h){actif=h;
+  boutons.forEach(function(x){x.setAttribute("aria-selected",x===b?"true":"false");});}});
+ champ.addEventListener("input",afficher);onglets.hidden=false;afficher();
+})();
+</script></body></html>"""
+
 FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<base href="../"><title>{{ perso.nom }} — {{ guilde }}</title>""" + STYLE + """</head><body><div class="page">
+<base href="../"><title>{{ perso.nom }} — {{ guilde }}</title>""" + STYLE + WOWHEAD_JS + """</head><body>""" + RECETTE + """<div class="page">
 """ + ENTETE + """
 <section class="carte perso identite" style="--c:{{ couleur(perso.classe) }}">
 <span class="embleme">{{ embleme(perso.classe) }}</span>
@@ -1450,6 +1789,25 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 {% if morts.detail %}<div class="table-wrap"><table><thead><tr><th>Statistique</th><th>Nombre</th></tr></thead><tbody>
 {% for l, n in morts.detail %}<tr><td>{{ l }}</td><td class="num">{{ n }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<span class="vide">{{ "Aucune mort, bravo !" if morts.total == 0 else "Pas de détail par catégorie." }}</span>{% endif %}
+</section>{% endif %}
+
+{% if metiers is not none %}<section class="carte bloc" id="metiers">
+<div class="bloc-tete"><h2>Métiers <small>{{ "lus " ~ metiers_lus if metiers_lus else "pas encore lus" }} · visible des membres connectés</small></h2>
+<a class="cta sec fiche" href="metiers">Tous les métiers</a></div>
+{% if metiers.primaires or metiers.secondaires %}
+<div class="metiers-perso">{% for m in metiers.primaires %}<div class="metier">
+ <div class="m-tete"><b>{{ m.nom }}</b><span class="num">{{ m.competence }}/{{ m.maximum }}</span></div>
+ <div class="barre"><i class="{{ 'max' if m.competence >= 300 else '' }}" style="width:{{ (m.competence / (m.maximum or 300) * 100)|round|int if m.maximum else 0 }}%"></i></div>
+ {% if m.recettes %}<details open><summary>{{ m.recettes|length }} recette{{ "s" if m.recettes|length > 1 }}</summary><ul class="recettes-perso">
+ {% for r in m.recettes %}<li>{{ icone_recette(r, True) }}{{ lien_recette(r) }}</li>{% endfor %}</ul></details>
+ {% elif not m.fabrication %}<small>Métier de récolte</small>{% endif %}
+</div>{% endfor %}</div>
+{% if metiers.secondaires %}<div class="metiers-perso">{% for m in metiers.secondaires %}<div class="metier secondaire">
+ <div class="m-tete"><b>{{ m.nom }}</b><span class="num">{{ m.competence }}/{{ m.maximum }}</span></div>
+ {% if m.recettes %}<details><summary>{{ m.recettes|length }} recette{{ "s" if m.recettes|length > 1 }}</summary><ul class="recettes-perso">
+ {% for r in m.recettes %}<li>{{ icone_recette(r, True) }}{{ lien_recette(r) }}</li>{% endfor %}</ul></details>{% endif %}
+</div>{% endfor %}</div>{% endif %}
+{% else %}<span class="vide">Aucun métier connu pour ce personnage.</span>{% endif %}
 </section>{% endif %}
 
 <section class="carte bloc">
@@ -1636,6 +1994,9 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">🗝️</span>Clés de cles.txt sans compte Discord <small>{{ sans_compte|length }}</small></h2></div>
  {% if sans_compte %}<div class="puces">{% for p in sans_compte %}<span class="puce">{{ p }}</span>{% endfor %}</div>
  {% else %}<p>Tout le monde est relié.</p>{% endif %}</section>
+<section class="carte bloc"><div class="bloc-tete"><h2><span class="ic">⚒️</span>Métiers</h2></div>
+ <form method="post"><input type="hidden" name="action" value="metiers"><div><button class="sec" type="submit">Relire les métiers maintenant</button></div></form>
+ <small>Lus automatiquement une fois par jour (première collecte après 5 h), en tâche de fond. Voir le journal de l'app.</small></section>
 <section class="carte bloc danger"><div class="bloc-tete"><h2><span class="ic">⚠️</span>Zone dangereuse</h2></div>
  <form method="post" onsubmit="return confirm('Vider toute la progression ? Une copie est gardée.')">
  <input type="hidden" name="action" value="reinitialiser"><div><button class="danger-btn" type="submit">Vider la base de progression</button></div></form>
@@ -1711,10 +2072,13 @@ def index():
 def route_perso(nom):
     with db() as con:
         f = fiche(con, nom)
+        # Métiers (v1.16.0) : membres connectés seulement
+        metiers = metiers_perso(con, nom) if f and DISCORD_SECRET and session.get("discord") else None
+        lu = reglage(con, "metiers_lus")
     if f is None:
         abort(404)
     return render_template_string(FICHE, guilde=NOM_GUILDE, titre=nom, ordinal=ordinal, medailles=MEDAILLES,
-                                  date_lisible=date_lisible, **f)
+                                  date_lisible=date_lisible, metiers=metiers, metiers_lus=date_lisible(lu) if lu else None, **f)
 
 
 def formulaire(**kw):
@@ -1734,7 +2098,30 @@ def route_image(fichier):
 def route_collecter():
     verifier_token()
     mises_a_jour, source = collecter()
-    return jsonify(ok=True, mises_a_jour=mises_a_jour, source=source)
+    metiers = lancer_metiers() if metiers_a_lire() else False  # une fois par jour, en tâche de fond
+    return jsonify(ok=True, mises_a_jour=mises_a_jour, source=source, metiers=metiers)
+
+
+@app.route("/icone/<int:icone>.jpg")
+def route_icone(icone):
+    f = dossier_icones() / f"{icone}.jpg"
+    if not f.exists():
+        abort(404)
+    return send_file(f, mimetype="image/jpeg", max_age=30 * 86400)
+
+
+@app.route("/metiers")
+def route_metiers():
+    """Recettes connues dans la guilde, par métier (membres connectés seulement)."""
+    if not DISCORD_SECRET:
+        abort(404)
+    if not session.get("discord"):
+        return redirect(url_discord())
+    with db() as con:
+        onglets = metiers_guilde(con)
+        lu = reglage(con, "metiers_lus")
+    return render_template_string(METIERS_PAGE, guilde=NOM_GUILDE, titre="Métiers de la guilde", onglets=onglets,
+                                  lu=date_lisible(lu) if lu else None, normaliser=normaliser)
 
 
 @app.route("/recap", methods=["GET", "POST"])
@@ -1757,7 +2144,8 @@ def reinitialiser():
     with db() as con, sqlite3.connect(DB + ".avant-reset") as copie:
         con.backup(copie)
         return {t: con.execute(f"DELETE FROM {t}").rowcount
-                for t in ("personnages", "historique", "exploits", "envois", "proprietaires", "inactifs", "morts")}
+                for t in ("personnages", "historique", "exploits", "envois", "proprietaires", "inactifs", "morts",
+                          "metiers", "recettes_connues", "reglages")}
 
 
 @app.route("/envoyer", methods=["POST"])
@@ -2017,6 +2405,11 @@ def route_admin():
                 con.execute("INSERT INTO rangs VALUES(?,?) ON CONFLICT(id) DO UPDATE SET nom=excluded.nom",
                             (int(nouveau), request.form["nouveau_nom"].strip()[:40]))
         message = "Noms des rangs enregistrés."
+    elif action == "metiers":
+        if lancer_metiers():
+            message = "Lecture des métiers lancée (une à deux minutes la première fois)."
+        else:
+            message, classe = "API Blizzard inactive ou lecture déjà en cours.", "err"
     elif action == "reinitialiser":
         vides = reinitialiser()
         message = (f"Base vidée ({vides['personnages']} personnages, {vides['proprietaires']} associations). "
@@ -2059,6 +2452,8 @@ def route_export():
             "inactifs": [dict(r) for r in con.execute("SELECT * FROM inactifs ORDER BY nom")],
             "rangs": [dict(r) for r in con.execute("SELECT * FROM rangs ORDER BY id")],
             "morts": [dict(r) for r in con.execute("SELECT * FROM morts ORDER BY nom, stat")],
+            "metiers": [dict(r) for r in con.execute("SELECT * FROM metiers ORDER BY nom, metier")],
+            "recettes_connues": [dict(r) for r in con.execute("SELECT * FROM recettes_connues ORDER BY nom, recette")],
         }
     return app.response_class(
         json.dumps(donnees, ensure_ascii=False, indent=2), mimetype="application/json",

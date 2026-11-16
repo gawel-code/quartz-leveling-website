@@ -5,6 +5,10 @@ Un site, **https://quartz.gawel.be**, qui affiche le niveau de tous les membres 
 la guilde, un tableau d'honneur avec des médailles, et des annonces automatiques
 sur Discord quand quelqu'un atteint un palier.
 
+Une fois connecté avec Discord, le menu **Métiers** montre toutes les recettes connues
+dans la guilde (« Qui sait fabriquer… ? »), et la fiche de chaque personnage ses métiers
+et ses recettes. Ces informations sont mises à jour une fois par jour.
+
 Comme Blizzard ne fournit pas encore ces informations pour Forever, **c'est nous
 qui les collectons**, grâce à un petit addon. Plus il y a de membres qui
 participent, plus le classement est à jour !

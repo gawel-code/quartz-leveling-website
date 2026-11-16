@@ -87,7 +87,7 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 - Tables : `personnages`, `historique` (chaque montée de niveau), `exploits`
   (UNIQUE palier+nom → une annonce ne part jamais deux fois), `envois`, `comptes`
   (connexion Discord, voir plus bas), `proprietaires` (personnage → joueur, v1.6.0), `inactifs`
-  (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0), `morts` (v1.14.0). `personnages.rang` (n° de rang,
+  (v1.8.0), `rangs` (référentiel des noms de rangs, v1.10.0), `morts` (v1.14.0), `metiers`, `recettes_connues`, `recettes`, `reglages` (v1.16.0). `personnages.rang` (n° de rang,
   v1.10.0), `personnages.specialisation` / `talents` (v1.15.0) : les `INSERT` dans `personnages` nomment leurs colonnes (ne plus écrire `VALUES(?,?,?,?,?)`).
 - Fusion : on garde toujours le **niveau le plus haut** ; une race connue n'est
   jamais écrasée par « ? ».
@@ -249,6 +249,29 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   doré, motif clair, `.p` = plein) ; `icone_spe(classe, spe, talents)` (contexte des templates) →
   `<span class="spe" title=…>`, vide si inconnue. Affichée devant la classe : classement, fiche
   (+ nom de la spé), `carte_perso` (/moi), admin.
+- Métiers (v1.16.0) : `/profile/wow/character/{slug}/professions` (`primaries` / `secondaries`, `tiers[0]` :
+  `skill_points`, `max_skill_points`, `known_recipes[]`) ; **noms en anglais même en fr_FR** → libellés des
+  métiers en dur (`METIERS`, ids de l'index Forever : 129 = Secourisme, 185 Cuisine, 356 Pêche…), recettes
+  traduites par la fiche statique `/data/wow/recipe/{id}` (nom fr, `crafted_item`, `reagents`,
+  `crafted_quantity`) + `/data/wow/item/{id}` (`quality.type`) + `/data/wow/media/recipe/{id}` (icône
+  `file_data_id` + URL `render.worldofwarcraft.com/forever-eu/icons/56/…jpg`). L'id de recette n'est pas un id
+  de sort : sans objet fabriqué (enchantements), lien Wowhead = recherche par nom (`lien_wowhead()`).
+  Lecture quotidienne hors du chemin de `/collecter` : `metiers_a_lire()` (pas lue depuis la dernière borne
+  `HEURE_METIERS` = 5 h, `reglages.metiers_lus`) → `lancer_metiers()` (thread, `_verrou_metiers` ; `METIERS_EN_FOND
+  = False` dans les tests) → `rafraichir_metiers()` : roster + `/professions` en parallèle, `enregistrer_metiers()`
+  (photo : hors roster supprimé, profil 404 gardé, sinon remplacé), `completer_recettes()` (fiches des
+  recettes de fabrication absentes du cache `recettes`, jamais relues, puis icônes manquantes dans
+  `<dossier de la base>/icones/<file_data_id>.jpg`, route `/icone/<id>.jpg`, cache 30 j ; icône absente du
+  disque = pas d'`<img>`, `icones_presentes()`). Tables `metiers(nom, metier, nom_api, type, competence,
+  maximum, maj)`, `recettes_connues(nom, recette, metier, nom_api)` (vidées par `reinitialiser()`, dans
+  `/export.json`), `recettes` (cache, gardé), `reglages(cle, valeur)`. `fabrication(id)` = `FABRICATION`
+  (ordre des onglets) ou métier inconnu. `metiers_guilde()` (onglets, recettes triées rareté puis nom,
+  artisans par compétence avec @joueur et motif d'exclusion), `metiers_perso()` (fiche). Gabarits :
+  `METIERS_PAGE`, macros `RECETTE` (`lien_recette`, `icone_recette`), `WOWHEAD_JS` (tooltips.js de
+  `wow.zamimg.com`, `colorLinks/iconizeLinks/renameLinks: false`), liens `https://www.wowhead.com/forever/fr/item=<id>`.
+  Accès : session Discord (`/metiers` → redirection vers discord.com, 404 si connexion désactivée ; bloc
+  `#metiers` de la fiche absent sinon) ; lien « Métiers » dans `ENTETE` si connecté ; admin : action `metiers`.
+  CSS : `[hidden]{display:none!important}` (sinon `.sec` / `.recette` l'emportent sur l'attribut `hidden`).
 - Fiche personnage (v1.12.0) : route `/perso/<path:nom>` (nom URL-encodé, espaces des noms de
   famille → `%20` via `|urlencode`), gabarit `FICHE` avec `<base href="../">` (liens relatifs de
   `ENTETE`/`STYLE`). `fiche(con, nom)` → None si inconnu **ou exclu** (404), sinon `perso`,
@@ -307,8 +330,16 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 6 novembre 2026 (v1.15.0 déployée, v1.15.1 en attente de merge)
-- ⏳ v1.15.1 (PR en attente) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
+## État au 16 novembre 2026 (v1.15.1 déployée, v1.16.0 en attente de merge)
+- ⏳ v1.16.0 (PR en attente) : métiers (voir *Serveur*). Conçue avec Gaël le 16/11 (questions/réponses) :
+  onglets = fabrication + Cuisine + Secourisme (pas la récolte), icônes servies par le site, liens + infobulles
+  Wowhead, qualité en couleur, composants repliables, mules/banques comprises, photo du jour. Rejouée en local
+  contre la vraie API le 16/11 : 40 profils `/professions` sur 42 (jazeel-moonveil, lendy-forever en 404),
+  176 métiers, 2 616 recettes connues, 620 fiches de recettes (85 sans objet : enchantements, « Désenchanter »),
+  1ʳᵉ lecture ≈ 170 s, suivantes ≈ 13 s ; page `/metiers` ≈ 800 Ko. Icônes non testées (proxy de session :
+  `render.worldofwarcraft.com` et Wowhead bloqués) : **à vérifier après déploiement** (dossier
+  `/app_configs/ee5b467c_quartz_forever/icones/`, journal « Métiers lus : … »).
+- ✅ v1.15.1 (mergée, PR #44 ; **pied « v1.15.1 » vérifié en ligne le 16/11**) : profils lus en parallèle (`lire_profil()`, `ThreadPoolExecutor(BNET_PARALLELE = 8)`,
   la boucle de `lire_api_blizzard()` ne fait plus que la logique), gunicorn `--timeout 120` (`run.sh`).
   Vu le 6/11 après le déploiement de la v1.15.0 : `rest_command.quartz_collecter` → « Timeout when calling
   resource » (10 s par défaut côté HA ; 3 requêtes × 28 membres à la suite ≈ 12 s ; la v1.14.0 prenait
@@ -489,4 +520,5 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
 10. Plus tard : notification HA (en plus de Discord) quand un membre passe 60.
 11. Idées en attente : maquette
     artefact pour présenter le projet à la guilde ; autres statistiques de l'API (victimes, quêtes,
-    donjons/boss, métiers, `experience` pour un niveau décimal) ; annonce Discord du 1ᵉʳ au classement des morts.
+    donjons/boss, `experience` pour un niveau décimal) ; métiers : alerte quand une recette rare
+    arrive dans la guilde ; annonce Discord du 1ᵉʳ au classement des morts.
