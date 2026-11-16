@@ -723,8 +723,9 @@ def blizzard(client, monkeypatch):
     for cle, val in {"BNET_ID": "id", "BNET_SECRET": "s", "BNET_ROYAUME": "Firemaw",
                      "BNET_GUILDE": "Quartz Forever"}.items():
         monkeypatch.setitem(g, cle, val)
+    monkeypatch.setitem(g, "METIERS_EN_FOND", False)  # v1.16.0 : lecture des métiers en direct
     etat = {"roster": [], "profils": {}, "morts": {}, "spes": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
-            "jeu": "-classic1x-eu"}
+            "jeu": "-classic1x-eu", "metiers": {}, "recettes": {}, "icones": []}
 
     def post(url, **kw):
         assert url == "https://oauth.battle.net/token" and kw["auth"] == ("id", "s")
@@ -732,6 +733,11 @@ def blizzard(client, monkeypatch):
         return Reponse({"access_token": "t", "expires_in": 86399})
 
     def get(url, **kw):
+        if url.startswith("https://render.worldofwarcraft.com/"):  # v1.16.0 : icônes des recettes
+            etat["icones"].append(url)
+            r = Reponse({})
+            r.content = b"\xff\xd8JPG"
+            return r
         chemin = url.split("api.blizzard.com")[1]
         etat["appels"].append(chemin)
         etat["espaces"].append(kw["params"]["namespace"])
@@ -744,6 +750,13 @@ def blizzard(client, monkeypatch):
             return Reponse(CLASSES_API)
         if chemin in ("/data/wow/guild/firemaw/quartz-forever/roster", "/data/wow/guild/quartz-forever/roster"):
             return Reponse({"members": etat["roster"]})
+        if chemin.endswith("/professions"):  # v1.16.0 : métiers
+            perso = chemin.split("/")[-2]
+            return Reponse(etat["metiers"][perso]) if perso in etat["metiers"] else Reponse({}, 404)
+        for prefixe in ("/data/wow/recipe/", "/data/wow/media/recipe/", "/data/wow/item/"):
+            if chemin.startswith(prefixe):
+                cle = (prefixe, int(chemin.rsplit("/", 1)[1]))
+                return Reponse(etat["recettes"][cle]) if cle in etat["recettes"] else Reponse({}, 404)
         if chemin.endswith("/specializations"):  # v1.15.0 : spécialisation
             perso = chemin.split("/")[-2]
             return Reponse(etat["spes"][perso]) if perso in etat["spes"] else Reponse({}, 404)
@@ -763,7 +776,7 @@ def blizzard(client, monkeypatch):
 def test_api_inactive_par_defaut(client, monkeypatch):
     g = client.application.view_functions["index"].__globals__
     monkeypatch.setattr(g["requests"], "get", lambda *a, **k: pytest.fail("aucun appel attendu"))
-    assert client.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 0, "source": None}
+    assert client.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 0, "source": None, "metiers": False}
 
 
 def test_collecte_par_l_api(blizzard, monkeypatch):
@@ -771,7 +784,7 @@ def test_collecte_par_l_api(blizzard, monkeypatch):
     messages, _ = capturer(monkeypatch, c)
     etat["roster"] = [membre("Grommash", 12), membre("Zuljin", 9, 8, 7)]
     r = c.get("/collecter?token=tok").json
-    assert r == {"ok": True, "mises_a_jour": 2, "source": "blizzard"}
+    assert r == {"ok": True, "mises_a_jour": 2, "source": "blizzard", "metiers": True}
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert (persos["Grommash"]["race"], persos["Grommash"]["classe"], persos["Grommash"]["niveau"]) == ("Orc", "Guerrier", 12)
     assert persos["Zuljin"]["race"] == "Troll" and any("Grommash" in m and "10" in m for m in messages)
@@ -871,7 +884,8 @@ def test_espaces_de_noms_forever(blizzard, monkeypatch):
         "/data/wow/guild/firemaw/quartz-forever/roster": "profile-forever-eu",
         "/data/wow/playable-race/index": "static-1.60.1_70399-forever-eu",
         "/data/wow/playable-class/index": "static-1.60.1_70399-forever-eu",
-        "/profile/wow/character/firemaw/grommash": "profile-forever-eu"}
+        "/profile/wow/character/firemaw/grommash": "profile-forever-eu",
+        "/profile/wow/character/firemaw/grommash/professions": "profile-forever-eu"}  # v1.16.0
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert (persos["Grommash"]["race"], persos["Grommash"]["classe"]) == ("Tauren", "Guerrier")
 
@@ -892,7 +906,7 @@ def test_roster_forever_sans_royaume(blizzard, monkeypatch):
     etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 7, race=2),
                       membre_sans_royaume("Anar", "Forever", 14, rang=0),
                       membre_sans_royaume("Anar", "Lumière", 9)]
-    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 3, "source": "blizzard"}
+    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 3, "source": "blizzard", "metiers": True}
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert set(persos) == {"Gawel Zugzug", "Anar Forever", "Anar Lumière"}
     assert (persos["Gawel Zugzug"]["race"], persos["Gawel Zugzug"]["niveau"]) == ("Orc", 7)
@@ -951,7 +965,7 @@ def test_api_en_panne_repli_sur_le_fichier(blizzard, tmp_path, monkeypatch):
     fichier.write_text(LUA1, encoding="utf-8")
     monkeypatch.setitem(g, "EXPORT", fichier)
     etat["panne"] = True
-    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 2, "source": "fichier"}
+    assert c.get("/collecter?token=tok").json == {"ok": True, "mises_a_jour": 2, "source": "fichier", "metiers": True}
 
 
 # ---------- Morts (v1.14.0) ----------
@@ -1272,3 +1286,135 @@ def test_fiche_rythme_seulement_apres_24_h_de_donnees(client):
         assert g["fiche"](con, "Gawel")["rythme"] is None  # pas d'extrapolation à 80 niveaux par jour
         assert g["fiche"](con, "Mok")["rythme"] == 12.0
     assert "niveaux par jour" in client.get("/perso/Gawel").text  # carte affichée avec « — »
+
+
+# ---------- Métiers (v1.16.0) ----------
+def metier(id_, nom, competence, maximum, recettes=()):
+    return {"profession": {"id": id_, "name": nom}, "tiers": [{"skill_points": competence, "max_skill_points": maximum,
+            "tier": {"id": 1, "name": nom}, "known_recipes": [{"id": i, "name": n} for i, n in recettes]}]}
+
+
+def recette_statique(etat, id_, nom, objet=None, nom_objet="", qualite="COMMON", icone=None, composants=()):
+    """Fiches statiques d'une recette (fr_FR), de son icône et de l'objet fabriqué."""
+    r = {"id": id_, "name": nom, "reagents": [{"reagent": {"id": i, "name": n}, "quantity": q} for i, n, q in composants]}
+    if objet:
+        r["crafted_item"] = {"id": objet, "name": nom_objet}
+        etat["recettes"][("/data/wow/item/", objet)] = {"id": objet, "name": nom_objet, "quality": {"type": qualite}}
+    etat["recettes"][("/data/wow/recipe/", id_)] = r
+    if icone:
+        etat["recettes"][("/data/wow/media/recipe/", id_)] = {"assets": [{"key": "icon", "file_data_id": icone,
+            "value": f"https://render.worldofwarcraft.com/forever-eu/icons/56/{icone}.jpg"}]}
+
+
+@pytest.fixture
+def metiers(blizzard, monkeypatch):
+    """Guilde Forever : Gawel Zugzug (couture 212/300, minage, cuisine) et Olich Ier (couture), lecture des
+    métiers synchrone (pas de tâche de fond) et connexion Discord active."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    monkeypatch.setitem(g, "DISCORD_SECRET", "secret")
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 30), membre_sans_royaume("Olich", "Ier", 21, classe=8)]
+    etat["metiers"] = {
+        "gawel-zugzug": {"primaries": [metier(197, "Tailoring", 212, 300, [(10, "Silk Robe"), (11, "Spinning Wheel")]),
+                                       metier(186, "Mining", 218, 300, [(20, "Smelt Gold")])],
+                         "secondaries": [metier(185, "Cooking", 130, 150, [(30, "Spiced Wolf Meat")]),
+                                         metier(356, "Fishing", 22, 75, [(40, "Fishing")])]},
+        "olich-ier": {"primaries": [metier(197, "Tailoring", 40, 75, [(10, "Silk Robe")])]},
+    }
+    recette_statique(etat, 10, "Robe en soie", 1001, "Robe en soie", "RARE", 501,
+                     [(4305, "Rouleau d'étoffe de soie", 5), (2321, "Fil fin", 2)])
+    recette_statique(etat, 11, "Rouet", 1002, "Rouet", "COMMON", 502)
+    recette_statique(etat, 20, "Fonte de l'or", 3577, "Barre d'or", "UNCOMMON", 503)
+    recette_statique(etat, 30, "Loup épicé", 1003, "Viande de loup épicée", "COMMON", 504)
+    return c, etat
+
+
+def connecter_membre(c, id_="7"):
+    with c.session_transaction() as s:
+        s["discord"] = {"id": id_, "nom": "Membre"}
+
+
+def test_metiers_reserves_aux_membres_connectes(metiers):
+    c, etat = metiers
+    c.get("/collecter?token=tok")
+    r = c.get("/metiers")
+    assert r.status_code == 302 and "discord.com/oauth2/authorize" in r.headers["Location"]
+    assert 'href="metiers"' not in c.get("/").text
+    fiche = c.get("/perso/Gawel%20Zugzug").text
+    assert 'id="metiers"' not in fiche and "Robe en soie" not in fiche
+    connecter_membre(c)
+    assert 'href="metiers"' in c.get("/").text
+    assert c.get("/metiers").status_code == 200
+
+
+def test_metiers_lus_par_l_api_et_affiches(metiers):
+    c, etat = metiers
+    assert c.get("/collecter?token=tok").json["metiers"] is True
+    assert "/profile/wow/character/gawel-zugzug/professions" in etat["appels"]
+    connecter_membre(c)
+    page = c.get("/metiers").text
+    # Onglets : métiers de fabrication (couture) et secondaires (cuisine), pas de récolte (minage, pêche)
+    assert "Couture" in page and "Cuisine" in page
+    assert "Minage" not in page and "Barre d'or" not in page and "Pêche" not in page
+    # Recette en français, couleur de qualité, lien et infobulle Wowhead, icône servie par le site
+    assert "Robe en soie" in page and "https://www.wowhead.com/forever/fr/item=1001" in page
+    assert "wow.zamimg.com/js/tooltips.js" in page and 'src="icone/501.jpg"' in page
+    assert "#0070dd" in page.lower()
+    assert "Rouleau d&#39;étoffe de soie" in page and "Fil fin" in page  # composants
+    # Artisans : les deux couturiers sur la robe, le plus compétent d'abord
+    robe = page[page.index("Robe en soie"):page.index("Rouet")]
+    assert robe.index("Gawel Zugzug") < robe.index("Olich Ier") and "212" in robe
+    # Icônes téléchargées une fois et servies par le site
+    assert len(etat["icones"]) == 3  # pas d'icône pour les fontes du minage
+    r = c.get("/icone/501.jpg")
+    assert r.status_code == 200 and r.data == b"\xff\xd8JPG"
+    assert c.get("/icone/999.jpg").status_code == 404
+
+
+def test_metiers_sur_la_fiche(metiers):
+    c, etat = metiers
+    c.get("/collecter?token=tok")
+    connecter_membre(c)
+    fiche = c.get("/perso/Gawel%20Zugzug").text
+    bloc = fiche[fiche.index('id="metiers"'):]
+    assert "Couture" in bloc and "212/300" in bloc and "Robe en soie" in bloc and "Rouet" in bloc
+    assert "Minage" in bloc and "218/300" in bloc and "Barre d'or" not in bloc  # récolte : compétence seule
+    assert "Cuisine" in bloc and "130/150" in bloc and "Pêche" in bloc and "22/75" in bloc
+    assert "Viande de loup épicée" in bloc
+
+
+def test_metiers_lus_une_fois_par_jour(metiers):
+    c, etat = metiers
+    c.get("/collecter?token=tok")
+    lus = [a for a in etat["appels"] if a.startswith("/data/wow/recipe/")]
+    assert c.get("/collecter?token=tok").json["metiers"] is False  # déjà lus depuis 5 h
+    assert sum(a.endswith("/professions") for a in etat["appels"]) == 2
+    # Lecture forcée par l'admin : les fiches de recettes déjà connues ne sont pas relues
+    etat["metiers"]["olich-ier"]["primaries"][0]["tiers"][0]["skill_points"] = 60
+    admin(c)
+    assert "Lecture des métiers lancée" in c.post("/admin", data={"action": "metiers"}).text
+    assert sum(a.endswith("/professions") for a in etat["appels"]) == 4
+    assert [a for a in etat["appels"] if a.startswith("/data/wow/recipe/")] == lus
+    assert len(etat["icones"]) == 3  # pas d'icône pour les fontes du minage
+    connecter_membre(c)
+    assert "60/75" in c.get("/perso/Olich%20Ier").text
+
+
+def test_metiers_photo_du_jour(metiers):
+    """Un membre absent du roster disparaît des métiers ; un profil non publié (404) garde ses données."""
+    c, etat = metiers
+    c.get("/collecter?token=tok")
+    g = c.application.view_functions["index"].__globals__
+    with g["db"]() as con:
+        con.execute("DELETE FROM reglages")
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 30)]
+    del etat["metiers"]["gawel-zugzug"]
+    c.get("/collecter?token=tok")
+    connecter_membre(c)
+    page = c.get("/metiers").text
+    assert "Gawel Zugzug" in page and "Olich Ier" not in page
+
+
+def test_metiers_sans_api(client):
+    assert client.get("/collecter?token=tok").json["metiers"] is False

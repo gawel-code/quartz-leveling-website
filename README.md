@@ -2,9 +2,10 @@
 
 Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) sur
 **World of Warcraft: Forever** (lancement le 5 novembre 2026, niveau max 60) :
-classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité et annonces Discord.
+classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité, annonces Discord
+et, pour les membres connectés, les métiers et recettes connues de la guilde.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.15.1
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.16.0
 
 ## Fonctionnement
 
@@ -59,6 +60,16 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   guilde et temps depuis le palier précédent ; courbe du perso face à la guilde ; historique daté de
   chaque niveau. Lien depuis le classement, le tableau d'honneur, le fil d'activité et « Mes
   personnages » (`/moi`). Un perso inconnu ou exclu (mule, banque) donne une 404.
+- **Métiers** (v1.16.0, membres connectés seulement) : lus par l'API Blizzard une fois par jour
+  (première collecte après 5 h, en tâche de fond ; « Relire les métiers maintenant » dans `/admin`).
+  `/metiers` (lien « Métiers » dans l'en-tête) : un onglet par métier de fabrication (Alchimie, Couture,
+  Enchantement, Forge, Ingénierie, Travail du cuir, Cuisine, Secourisme), chaque recette avec son icône,
+  l'objet fabriqué en français à la couleur de sa qualité, lien et infobulle **Wowhead** (Forever),
+  composants et artisans du plus compétent au moins compétent (mules et banques comprises) ; recherche
+  « Qui sait fabriquer… » sur les recettes, objets, composants et artisans. Fiche personnage : bloc
+  « Métiers » (compétence de chaque métier, recettes des métiers de fabrication ; récolte et pêche :
+  compétence seule). Un membre qui quitte la guilde disparaît des métiers à la lecture suivante ; un
+  profil non publié garde ses dernières données.
 - **Mules et banques** : dans `/admin`, un personnage peut être exclu de la progression (mule,
   banque, autre) : il sort du classement, du tableau d'honneur, des annonces, du récap et de la
   courbe ; ses niveaux restent enregistrés et « Réintégrer » lui rend ses paliers, sans annonce.
@@ -107,14 +118,16 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | Route | Accès | Rôle |
 |---|---|---|
 | `GET /` | public | classement, tableau d'honneur, classement des morts, fil d'activité |
-| `GET /perso/<nom>` | public | fiche d'un personnage (404 si inconnu ou exclu) |
+| `GET /perso/<nom>` | public | fiche d'un personnage (404 si inconnu ou exclu) ; bloc « Métiers » pour les membres connectés |
+| `GET /metiers` | session Discord | recettes connues dans la guilde, par métier (sinon redirection vers la connexion Discord ; 404 si la connexion Discord est désactivée) |
+| `GET /icone/<id>.jpg` | public | icône d'une recette, téléchargée une fois depuis Blizzard et servie par le site |
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
-| `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour` et `source` (`blizzard`, `fichier` ou `null`) |
+| `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour`, `source` (`blizzard`, `fichier` ou `null`) et `metiers` (`true` si la lecture quotidienne des métiers vient d'être lancée en tâche de fond) |
 | `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
 | `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) ; les boutons pointent directement sur discord.com (ouverture de l'app Discord sur mobile si installée), `/connexion` reste une redirection équivalente |
 | `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
-| `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, vider la progression |
+| `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, relire les métiers, vider la progression |
 | `GET /export.json` | `?token=` | export complet de la base |
 | `POST /reinitialiser` | `?token=` | vide la base (copie de sauvegarde dans `guilde.db.avant-reset`) |
 
@@ -122,13 +135,16 @@ Si l'option `token` est vide, les routes protégées sont fermées.
 
 ### Données
 
-Tables SQLite (`/data/guilde.db`) : `personnages` (état courant), `historique` (une ligne
+Tables SQLite (`/config/guilde.db`, soit `/app_configs/ee5b467c_quartz_forever/` côté HA) : `personnages` (état courant), `historique` (une ligne
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
-`envois` (journal des envois), `morts` (statistiques de morts de l'API, v1.14.0), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
+`envois` (journal des envois), `morts` (statistiques de morts de l'API, v1.14.0), `metiers` / `recettes_connues` (photo quotidienne de l'API, v1.16.0),
+`recettes` (fiches de recettes en français : objet, qualité, composants, icône ; cache jamais vidé), `reglages`
+(date de la dernière lecture des métiers), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
 mules, banques), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` vide la
-progression, les envois, les morts, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
-BattleTags), les noms des rangs ni les sessions. Les sessions sont signées par `/data/secret.key` (créée au premier démarrage).
+progression, les envois, les morts, les métiers, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
+BattleTags), les noms des rangs, le cache des recettes ni les sessions. Les sessions sont signées par `secret.key`
+(créée au premier démarrage, à côté de la base) ; les icônes des recettes sont dans `icones/`, à côté de la base.
 
 ### Options de l'app Home Assistant
 
@@ -226,6 +242,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.16.0 | Métiers (membres connectés) : lecture quotidienne de `/professions` par l'API (en tâche de fond, première collecte après 5 h ; bouton dans l'admin), page `/metiers` (onglets par métier de fabrication, recettes en français avec icône, qualité, composants, lien et infobulle Wowhead, artisans par compétence, recherche) et bloc « Métiers » sur la fiche ; icônes servies par le site (`/icone/<id>.jpg`) |
 | 1.15.1 | Collecte plus rapide : profil, statistiques et spé de chaque membre lus en parallèle (8 requêtes simultanées) ; à la suite, la collecte dépassait les 10 s du `rest_command` de Home Assistant (erreur, récap de 9 h / 21 h bloqué) ; gunicorn `--timeout 120` |
 | 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle ; couleur de classe aussi pour les libellés au féminin de l'addon (« Guerrière » était en blanc) ; filtre de classe du classement sans doublons masculin / féminin |
 | 1.14.0 | Classement des morts : statistiques de morts lues sur l'API Blizzard à chaque collecte (table `morts`, par catégorie : donjons et raids, en extérieur, autres), classement sur l'accueil, détail sur la fiche ; vidées par la remise à zéro, incluses dans `/export.json` |
