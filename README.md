@@ -5,7 +5,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité, annonces Discord
 et, pour les membres connectés, les métiers et recettes connues de la guilde.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.16.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.17.0
 
 ## Fonctionnement
 
@@ -76,6 +76,9 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
 - **Contributeurs** : la page d'accueil met en avant les 3 membres qui ont signalé le plus de
   montées de niveau (premier envoi à les apprendre au site), puis le plus d'envois ; la liste
   complète (envois, persos lus, dernier envoi) est dans `/admin`. La collecte serveur ne compte pas.
+- **Classement** : par niveau puis, à niveau égal, par **ordre d'arrivée** à ce niveau (date réelle de
+  l'historique, v1.17.0) : les 60 restent dans l'ordre où ils l'ont atteint. Même ordre pour la place
+  affichée sur la fiche et pour le récap Discord.
 - **Tableau d'honneur** : les paliers 10, 20, 30, 40, 50 et 60 sont classés **par date
   réelle**. Un envoi tardif ne fait pas perdre son rang : le tableau se remet dans l'ordre.
 
@@ -120,7 +123,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `GET /` | public | classement, tableau d'honneur, classement des morts, fil d'activité |
 | `GET /perso/<nom>` | public | fiche d'un personnage (404 si inconnu ou exclu) ; bloc « Métiers » pour les membres connectés |
 | `GET /metiers` | session Discord | recettes connues dans la guilde, par métier (sinon redirection vers la connexion Discord ; 404 si la connexion Discord est désactivée) |
-| `GET /icone/<id>.jpg` | public | icône d'une recette, téléchargée une fois depuis Blizzard et servie par le site |
+| `GET /icone/<id>.jpg` | public | icône d'une recette, d'une spé ou d'une classe, téléchargée une fois depuis Blizzard et servie par le site |
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour`, `source` (`blizzard`, `fichier` ou `null`) et `metiers` (`true` si la lecture quotidienne des métiers vient d'être lancée en tâche de fond) |
@@ -139,7 +142,7 @@ Tables SQLite (`/config/guilde.db`, soit `/app_configs/ee5b467c_quartz_forever/`
 par niveau atteint, avec sa date), `exploits` (paliers de 10, rang par date réelle),
 `envois` (journal des envois), `morts` (statistiques de morts de l'API, v1.14.0), `metiers` / `recettes_connues` (photo quotidienne de l'API, v1.16.0),
 `recettes` (fiches de recettes en français : objet, qualité, composants, icône ; cache jamais vidé), `reglages`
-(date de la dernière lecture des métiers), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
+(date de la dernière lecture des métiers), `icones_officielles` (icônes de spé et de classe, v1.17.0, gardées), `proprietaires` (perso → pseudo, source), `inactifs` (persos exclus :
 mules, banques), `comptes` (Discord ↔ pseudo, BattleTag lu sur Discord ou saisi ; clé créée sur le site, sinon
 celle de `cles.txt`, qu'elle remplace). Dates ISO à la seconde. `/reinitialiser` vide la
 progression, les envois, les morts, les métiers, les associations et les exclusions de personnages, mais pas les comptes (pseudos, clés,
@@ -194,9 +197,11 @@ les créatures en extérieur ; détail au survol du total), la fiche du perso le
 (une requête de plus par membre au profil publié). Comme sur Classic, l'API donne les arbres de talents
 du groupe actif avec le rang de chaque talent : la spé retenue est l'arbre le plus fourni (égalité : le
 premier listé), la répartition est gardée pour l'infobulle (« Equilibre — Equilibre 9 · Restauration 8 »,
-« Protection — 7 points »). Une icône dessinée pour le site, inspirée de l'icône de la spé en jeu
-(27 spés : bouclier pour Protection, patte pour Maîtrise des bêtes, lune pour Équilibre…), s'affiche
-devant la classe dans le classement, la fiche (« Guerrier Protection »), « Mon compte » et l'admin.
+« Protection — 7 points »). Depuis la v1.17.0, l'**icône officielle** de la spé (sinon celle de la
+classe) s'affiche devant la classe dans le classement, en grand sur la fiche (« Guerrier Protection »),
+sur les cartes de « Mon compte » et dans l'admin. Les 27 icônes de spé et les 9 de classe sont lues une
+fois sur l'API (`/data/wow/media/playable-specialization/{id}`, `…/playable-class/{id}`) par la lecture
+quotidienne, puis servies par le site ; tant qu'elles manquent, l'emblème dessiné pour le site prend le relais.
 
 **Rangs de la guilde** (v1.10.0) : le roster de l'API et l'addon (≥ 1.3.0, table `GuildExportRangs`)
 donnent le numéro de rang de chaque membre (0 = maître de guilde, même numérotation), pas son nom. Les noms se définissent dans `/admin` (bloc « Rangs de la guilde ») ; le
@@ -242,6 +247,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.17.0 | Classement à niveau égal par ordre d'arrivée à ce niveau (accueil, place sur la fiche, récap Discord) : les 60 restent dans l'ordre où ils l'ont atteint ; icônes officielles des spés et des classes (lues une fois sur l'API, servies par le site) à la place des icônes dessinées en v1.15.0 |
 | 1.16.0 | Métiers (membres connectés) : lecture quotidienne de `/professions` par l'API (en tâche de fond, première collecte après 5 h ; bouton dans l'admin), page `/metiers` (onglets par métier de fabrication, recettes en français avec icône, qualité, composants, lien et infobulle Wowhead, artisans par compétence, recherche) et bloc « Métiers » sur la fiche ; icônes servies par le site (`/icone/<id>.jpg`) |
 | 1.15.1 | Collecte plus rapide : profil, statistiques et spé de chaque membre lus en parallèle (8 requêtes simultanées) ; à la suite, la collecte dépassait les 10 s du `rest_command` de Home Assistant (erreur, récap de 9 h / 21 h bloqué) ; gunicorn `--timeout 120` |
 | 1.15.0 | Spécialisation de chaque perso lue sur l'API Blizzard (arbre de talents le plus fourni, colonnes `personnages.specialisation` et `talents`) ; icône de spé dessinée pour le site (27 spés, inspirées des icônes du jeu) devant la classe, répartition des talents en infobulle ; couleur de classe aussi pour les libellés au féminin de l'addon (« Guerrière » était en blanc) ; filtre de classe du classement sans doublons masculin / féminin |

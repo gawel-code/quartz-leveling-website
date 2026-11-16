@@ -66,85 +66,8 @@ CLASSES = {"Guerrier": "guerrier", "Guerrière": "guerrier", "Mage": "mage", "Pr
            "Démoniste": "demoniste", "Paladin": "paladin", "Chaman": "chaman", "Chamane": "chaman"}
 
 
-# Icônes de spécialisation (v1.15.0) : dessinées pour le site, inspirées des icônes du jeu (fond
-# dégradé aux couleurs de l'icône d'origine, motif clair au trait ; .p = motif plein). Clé :
-# (classe de CLASSES, nom de la spé sans accents ni casse, tel que l'API le donne en fr_FR).
-_D = '<circle class="p" cx="%s" cy="%s" r="%s"/>'
-SPES = {
-    ("guerrier", "armes"): ("#9a5a3a", "#2a140c",  # Frappe mortelle : épée sanglante
-        '<path d="M5 19 15 9M15 9l3.5-4.5.9.9L15 9M8 13l3 3M4.5 19.5l2-2"/><path class="p" d="M17 14c0 0 1.6 2 1.6 2.9a1.6 1.6 0 0 1-3.2 0c0-.9 1.6-2.9 1.6-2.9z"/>'),
-    ("guerrier", "fureur"): ("#c8321e", "#3d0906",  # Rage intérieure : visage hurlant
-        '<path d="M6.5 8.5l3.5 1.6M17.5 8.5 14 10.1M8 15.5c1.2-1.8 2.5-2.5 4-2.5s2.8.7 4 2.5c-1.2 1.6-2.5 2.5-4 2.5s-2.8-.9-4-2.5z"/><path d="M4 5l2 2M20 5l-2 2M12 3v2"/>'),
-    ("guerrier", "protection"): ("#6c7c8c", "#1c232b",  # Bouclier
-        '<path d="M12 3.5l7 2.6v5.4c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6.1z"/><path d="M12 6.5v12M5.6 11.5h12.8"/>'),
-    ("paladin", "sacre"): ("#f0c95a", "#6b4a12",  # Horion sacré : éclat de lumière
-        _D % (12, 12, 3.2) + '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
-    ("paladin", "protection"): ("#3d62a8", "#121d38",  # Aura de dévotion : bouclier béni
-        '<path d="M12 3.5l7 2.6v5.4c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6.1z"/><path d="M12 7v9.5M8.5 10.5h7"/>'),
-    ("paladin", "vindicte"): ("#e08a2e", "#4a1f06",  # Aura de lumière : épée solaire
-        '<path d="M12 3v13M9.3 13.5h5.4M12 16v4.5"/><path d="M6 6.5l2 1.5M18 6.5l-2 1.5M4.5 11h2.5M19.5 11H17"/>'),
-    ("chasseur", "maitrise des betes"): ("#7d8c3a", "#24300f",  # Dressage : patte
-        _D % (6.8, 10.3, 1.7) + _D % (10.2, 6.8, 1.7) + _D % (13.8, 6.8, 1.7) + _D % (17.2, 10.3, 1.7)
-        + '<path class="p" d="M12 11.2c-3 0-5 3.6-5 5.6 0 1.5 1.4 2.1 2.6 1.6.9-.4 1.6-.6 2.4-.6s1.5.2 2.4.6c1.2.5 2.6-.1 2.6-1.6 0-2-2-5.6-5-5.6z"/>'),
-    ("chasseur", "precision"): ("#9a7a42", "#2e2010",  # Tir précis : cible et flèche
-        '<circle cx="10" cy="14" r="6"/><circle cx="10" cy="14" r="2.3"/><path d="M10 14 20 4M20 4h-4M20 4v4"/>'),
-    ("chasseur", "survie"): ("#4f7a62", "#122620",  # Frappe rapide : lames croisées
-        '<path d="M5 5l11 11M19 5 8 16M14.5 17.5l3-3M9.5 17.5l-3-3M17 17l2.5 2.5M7 17l-2.5 2.5"/>'),
-    ("voleur", "assassinat"): ("#4a8a2e", "#0f2a0a",  # Poison : dague et goutte
-        '<path d="M9 3v11M6.5 14h5M9 14v3.5M8 20.5h2"/><path class="p" d="M16.5 10s2.6 3.2 2.6 4.6a2.6 2.6 0 0 1-5.2 0c0-1.4 2.6-4.6 2.6-4.6z"/>'),
-    ("voleur", "combat"): ("#9a402e", "#2a0f0a",  # Attaque sournoise : épées croisées
-        '<path d="M4 4l12 12M20 4 8 16M13.5 18.5l4-4M6.5 14.5l4 4M17 17l2.5 2.5M7 17l-2.5 2.5"/>'),
-    ("voleur", "finesse"): ("#46466e", "#0e0e1c",  # Camouflage : œil dans l'ombre
-        '<path d="M3 13c3-3.6 6-5 9-5s6 1.4 9 5c-3 3.6-6 5-9 5s-6-1.4-9-5z"/>' + _D % (12, 13, 2.2) + '<path d="M4 7.5c5-3 11-3 16 0"/>'),
-    ("pretre", "discipline"): ("#b8b8e0", "#34346a",  # Mot de pouvoir : Bouclier
-        '<circle cx="12" cy="12" r="8"/><path d="M7.5 9.5a5 5 0 0 1 3.5-3"/><path d="M12 9v6M9 12h6"/>'),
-    ("pretre", "sacre"): ("#f2e6b0", "#7a6a2a",  # Lumière sacrée : rayons
-        '<path d="M12 4v16M7.5 9h9"/><path d="M5 4.5l2 2M19 4.5l-2 2M4 13h2M18 13h2"/>'),
-    ("pretre", "magie de l'ombre"): ("#6a2e9a", "#14061f",  # Mot de l'ombre : Douleur (spirale)
-        '<path d="M12 12a1 1 0 1 1 2 0 3 3 0 1 1-6 0 5 5 0 1 1 10 0 7 7 0 1 1-14 0"/>'),
-    ("chaman", "combat elementaire"): ("#3466c0", "#0b1a3a",  # Éclair
-        '<path class="p" d="M13.5 2.5 5.5 14h5.5l-1.5 7.5 8.5-12h-5.8z"/>'),
-    ("chaman", "amelioration"): ("#2e8c9c", "#0a2a30",  # Bouclier de foudre : orbe
-        '<circle cx="12" cy="12" r="8"/><path d="M13 7.5l-3.5 5h3l-1 4 3.5-5h-3z"/><path d="M4.5 9.5c4-1 11-1 15 0"/>'),
-    ("chaman", "restauration"): ("#2e9ab8", "#0a2a3a",  # Vague de soins : goutte
-        '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/><path d="M8.5 14.5c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0"/>'),
-    ("mage", "arcane"): ("#9050dc", "#1f0a3d",  # Sentinelle magique : étoile arcanique
-        '<path class="p" d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z"/>' + _D % (18.5, 5.5, 1)),
-    ("mage", "feu"): ("#e85a28", "#4a0f05",  # Boule de feu : comète
-        _D % (15, 9, 4) + '<path d="M12 12.5 4.5 20M15 13 9 19.5M11 9 4 15.5"/>'),
-    ("mage", "givre"): ("#5ab8ec", "#0f2a4a",  # Éclair de givre : flocon
-        '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M10 4.5l2 2 2-2M10 19.5l2-2 2 2"/>'),
-    ("demoniste", "affliction"): ("#58782e", "#121f08",  # Voile mortel : crâne
-        '<path d="M6.5 13.5a5.5 5.5 0 1 1 11 0v2.5h-2v3h-7v-3h-2z"/>' + _D % (9.6, 12.5, 1.4) + _D % (14.4, 12.5, 1.4) + '<path d="M11 19v-2M13 19v-2"/>'),
-    ("demoniste", "demonologie"): ("#8a2e9a", "#1f0824",  # Métamorphose : tête cornue
-        '<path d="M5 3.5c0 4.5 2.5 6.5 4.5 7M19 3.5c0 4.5-2.5 6.5-4.5 7"/><path d="M7.5 12.5a4.5 4.5 0 0 0 9 0c0-1.5-1.5-2.5-4.5-2.5s-4.5 1-4.5 2.5z"/><path d="M10 13.5h.5M13.5 13.5h.5M10 17h4"/>'),
-    ("demoniste", "destruction"): ("#c8481e", "#3a0a05",  # Pluie de feu
-        _D % (8, 17, 2.2) + _D % (16.5, 14, 2.2) + _D % (11, 8, 1.8) + '<path d="M9.5 15.5 14 6M18 12.5 21 6M12.2 6.8 14.5 2.5"/>'),
-    ("druide", "equilibre"): ("#3c50b8", "#0a0f33",  # Météores : lune et étoile
-        '<path class="p" d="M14.5 4a8 8 0 1 0 5.5 12 6.5 6.5 0 0 1-5.5-12z"/><path d="M18 4v3M16.5 5.5h3"/>'),
-    ("druide", "combat farouche"): ("#9a6430", "#2a1608",  # Forme d'ours : griffures
-        '<path d="M7 4c1.2 5 1.2 11-1 16M12 3c1.2 6 1.2 12-1 18M17 4c1.2 5 1.2 11-1 16"/>'),
-    ("druide", "restauration"): ("#3c9e4c", "#0a2a10",  # Toucher guérisseur : feuille
-        '<path d="M5 19C5 10 11 5 20 4c-1 9-6 15-15 15zM5 19l8-8"/><path d="M13.5 15.5l2.5 2.5M9.5 11.5 7 9"/>'),
-}
-
-
 def normaliser(texte):
     return unicodedata.normalize("NFD", (texte or "").casefold()).encode("ascii", "ignore").decode().strip()
-
-
-def icone_spe(classe, spe, detail=""):
-    """Icône de la spécialisation (Markup vide si inconnue) ; detail = répartition des talents (infobulle :
-    « Protection — 7 points », « Equilibre — Equilibre 9 · Restauration 8 »)."""
-    icone = SPES.get((CLASSES.get(classe or ""), normaliser(spe)))
-    if not icone:
-        return Markup("")
-    if detail and " · " not in detail:  # un seul arbre : « Protection — 7 points »
-        detail = detail.rsplit(" ", 1)[-1] + " points"
-    titre = escape(spe + (f" — {detail}" if detail else ""))
-    return Markup('<span class="spe" style="--a:%s;--b:%s" title="%s" role="img" aria-label="%s">'
-                  '<svg viewBox="0 0 24 24" aria-hidden="true">%s</svg></span>') % (
-        icone[0], icone[1], titre, titre, Markup(icone[2]))
 
 
 NOMS_CLASSES = {cle: nom for nom, cle in reversed(list(CLASSES.items()))}  # libellé masculin (1ᵉʳ de CLASSES)
@@ -164,6 +87,38 @@ def embleme(classe):
     """Emblème SVG de la classe (point d'interrogation si inconnue)."""
     trace = EMBLEMES.get(CLASSES.get(classe or ""), "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5")
     return Markup('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="%s"/></svg>' % trace)
+
+
+# Icônes officielles (v1.17.0) : spés et classes, lues une fois sur l'API et servies par le site.
+_icones_off = None  # {clé: file_data_id} des icônes présentes sur le disque ; rechargé après téléchargement
+
+
+def icones_officielles():
+    global _icones_off
+    if _icones_off is None:
+        with db() as con:
+            presentes = icones_presentes()
+            _icones_off = {r[0]: r[1] for r in con.execute("SELECT cle, icone FROM icones_officielles") if r[1] in presentes}
+    return _icones_off
+
+
+def icone_perso(classe, spe=None, detail="", taille="ligne"):
+    """Icône officielle de la spé (infobulle : répartition des talents), sinon de la classe. Sans image :
+    emblème maison (taille « embleme » / « mini ») ou rien (« ligne », dans le texte)."""
+    off, cle = icones_officielles(), CLASSES.get(classe or "")
+    icone = off.get(f"spe:{cle}:{normaliser(spe)}") if spe else None
+    if icone:
+        if detail and " · " not in detail:  # un seul arbre : « Protection — 7 points »
+            detail = detail.rsplit(" ", 1)[-1] + " points"
+        titre = spe + (f" — {detail}" if detail else "")
+    else:
+        icone, titre = off.get(f"classe:{cle}"), classe or ""
+    if icone:
+        return Markup('<img class="ic-off %s" src="icone/%s.jpg" alt="%s" title="%s" loading="lazy">') % (
+            taille, icone, titre, titre)
+    if taille == "ligne":
+        return Markup("")
+    return Markup('<span class="embleme%s">%s</span>') % (" mini" if taille == "mini" else "", embleme(classe))
 
 
 def maintenant():
@@ -218,7 +173,9 @@ def init_db():
             id INTEGER PRIMARY KEY, nom TEXT, objet INTEGER, nom_objet TEXT, quantite INTEGER, qualite TEXT,
             icone INTEGER, icone_url TEXT, composants TEXT);
         CREATE TABLE IF NOT EXISTS reglages(cle TEXT PRIMARY KEY, valeur TEXT);
-        """)  # v1.16.0 : métiers et recettes connues (API, une fois par jour), fiches de recettes en cache
+        CREATE TABLE IF NOT EXISTS icones_officielles(cle TEXT PRIMARY KEY, icone INTEGER);
+        """)  # v1.16.0 : métiers et recettes connues (API, une fois par jour), fiches de recettes en cache ;
+        # v1.17.0 : icônes officielles, clés « classe:guerrier », « spe:guerrier:protection », « spe-id:257 » (spé lue)
         colonnes = {c[1] for c in con.execute("PRAGMA table_info(personnages)")}
         if "rang" not in colonnes:
             con.execute("ALTER TABLE personnages ADD COLUMN rang INTEGER")  # v1.10.0 : n° lu dans le roster
@@ -811,7 +768,8 @@ def metiers_a_lire():
         borne -= datetime.timedelta(days=1)
     with db() as con:
         lu = reglage(con, "metiers_lus")
-    return lu is None or lu < borne.isoformat(timespec="seconds")
+        sans_icones = not con.execute("SELECT 1 FROM icones_officielles LIMIT 1").fetchone()  # 1ʳᵉ fois (v1.17.0)
+    return lu is None or lu < borne.isoformat(timespec="seconds") or sans_icones
 
 
 def lancer_metiers():
@@ -838,6 +796,7 @@ def rafraichir_metiers():
         with ThreadPoolExecutor(BNET_PARALLELE) as pool:
             lus = dict(zip(membres, pool.map(lambda ch: bnet_get(ch + "/professions", "profile"), membres.values())))
         enregistrer_metiers(list(membres), {n: analyser_metiers(r) for n, r in lus.items() if r is not None})
+        completer_icones_officielles(version_static(roster))
         completer_recettes(version_static(roster))
         print(f"Métiers lus : {sum(r is not None for r in lus.values())} profils sur {len(lus)}", flush=True)
     except (requests.RequestException, ValueError, KeyError, sqlite3.Error) as e:
@@ -877,12 +836,11 @@ def lire_recette(id_, versions):
         return None
     objet = r.get("crafted_item") or {}
     item = bnet_get(f"/data/wow/item/{objet['id']}", "static", v) if objet.get("id") else None
-    media = bnet_get(f"/data/wow/media/recipe/{id_}", "static", v) or {}
-    icone = next((a for a in media.get("assets", []) if a.get("key") == "icon"), {})
+    icone, icone_url = icone_media(bnet_get(f"/data/wow/media/recipe/{id_}", "static", v))
     composants = [(c["reagent"].get("name", ""), c.get("quantity", 1)) for c in r.get("reagents", []) if c.get("reagent")]
     quantite = (r.get("crafted_quantity") or {}).get("value") or (r.get("crafted_quantity") or {}).get("minimum") or 1
     return (id_, r.get("name"), objet.get("id"), objet.get("name"), int(quantite),
-            ((item or {}).get("quality") or {}).get("type"), icone.get("file_data_id"), icone.get("value"),
+            ((item or {}).get("quality") or {}).get("type"), icone, icone_url,
             json.dumps(composants, ensure_ascii=False))
 
 
@@ -898,6 +856,62 @@ def completer_recettes(version_roster=""):
     with db() as con:
         con.executemany("INSERT OR REPLACE INTO recettes VALUES(?,?,?,?,?,?,?,?,?)", fiches)
         icones = {r[0]: r[1] for r in con.execute("SELECT DISTINCT icone, icone_url FROM recettes WHERE icone IS NOT NULL")}
+    telecharger_icones(icones)
+
+
+def bnet_static(chemin, versions):
+    """GET dans l'espace statique : première version qui répond."""
+    for v in versions:
+        r = bnet_get(chemin, "static", v)
+        if r:
+            return r
+    return None
+
+
+def icone_media(media):
+    """(file_data_id, URL) de l'icône d'une réponse /data/wow/media/… ; (None, None) sans icône."""
+    a = next((a for a in (media or {}).get("assets", []) if a.get("key") == "icon"), {})
+    return a.get("file_data_id"), a.get("value")
+
+
+def completer_icones_officielles(version_roster=""):
+    """Icônes officielles des classes et des spés (v1.17.0), lues une fois : la classe d'une spé vient de
+    sa fiche (les noms se répètent : Protection, Restauration, Sacré), notée « spe-id:<id> » une fois lue."""
+    global _icones_off
+    versions = list(dict.fromkeys([BNET_VERSION_STATIC, version_roster]))
+    with db() as con:
+        connues = {r[0] for r in con.execute("SELECT cle FROM icones_officielles")}
+    classes = libelles("class", version_roster)
+    a_lire = [(f"classe:{cle_classe(nom)}", f"/data/wow/media/playable-class/{id_}", None)
+              for id_, nom in classes.items() if f"classe:{cle_classe(nom)}" not in connues]
+    if a_lire or not any(c.startswith("spe-id:") for c in connues):  # index lu tant qu'il manque quelque chose
+        index = bnet_static("/data/wow/playable-specialization/index", versions) or {}
+    else:
+        index = {}
+    spes = [s for s in index.get("character_specializations", []) if f"spe-id:{s['id']}" not in connues]
+
+    def lire(s):
+        d = bnet_static(f"/data/wow/playable-specialization/{s['id']}", versions) or {}
+        classe = classes.get((d.get("playable_class") or {}).get("id"))
+        if not classe:
+            return None
+        return (f"spe:{cle_classe(classe)}:{normaliser(d.get('name') or s['name'])}",
+                f"/data/wow/media/playable-specialization/{s['id']}", s["id"])
+    with ThreadPoolExecutor(BNET_PARALLELE) as pool:
+        a_lire += [x for x in pool.map(lire, spes) if x]
+        medias = list(pool.map(lambda x: icone_media(bnet_static(x[1], versions)), a_lire))
+    with db() as con:
+        for (cle, _, id_spe), (icone, _) in zip(a_lire, medias):
+            if icone:
+                con.execute("INSERT OR REPLACE INTO icones_officielles VALUES(?,?)", (cle, icone))
+                if id_spe:
+                    con.execute("INSERT OR REPLACE INTO icones_officielles VALUES(?,?)", (f"spe-id:{id_spe}", icone))
+    telecharger_icones({i: u for i, u in medias if i and u})
+    _icones_off = None  # rechargées au prochain affichage
+
+
+def telecharger_icones(icones):
+    """{file_data_id: URL} → <dossier de la base>/icones/<id>.jpg pour celles qui manquent."""
     dossier = dossier_icones()
     dossier.mkdir(exist_ok=True)
     manquantes = [(i, u) for i, u in icones.items() if u and not (dossier / f"{i}.jpg").exists()]
@@ -1162,6 +1176,11 @@ def courbe(con, mes_noms=()):
                                   "niveaux": niv} for n, niv in persos.items()]}
 
 
+# Classement (v1.17.0) : niveau, puis ordre d'arrivée à ce niveau (date réelle de l'historique), puis nom.
+ORDRE_CLASSEMENT = """niveau DESC, COALESCE((SELECT MIN(h.date) FROM historique h WHERE h.nom = personnages.nom
+                      AND h.niveau >= personnages.niveau), '9999'), nom"""
+
+
 def duree(debut, fin):
     """Durée lisible entre deux dates ISO : « 45 min », « 6 h », « 1 j 12 h »."""
     minutes = int((datetime.datetime.fromisoformat(fin) - datetime.datetime.fromisoformat(debut)).total_seconds() // 60)
@@ -1185,8 +1204,8 @@ def fiche(con, nom):
         paliers.append({"palier": palier, "date": date, "rang": rangs.get(palier),
                         "duree": duree(avant, date) if date and avant else None})
         avant = date
-    classement = [r[0] for r in con.execute("""SELECT nom FROM personnages WHERE nom NOT IN
-                  (SELECT nom FROM inactifs) ORDER BY niveau DESC, nom""")]
+    classement = [r[0] for r in con.execute(f"""SELECT nom FROM personnages WHERE nom NOT IN
+                  (SELECT nom FROM inactifs) ORDER BY {ORDRE_CLASSEMENT}""")]
     extremes = con.execute("""SELECT MIN(niveau) n0, MIN(date) d0, MAX(niveau) n1, MAX(date) d1
                               FROM historique WHERE nom=?""", (nom,)).fetchone()
     jours = ((datetime.datetime.fromisoformat(extremes["d1"]) - datetime.datetime.fromisoformat(extremes["d0"]))
@@ -1208,8 +1227,8 @@ def fiche(con, nom):
 
 def recap():
     with db() as con:
-        persos = con.execute("""SELECT * FROM personnages WHERE nom NOT IN (SELECT nom FROM inactifs)
-                                ORDER BY niveau DESC, nom""").fetchall()
+        persos = con.execute(f"""SELECT * FROM personnages WHERE nom NOT IN (SELECT nom FROM inactifs)
+                                 ORDER BY {ORDRE_CLASSEMENT}""").fetchall()
         g = gains(con, 12)
     if not persos:
         return
@@ -1381,12 +1400,10 @@ background:color-mix(in srgb,var(--c) 22%,var(--nuit2));border:1px solid color-m
 box-shadow:0 0 14px color-mix(in srgb,var(--c) 25%,transparent)}
 .embleme svg{width:22px;height:22px;fill:none;stroke:var(--c);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .embleme.mini{width:26px;height:26px;border-radius:8px}.embleme.mini svg{width:15px;height:15px}
-.spe{display:inline-grid;place-items:center;width:1.75em;height:1.75em;border-radius:6px;vertical-align:-.55em;margin-right:.45em;
- background:radial-gradient(circle at 30% 25%,var(--a),var(--b) 85%);border:1px solid rgba(232,200,120,.55);
- box-shadow:inset 0 0 0 1px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
-.spe svg{width:78%;height:78%;fill:none;stroke:#fff4dc;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
- filter:drop-shadow(0 0 1.5px rgba(0,0,0,.7))}
-.spe svg .p{fill:#fff4dc;stroke:none}
+.ic-off{display:inline-block;width:1.75em;height:1.75em;border-radius:6px;vertical-align:-.55em;margin-right:.45em;
+ border:1px solid rgba(232,200,120,.55);box-shadow:0 1px 2px rgba(0,0,0,.4);object-fit:cover}
+.ic-off.embleme{width:38px;height:38px;border-radius:11px;margin:0;border-color:color-mix(in srgb,var(--c) 55%,transparent)}
+.ic-off.mini{width:26px;height:26px;border-radius:8px;margin:0;vertical-align:middle}
 .perso-id{display:flex;flex-direction:column;min-width:0;flex:1}
 .perso-id b{font-family:var(--f-titre);font-weight:600;color:var(--c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .perso-id small{color:var(--doux);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1635,7 +1652,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <tr data-classe="{{ cle_classe(p.classe) }}"><td class="rang num">{{ loop.index }}</td>
 <td class="nom" style="color:{{ couleur(p.classe) }}"><span class="dot" style="background:{{ couleur(p.classe) }}"></span><a class="lien-perso" href="perso/{{ p.nom|urlencode }}">{{ p.nom }}</a>
 {%- set pr = proprios.get(p.nom) %}{% if pr %} {% if pr.discord %}<a class="joueur" href="https://discord.com/users/{{ pr.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ pr.pseudo }}">@{{ pr.pseudo }}</a>{% else %}<span class="joueur">@{{ pr.pseudo }}</span>{% endif %}{% endif %}</td>
-<td>{{ p.race }}</td><td class="classe">{{ icone_spe(p.classe, p.specialisation, p.talents) }}{{ p.classe }}</td>
+<td>{{ p.race }}</td><td class="classe">{{ icone_perso(p.classe, p.specialisation, p.talents) }}{{ p.classe }}</td>
 {% if avec_rangs %}<td class="rang-guilde">{% if p.rang is not none %}{{ rangs.get(p.rang) or "Rang " ~ p.rang }}{% endif %}</td>{% endif %}
 <td><span class="niv num{{ ' max' if p.niveau == 60 else '' }}">{{ p.niveau }}</span></td>
 <td><div class="barre"><i class="{{ 'max' if p.niveau == 60 else '' }}" style="width:{{ (p.niveau / 60 * 100)|round|int }}%"></i></div></td>
@@ -1747,8 +1764,8 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <base href="../"><title>{{ perso.nom }} — {{ guilde }}</title>""" + STYLE + WOWHEAD_JS + """</head><body>""" + RECETTE + """<div class="page">
 """ + ENTETE + """
 <section class="carte perso identite" style="--c:{{ couleur(perso.classe) }}">
-<span class="embleme">{{ embleme(perso.classe) }}</span>
-<span class="perso-id"><b>{{ perso.nom }}</b><small>{{ perso.race ~ ' · ' if perso.race and perso.race != '?' }}{{ icone_spe(perso.classe, perso.specialisation, perso.talents) }}{{ perso.classe }}{{ ' ' ~ perso.specialisation if perso.specialisation }}
+{{ icone_perso(perso.classe, perso.specialisation, perso.talents, "embleme") }}
+<span class="perso-id"><b>{{ perso.nom }}</b><small>{{ perso.race ~ ' · ' if perso.race and perso.race != '?' }}{{ perso.classe }}{{ ' ' ~ perso.specialisation if perso.specialisation }}
 {%- if nom_rang %} · {{ nom_rang }}{% endif %}
 {%- if joueur %} · {% if joueur.discord %}<a class="joueur" href="https://discord.com/users/{{ joueur.discord }}" target="_blank" rel="noopener" title="Profil Discord de {{ joueur.pseudo }}">@{{ joueur.pseudo }}</a>{% else %}<span class="joueur">@{{ joueur.pseudo }}</span>{% endif %}{% endif %}</small></span>
 <span class="niv gros num{{ ' max' if perso.niveau == 60 else '' }}">{{ perso.niveau }}</span>
@@ -1838,8 +1855,8 @@ FORMULAIRE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 
 # Carte d'un personnage : emblème de classe, nom à la couleur de la classe, race, classe, niveau.
 PERSO = """{% macro carte_perso(nom, info) -%}
-<span class="embleme">{{ embleme(info.classe if info else '') }}</span>
-<span class="perso-id"><b>{{ nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ icone_spe(info.classe, info.specialisation, info.talents) }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span>
+{{ icone_perso(info.classe if info else '', info.specialisation if info else None, info.talents if info else '', "embleme") }}
+<span class="perso-id"><b>{{ nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{{ ' ' ~ info.specialisation if info.specialisation }}{% else %}hors de la guilde{% endif %}</small></span>
 {%- if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}
 {%- endmacro %}"""
 
@@ -1938,8 +1955,8 @@ ADMIN = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <div class="table-wrap"><table><thead><tr><th>Personnage</th><th>Niveau</th><th>Joueur</th><th>Source</th><th></th><th>Progression</th></tr></thead><tbody>
  {% for l in lignes %}{% set info = l.info %}
  <tr data-texte="{{ (l.nom ~ ' ' ~ (l.pseudo or ''))|lower }}" data-etat="{{ 'lie' if l.pseudo else 'libre' }}{{ ' exclu' if l.inactif }}"{{ ' class="exclu"'|safe if l.inactif }}>
- <td><span class="persoligne" style="--c:{{ couleur(info.classe if info else '') }}"><span class="embleme mini">{{ embleme(info.classe if info else '') }}</span>
- <span><b>{{ l.nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ icone_spe(info.classe, info.specialisation, info.talents) }}{{ info.classe }}{% else %}hors de la guilde{% endif %}</small></span></span></td>
+ <td><span class="persoligne" style="--c:{{ couleur(info.classe if info else '') }}">{{ icone_perso(info.classe if info else '', info.specialisation if info else None, info.talents if info else '', "mini") }}
+ <span><b>{{ l.nom }}</b><small>{% if info %}{{ info.race ~ ' · ' if info.race and info.race != '?' }}{{ info.classe }}{{ ' ' ~ info.specialisation if info.specialisation }}{% else %}hors de la guilde{% endif %}</small></span></span></td>
  <td>{% if info %}<span class="niv num{{ ' max' if info.niveau == 60 else '' }}">{{ info.niveau }}</span>{% endif %}</td>
  <td><select name="pseudo" form="a{{ loop.index }}" aria-label="Joueur de {{ l.nom }}"><option value="">— aucun —</option>
  {% for j in joueurs %}<option{{ ' selected' if l.pseudo == j }}>{{ j }}</option>{% endfor %}</select></td>
@@ -2013,7 +2030,7 @@ function filtrerAdmin(){var e=document.getElementById("f-etat").value,q=document
 @app.context_processor
 def contexte():
     return {"discord_actif": bool(DISCORD_SECRET), "version": VERSION, "couleur": couleur, "embleme": embleme,
-            "icone_spe": icone_spe,
+            "icone_perso": icone_perso,
             "url_connexion": url_discord}
 
 
@@ -2036,7 +2053,7 @@ def verifier_token():
 def index():
     with db() as con:
         actifs_sql = "nom NOT IN (SELECT nom FROM inactifs)"
-        persos = con.execute(f"SELECT * FROM personnages WHERE {actifs_sql} ORDER BY niveau DESC, nom").fetchall()
+        persos = con.execute(f"SELECT * FROM personnages WHERE {actifs_sql} ORDER BY {ORDRE_CLASSEMENT}").fetchall()
         rows = con.execute("SELECT * FROM exploits ORDER BY palier, rang").fetchall()
         recents = con.execute(f"SELECT * FROM historique WHERE {actifs_sql} ORDER BY date DESC LIMIT 15").fetchall()
         g24 = gains(con, 24)

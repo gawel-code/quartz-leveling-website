@@ -710,6 +710,27 @@ RACES_API = {"races": [{"id": 2, "name": "Orc"}, {"id": 8, "name": "Troll"}, {"i
 CLASSES_API = {"classes": [{"id": 1, "name": "Guerrier"}, {"id": 7, "name": "Chaman"}, {"id": 11, "name": "Druide"}]}
 
 
+def media(icone):
+    return {"assets": [{"key": "icon", "file_data_id": icone,
+                        "value": f"https://render.worldofwarcraft.com/forever-eu/icons/56/{icone}.jpg"}]}
+
+
+# Icônes officielles (v1.17.0) : index des spés (ids Forever), classe de chaque spé, médias
+MEDIAS_API = {
+    "/data/wow/playable-specialization/index": {"character_specializations": [
+        {"id": 257, "name": "Protection"}, {"id": 258, "name": "Armes"}, {"id": 374, "name": "Restauration"}]},
+    "/data/wow/playable-specialization/257": {"id": 257, "name": "Protection", "playable_class": {"id": 1}},
+    "/data/wow/playable-specialization/258": {"id": 258, "name": "Armes", "playable_class": {"id": 1}},
+    "/data/wow/playable-specialization/374": {"id": 374, "name": "Restauration", "playable_class": {"id": 7}},
+    "/data/wow/media/playable-specialization/257": media(132341),
+    "/data/wow/media/playable-specialization/258": media(132355),
+    "/data/wow/media/playable-specialization/374": media(136052),
+    "/data/wow/media/playable-class/1": media(626008),
+    "/data/wow/media/playable-class/7": media(626006),
+    "/data/wow/media/playable-class/11": media(625999),
+}
+
+
 def membre(nom, niveau, race=2, classe=1, royaume="firemaw", rang=1):
     return {"character": {"name": nom, "level": niveau, "realm": {"slug": royaume},
                           "playable_race": {"id": race}, "playable_class": {"id": classe}}, "rank": rang}
@@ -725,7 +746,7 @@ def blizzard(client, monkeypatch):
         monkeypatch.setitem(g, cle, val)
     monkeypatch.setitem(g, "METIERS_EN_FOND", False)  # v1.16.0 : lecture des métiers en direct
     etat = {"roster": [], "profils": {}, "morts": {}, "spes": {}, "appels": [], "espaces": [], "jetons": 0, "panne": False,
-            "jeu": "-classic1x-eu", "metiers": {}, "recettes": {}, "icones": []}
+            "jeu": "-classic1x-eu", "metiers": {}, "recettes": {}, "icones": [], "medias": dict(MEDIAS_API)}
 
     def post(url, **kw):
         assert url == "https://oauth.battle.net/token" and kw["auth"] == ("id", "s")
@@ -753,6 +774,8 @@ def blizzard(client, monkeypatch):
         if chemin.endswith("/professions"):  # v1.16.0 : métiers
             perso = chemin.split("/")[-2]
             return Reponse(etat["metiers"][perso]) if perso in etat["metiers"] else Reponse({}, 404)
+        if chemin in etat["medias"]:  # v1.17.0 : spés et icônes officielles
+            return Reponse(etat["medias"][chemin])
         for prefixe in ("/data/wow/recipe/", "/data/wow/media/recipe/", "/data/wow/item/"):
             if chemin.startswith(prefixe):
                 cle = (prefixe, int(chemin.rsplit("/", 1)[1]))
@@ -877,6 +900,7 @@ def test_espaces_de_noms_forever(blizzard, monkeypatch):
             return Reponse({}, 404)
         return get(url, **kw)
     monkeypatch.setattr(g["requests"], "get", seulement_la_bonne_version)
+    monkeypatch.setitem(g, "metiers_a_lire", lambda: False)  # lecture quotidienne (métiers, icônes) à part
     etat["roster"] = [membre_forever("Grommash", 12, "1.60.1_70399")]
     assert c.get("/collecter?token=tok").json["source"] == "blizzard"
     assert etat["espaces"].count("static-1.60.0_1-forever-eu") == 2  # races puis classes : repli
@@ -884,8 +908,7 @@ def test_espaces_de_noms_forever(blizzard, monkeypatch):
         "/data/wow/guild/firemaw/quartz-forever/roster": "profile-forever-eu",
         "/data/wow/playable-race/index": "static-1.60.1_70399-forever-eu",
         "/data/wow/playable-class/index": "static-1.60.1_70399-forever-eu",
-        "/profile/wow/character/firemaw/grommash": "profile-forever-eu",
-        "/profile/wow/character/firemaw/grommash/professions": "profile-forever-eu"}  # v1.16.0
+        "/profile/wow/character/firemaw/grommash": "profile-forever-eu"}
     persos = {p["nom"]: p for p in c.get("/export.json?token=tok").json["personnages"]}
     assert (persos["Grommash"]["race"], persos["Grommash"]["classe"]) == ("Tauren", "Guerrier")
 
@@ -1074,25 +1097,36 @@ def test_analyser_spe(client):
     assert g["analyser_spe"]({}) is None
 
 
-def test_toutes_les_spes_ont_une_icone(client):
-    """Les 27 spés de l'index Forever (libellés fr_FR du 06/11, classe au masculin ou au féminin)."""
-    g = client.application.view_functions["index"].__globals__
-    index = {"Guerrier": ["Armes", "Fureur", "Protection"], "Paladin": ["Sacré", "Protection", "Vindicte"],
-             "Chasseresse": ["Maîtrise des bêtes", "Précision", "Survie"], "Voleur": ["Assassinat", "Combat", "Finesse"],
-             "Prêtresse": ["Discipline", "Sacré", "Magie de l'ombre"],
-             "Chaman": ["Combat élémentaire", "Amélioration", "Restauration"], "Mage": ["Arcane", "Feu", "Givre"],
-             "Démoniste": ["Affliction", "Démonologie", "Destruction"], "Druidesse": ["Equilibre", "Combat farouche", "Restauration"]}
-    vus = set()
-    for classe, spes in index.items():
-        for spe in spes:
-            icone = str(g["icone_spe"](classe, spe, spe + " 5"))
-            assert f'title="{html.escape(spe, quote=True).replace("&#x27;", "&#39;")} — 5 points"' in icone
-            assert icone.startswith('<span class="spe"') and "<svg" in icone, (classe, spe)
-            vus.add(icone)
-    assert len(vus) == 27
-    assert str(g["icone_spe"]("Guerrier", "Sacré")) == "" and str(g["icone_spe"]("?", None)) == ""
-    assert "Magie de l&#39;ombre — Discipline 6 · Magie de l&#39;ombre 6" in str(
-        g["icone_spe"]("Prêtre", "Magie de l'ombre", "Discipline 6 · Magie de l'ombre 6"))
+def test_icones_officielles_de_spe_et_de_classe(blizzard, monkeypatch):
+    """v1.17.0 : icône officielle de la spé (sinon de la classe), téléchargée une fois et servie par le
+    site ; emblème maison en secours tant que l'image n'est pas là."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    etat["roster"] = [membre_sans_royaume("Gawel", "Zugzug", 16), membre_sans_royaume("Olich", "Ier", 21, classe=7)]
+    etat["profils"] = {"Gawel-Zugzug": (16, 0)}
+    etat["spes"] = {"gawel-zugzug": arbres(("Protection", [5, 2]))}
+    etat["panne"] = True  # API muette : rien de téléchargé
+    envoyer(c, lua_dates([("Gawel Zugzug", 16)], {}))
+    assert "icone/" not in c.get("/").text
+    assert "<svg" in c.get("/perso/Gawel%20Zugzug").text.split('class="carte perso identite"')[1][:600]  # emblème maison
+    etat["panne"] = False
+    c.get("/collecter?token=tok")
+    assert sorted(u.rsplit("/", 1)[1] for u in etat["icones"]) == [
+        "132341.jpg", "132355.jpg", "136052.jpg", "625999.jpg", "626006.jpg", "626008.jpg"]
+    page = c.get("/").text
+    assert 'src="icone/132341.jpg"' in page and 'title="Protection — 7 points"' in page  # spé de Gawel
+    assert 'src="icone/626006.jpg"' in page and 'title="Chaman"' in page               # Olich : pas de spé → classe
+    assert c.get("/icone/132341.jpg").status_code == 200
+    fiche = c.get("/perso/Gawel%20Zugzug").text
+    assert 'class="ic-off embleme" src="icone/132341.jpg"' in fiche and "Guerrier Protection" in fiche
+    # Déjà connues : ni relues ni retéléchargées
+    appels = len(etat["appels"])
+    with g["db"]() as con:
+        con.execute("DELETE FROM reglages")
+    c.get("/collecter?token=tok")
+    assert not [a for a in etat["appels"][appels:] if "playable-specialization" in a or "media/playable" in a]
+    assert len(etat["icones"]) == 6
 
 
 def test_spe_lue_par_l_api_et_affichee(blizzard, monkeypatch):
@@ -1108,13 +1142,13 @@ def test_spe_lue_par_l_api_et_affichee(blizzard, monkeypatch):
     assert (persos["Gawel Zugzug"]["specialisation"], persos["Gawel Zugzug"]["talents"]) == ("Protection", "Protection 7")
     assert persos["Olich Ier"]["specialisation"] is None
     page = c.get("/").text
-    assert page.count('class="spe"') == 1 and 'title="Protection — 7 points"' in page
+    assert page.count('src="icone/132341.jpg"') == 1 and 'title="Protection — 7 points"' in page
     fiche = c.get("/perso/Gawel%20Zugzug").text
-    assert 'class="spe"' in fiche and "Guerrier Protection" in fiche
+    assert 'src="icone/132341.jpg"' in fiche and "Guerrier Protection" in fiche
     # Changement de spé : la dernière lecture l'emporte
     etat["spes"]["gawel-zugzug"] = arbres(("Armes", [5, 5]), ("Protection", [7]))
     c.get("/collecter?token=tok")
-    assert 'title="Armes — Armes 10 · Protection 7"' in c.get("/").text
+    assert 'title="Armes — Armes 10 · Protection 7"' in c.get("/").text and 'src="icone/132355.jpg"' in c.get("/").text
 
 
 # ---------- Rangs de la guilde (v1.10.0) ----------
@@ -1366,7 +1400,7 @@ def test_metiers_lus_par_l_api_et_affiches(metiers):
     robe = page[page.index("Robe en soie"):page.index("Rouet")]
     assert robe.index("Gawel Zugzug") < robe.index("Olich Ier") and "212" in robe
     # Icônes téléchargées une fois et servies par le site
-    assert len(etat["icones"]) == 3  # pas d'icône pour les fontes du minage
+    assert len([u for u in etat["icones"] if "/icons/56/50" in u]) == 3  # pas d'icône pour les fontes du minage
     r = c.get("/icone/501.jpg")
     assert r.status_code == 200 and r.data == b"\xff\xd8JPG"
     assert c.get("/icone/999.jpg").status_code == 404
@@ -1396,7 +1430,7 @@ def test_metiers_lus_une_fois_par_jour(metiers):
     assert "Lecture des métiers lancée" in c.post("/admin", data={"action": "metiers"}).text
     assert sum(a.endswith("/professions") for a in etat["appels"]) == 4
     assert [a for a in etat["appels"] if a.startswith("/data/wow/recipe/")] == lus
-    assert len(etat["icones"]) == 3  # pas d'icône pour les fontes du minage
+    assert len([u for u in etat["icones"] if "/icons/56/50" in u]) == 3  # pas d'icône pour les fontes du minage
     connecter_membre(c)
     assert "60/75" in c.get("/perso/Olich%20Ier").text
 
@@ -1418,3 +1452,25 @@ def test_metiers_photo_du_jour(metiers):
 
 def test_metiers_sans_api(client):
     assert client.get("/collecter?token=tok").json["metiers"] is False
+
+
+# ---------- Ordre d'arrivée à niveau égal (v1.17.0) ----------
+def test_ordre_d_arrivee_a_niveau_egal(client, monkeypatch):
+    """À niveau égal, le premier arrivé à ce niveau passe devant : accueil, place sur la fiche, récap."""
+    import datetime
+    recap, _ = capturer(monkeypatch, client)
+    base = datetime.datetime.now().replace(microsecond=0) - datetime.timedelta(days=2)
+    ts = lambda h: int((base + datetime.timedelta(hours=h)).timestamp())
+    # Ordre alphabétique : Aragh, Bolga, Zuljin ; ordre d'arrivée au 60 : Zuljin, Aragh ; Bolga 59
+    envoyer(client, lua_dates([("Aragh", 60), ("Bolga", 59), ("Zuljin", 60), ("Mok", 12), ("Kro", 12)],
+                              {"Aragh": f"60@{ts(5)}", "Zuljin": f"60@{ts(2)}", "Bolga": f"59@{ts(1)}",
+                               "Mok": f"12@{ts(3)}", "Kro": f"12@{ts(4)}"}))
+    page = client.get("/").text
+    ordre = [page.index(f'href="perso/{n}"') for n in ("Zuljin", "Aragh", "Bolga", "Mok", "Kro")]
+    assert ordre == sorted(ordre)
+    assert "1ᵉʳ" in client.get("/perso/Zuljin").text.split("Place au classement")[1][:80]
+    assert "2ᵉ" in client.get("/perso/Aragh").text.split("Place au classement")[1][:80]
+    recap.clear()
+    client.get("/recap?token=tok")
+    lignes = [l for l in recap if l.startswith("`")]
+    assert [l.split("**")[1] for l in lignes] == ["Zuljin", "Aragh", "Bolga", "Mok", "Kro"]
