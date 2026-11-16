@@ -330,8 +330,8 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 16 novembre 2026 (v1.15.1 déployée, v1.16.0 en attente de merge)
-- ⏳ v1.16.0 (PR en attente) : métiers (voir *Serveur*). Conçue avec Gaël le 16/11 (questions/réponses) :
+## État au 16 novembre 2026 (v1.16.0 mergée, déploiement en cours)
+- ✅ v1.16.0 (mergée le 16/11, PR #45) : métiers (voir *Serveur*). Conçue avec Gaël le 16/11 (questions/réponses) :
   onglets = fabrication + Cuisine + Secourisme (pas la récolte), icônes servies par le site, liens + infobulles
   Wowhead, qualité en couleur, composants repliables, mules/banques comprises, photo du jour. Rejouée en local
   contre la vraie API le 16/11 : 40 profils `/professions` sur 42 (jazeel-moonveil, lendy-forever en 404),
