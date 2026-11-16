@@ -343,10 +343,14 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 16 novembre 2026 (v1.17.0 mergée, déploiement en cours)
+## État au 16 novembre 2026 (v1.17.0 déployée et validée)
 - ✅ v1.17.0 (mergée le 16/11, PR #46) : ordre d'arrivée à niveau égal + icônes officielles de spé et de classe (voir
   *Serveur*). Demandé par Gaël le 16/11 (les 60 étaient classés par nom). Les icônes arrivent par la lecture en
   tâche de fond : au déploiement, la 1ʳᵉ `/collecter` la lance (table vide), ou « Relire les métiers » dans l'admin.
+  **Déployée et vérifiée le 16/11 vers 12 h 15** : pied « v1.17.0 », collecte → `metiers: true`, 42 icônes
+  officielles dans le classement (Jazeel Sorrowbane : Protection, infobulle de la répartition), `/icone/132341.jpg`
+  servie, 60 dans l'ordre d'arrivée (Jazeel Sorrowbane, Lendive Forever, Ynelah Rose, Cart Forsaken) ; rendu
+  (fiche, « Mon compte ») **validé par Gaël**.
 - ✅ v1.16.0 (mergée le 16/11, PR #45) : métiers (voir *Serveur*). Conçue avec Gaël le 16/11 (questions/réponses) :
   onglets = fabrication + Cuisine + Secourisme (pas la récolte), icônes servies par le site, liens + infobulles
   Wowhead, qualité en couleur, composants repliables, mules/banques comprises, photo du jour. Rejouée en local
