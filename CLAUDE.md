@@ -228,10 +228,15 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   127 « Résurrection » ignorée ; pas de catégorie 122 (jamais mort) → total 0. `enregistrer_morts()`
   (appelé par `collecter()` après `integrer()`) : table `morts(nom, stat, categorie, libelle, quantite,
   maj, PK(nom, stat))`, `quantite = MAX(ancienne, nouvelle)`. `classement_morts(con)` → `(catégories,
-  lignes)` hors exclus, tri total décroissant ; valeur d'une catégorie = sa stat « Nombre total… »
+  lignes)` hors exclus, tri par morts hors champs de bataille (v1.18.0) ; valeur d'une catégorie = sa stat « Nombre total… »
   sinon la somme (`valeur_categorie()`), ordre `ORDRE_MORTS` puis A→Z, + colonne « Autres » = total −
   catégories (`AUTRES_MORTS` dans le détail ; vu le 6/11 : la plupart des morts sont hors catégorie,
-  Ooah 21 dont 1 en donjon). Accueil : bloc `#morts` (💀 au 1ᵉʳ, détail en `title`), caché sans
+  Ooah 21 dont 1 en donjon). **Champs de bataille** (v1.18.0, demandé par Gaël le 26/11) : sous-catégorie 124
+  « Champs de bataille » (`CAT_BG` ; stats 56 goulet, 57 Alterac, 59 Arathi, 64182 îles des Sombrelances, 593
+  « Morts causées par Vanndar Foudrepique » ⊂ Alterac, exclue des sommes par `STATS_INCLUSES`) : lignes avec
+  `bg` et `hors_bg` = total − bg, **tri par `hors_bg`** (place de la fiche aussi), affichage `hors_bg` +
+  « (+N BG) », colonne gardée. Vu le 26/11 : Souledge Forever 169 dont 120 en BG, Wagyu Steak 135 dont 110.
+  Accueil : bloc `#morts` (💀 au 1ᵉʳ, détail en `title`), caché sans
   données ; fiche : bloc `#morts` (détail + place). Vidée par `reinitialiser()`, dans `/export.json`.
   L'API donne aussi (non exploités) : `experience` (XP dans le niveau), victimes, quêtes, donjons,
   métiers, voyages, consommables. **Pas de temps de jeu (`/played`)** nulle part dans l'API.
@@ -261,7 +266,11 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   la base ont leur icône.
 - Classement (v1.17.0) : `ORDRE_CLASSEMENT` = niveau décroissant, puis date du premier passage à ce niveau
   (`MIN(historique.date)` pour `niveau >= personnages.niveau`, `'9999'` sans historique), puis nom ; utilisé
-  par l'accueil, `fiche()` (place) et `recap()`.
+  par l'accueil, `fiche()` (place) et `recap()` (ordre des égalités de gain).
+- Récap (v1.18.0) : `recap()` ne liste plus le top 15 (figé : le haut du classement est 60, demandé par Gaël le
+  26/11) : en-tête (membres, niveau moyen, nombre de 60) + une ligne par membre ayant pris des niveaux sur 12 h
+  (`gains(con, 12)`, plus gros gain d'abord, « 30 → 33 ») ; personne → aucun message (journal). Renvoie un booléen,
+  `/recap` → `{"ok": true, "envoye": …}`. Automatisation HA inchangée (9 h / 21 h).
 - Métiers (v1.16.0) : `/profile/wow/character/{slug}/professions` (`primaries` / `secondaries`, `tiers[0]` :
   `skill_points`, `max_skill_points`, `known_recipes[]`) ; **noms en anglais même en fr_FR** → libellés des
   métiers en dur (`METIERS`, ids de l'index Forever : 129 = Secourisme, 185 Cuisine, 356 Pêche…), recettes
@@ -343,7 +352,10 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 16 novembre 2026 (v1.17.0 déployée et validée)
+## État au 26 novembre 2026 (v1.17.0 déployée ; v1.18.0 en attente de PR / merge)
+- ⏳ v1.18.0 : classement des morts hors champs de bataille (affichées entre parenthèses) et récap Discord sans
+  top 15 (seulement les progressions sur 12 h, rien si personne n'a progressé). Voir *Serveur* (Morts, Récap).
+  Rejouée sur les statistiques réelles de l'API le 26/11 (3 persos avec des morts en BG).
 - ✅ v1.17.0 (mergée le 16/11, PR #46) : ordre d'arrivée à niveau égal + icônes officielles de spé et de classe (voir
   *Serveur*). Demandé par Gaël le 16/11 (les 60 étaient classés par nom). Les icônes arrivent par la lecture en
   tâche de fond : au déploiement, la 1ʳᵉ `/collecter` la lance (table vide), ou « Relire les métiers » dans l'admin.
