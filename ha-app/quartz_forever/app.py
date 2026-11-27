@@ -1038,6 +1038,8 @@ STAT_RESURRECTION = 127  # sous-catégorie « Résurrection » : ce ne sont pas 
 STAT_TOTAL_MORTS = 60  # « Nombre total de morts »
 AUTRES_MORTS = "Autres morts (créatures en extérieur…)"  # total moins les catégories de Blizzard
 ORDRE_MORTS = ["Donjons et raids", "En extérieur"]  # colonnes du classement ; autres catégories ensuite (A→Z)
+CAT_BG = "Champs de bataille"  # sous-catégorie 124 : affichée, mais hors du classement des morts (v1.18.0)
+STATS_INCLUSES = {593}  # « Morts causées par Vanndar Foudrepique » ⊂ morts dans la vallée d'Alterac : pas dans les sommes
 
 
 def analyser_morts(stats):
@@ -1072,13 +1074,14 @@ def valeur_categorie(stats):
     le détail : « Morts dans des donjons à 5 » ⊂ « Nombre total de morts en donjons et raids »),
     sinon la somme (« En extérieur » : noyade + chute…)."""
     total = [s["quantite"] for s in stats if s["libelle"].startswith("Nombre total")]
-    return total[0] if total else sum(s["quantite"] for s in stats)
+    return total[0] if total else sum(s["quantite"] for s in stats if s["stat"] not in STATS_INCLUSES)
 
 
 def classement_morts(con):
-    """(catégories en colonnes, lignes triées par total décroissant) ; persos exclus ignorés. Dernière
-    colonne « Autres » = total − catégories (Blizzard ne classe que donjons/raids et chute, noyade…).
-    Ligne : nom, classe, total, par_categorie {catégorie: nombre}, detail [(libellé, nombre)]."""
+    """(catégories en colonnes, lignes triées par morts hors champs de bataille) ; persos exclus ignorés.
+    Dernière colonne « Autres » = total − catégories (Blizzard ne classe que donjons/raids, champs de
+    bataille et chute, noyade…). Ligne : nom, classe, total (tout compris), bg (champs de bataille),
+    hors_bg (= total − bg, sert au classement), par_categorie {catégorie: nombre}, detail [(libellé, nombre)]."""
     lignes, ordre = {}, {}
     for r in con.execute("""SELECT m.*, p.classe FROM morts m JOIN personnages p ON p.nom = m.nom
                             WHERE m.nom NOT IN (SELECT nom FROM inactifs) ORDER BY m.stat"""):
@@ -1096,9 +1099,10 @@ def classement_morts(con):
         detail = [(s["libelle"], s["quantite"]) for c in categories for s in l["stats"].get(c, [])]
         if autres and detail:
             detail.append((AUTRES_MORTS, autres))
-        res.append({"nom": l["nom"], "classe": l["classe"], "total": l["total"],
+        bg = min(par_categorie.get(CAT_BG, 0), l["total"])
+        res.append({"nom": l["nom"], "classe": l["classe"], "total": l["total"], "bg": bg, "hors_bg": l["total"] - bg,
                     "par_categorie": {**par_categorie, "Autres": autres}, "detail": detail})
-    res.sort(key=lambda l: (-l["total"], l["nom"]))
+    res.sort(key=lambda l: (-l["hors_bg"], l["nom"]))
     return (categories + ["Autres"] if res else []), res
 
 
@@ -1226,21 +1230,24 @@ def fiche(con, nom):
 
 
 def recap():
+    """Récap Discord (9 h / 21 h) : depuis la v1.18.0, plus de top 15 (figé : tous au 60), seulement les
+    membres qui ont pris des niveaux sur 12 h ; aucun message si personne n'a progressé."""
     with db() as con:
         persos = con.execute(f"""SELECT * FROM personnages WHERE nom NOT IN (SELECT nom FROM inactifs)
                                  ORDER BY {ORDRE_CLASSEMENT}""").fetchall()
         g = gains(con, 12)
-    if not persos:
-        return
+    progres = sorted((p for p in persos if g.get(p["nom"], 0) > 0), key=lambda p: -g[p["nom"]])  # tri stable
+    if not progres:
+        print("Récap : aucune progression sur 12 h, pas de message", flush=True)
+        return False
     moyenne = sum(p["niveau"] for p in persos) / len(persos)
-    lignes = [f"📜 **Progression de {NOM_GUILDE}** — {len(persos)} membres, niveau moyen {moyenne:.1f}"]
-    for i, p in enumerate(persos[:15], 1):
-        gain = f" (+{g[p['nom']]})" if g.get(p["nom"], 0) > 0 else ""
-        lignes.append(f"`{i:>2}.` **{p['nom']}** — {p['classe']} {p['niveau']}{gain}")
-    top = max(g.items(), key=lambda x: x[1], default=(None, 0))
-    if top[1] > 0:
-        lignes.append(f"🔥 Plus grosse progression sur 12 h : **{top[0]}** (+{top[1]} niveaux)")
+    au_max = sum(1 for p in persos if p["niveau"] >= 60)
+    lignes = [f"📜 **Progression de {NOM_GUILDE}** — {len(persos)} membres, niveau moyen {moyenne:.1f}, {au_max} au niveau 60",
+              "Ces 12 dernières heures :"]
+    for p in progres:
+        lignes.append(f"`+{g[p['nom']]:<2}` **{p['nom']}** — {p['classe']} {p['niveau'] - g[p['nom']]} → {p['niveau']}")
     discord("\n".join(lignes))
+    return True
 
 
 # ---------- Web ----------
@@ -1280,6 +1287,7 @@ h2{font-size:1.15rem;font-weight:600;display:flex;align-items:baseline;gap:10px}
 h2 small{font-family:var(--f-corps);font-size:.8rem;color:var(--doux);font-weight:500}
 a{color:var(--cristal);text-decoration:none}
 .num{font-variant-numeric:tabular-nums}
+small.bg{color:var(--doux);font-weight:500;white-space:nowrap}
 .sec{display:flex;flex-direction:column;gap:14px}
 .carte{background:var(--verre);border:1px solid var(--trait);border-radius:16px}
 header{display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:relative;overflow:hidden;
@@ -1662,15 +1670,16 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 </section>
 
 {% if morts %}<section class="sec" id="morts">
-<h2>Classement des morts <small>{{ morts|sum(attribute="total") }} morts dans la guilde · statistiques Blizzard</small></h2>
+{% set bg_guilde = morts|sum(attribute="bg") %}
+<h2>Classement des morts <small>{{ morts|sum(attribute="hors_bg") }} morts dans la guilde{% if bg_guilde %} (+{{ bg_guilde }} en champs de bataille, hors classement){% endif %} · statistiques Blizzard</small></h2>
 <div class="carte table-wrap"><table class="morts"><thead><tr><th>#</th><th>Personnage</th><th>Morts</th>
 {% for c in categories_morts %}<th>{{ c }}</th>{% endfor %}</tr></thead><tbody>
-{% for m in morts %}<tr><td class="rang num">{{ "💀" if loop.first and m.total > 0 else loop.index }}</td>
+{% for m in morts %}<tr><td class="rang num">{{ "💀" if loop.first and m.hors_bg > 0 else loop.index }}</td>
 <td class="nom" style="color:{{ couleur(m.classe) }}"><span class="dot" style="background:{{ couleur(m.classe) }}"></span><a class="lien-perso" href="perso/{{ m.nom|urlencode }}">{{ m.nom }}</a></td>
-<td><b class="num"{% if m.detail %} title="{% for l, n in m.detail %}{{ l }} : {{ n }}{{ "&#10;"|safe if not loop.last }}{% endfor %}"{% endif %}>{{ m.total }}</b></td>
+<td><b class="num"{% if m.detail %} title="{% for l, n in m.detail %}{{ l }} : {{ n }}{{ "&#10;"|safe if not loop.last }}{% endfor %}"{% endif %}>{{ m.hors_bg }}</b>{% if m.bg %} <small class="bg" title="Morts en champs de bataille, hors classement">(+{{ m.bg }} BG)</small>{% endif %}</td>
 {% for c in categories_morts %}<td class="num">{{ m.par_categorie.get(c) or "" }}</td>{% endfor %}</tr>
 {% endfor %}</tbody></table></div>
-<small>Lu sur le profil Blizzard de chaque perso : un profil pas encore publié n'apparaît pas.</small>
+<small>Lu sur le profil Blizzard de chaque perso : un profil pas encore publié n'apparaît pas. Les morts en champs de bataille sont affichées entre parenthèses, mais ne comptent pas pour le classement.</small>
 </section>{% endif %}
 
 {% if top %}<section class="sec">
@@ -1802,7 +1811,7 @@ FICHE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 </section>
 
 {% if morts %}<section class="carte bloc" id="morts">
-<div class="bloc-tete"><h2>Morts <small>{{ morts.total }} au total · {{ ordinal(place_morts) }} sur {{ nb_morts }} au <a href="./#morts">classement des morts</a></small></h2></div>
+<div class="bloc-tete"><h2>Morts <small>{{ morts.hors_bg }} au total{% if morts.bg %} (+{{ morts.bg }} en champs de bataille){% endif %} · {{ ordinal(place_morts) }} sur {{ nb_morts }} au <a href="./#morts">classement des morts</a></small></h2></div>
 {% if morts.detail %}<div class="table-wrap"><table><thead><tr><th>Statistique</th><th>Nombre</th></tr></thead><tbody>
 {% for l, n in morts.detail %}<tr><td>{{ l }}</td><td class="num">{{ n }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<span class="vide">{{ "Aucune mort, bravo !" if morts.total == 0 else "Pas de détail par catégorie." }}</span>{% endif %}
@@ -2144,8 +2153,7 @@ def route_metiers():
 @app.route("/recap", methods=["GET", "POST"])
 def route_recap():
     verifier_token()
-    recap()
-    return jsonify(ok=True)
+    return jsonify(ok=True, envoye=bool(recap()))
 
 
 @app.route("/reinitialiser", methods=["POST"])

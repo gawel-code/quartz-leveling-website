@@ -115,6 +115,7 @@ si quelqu'un d'autre était en fait arrivé avant.
   avec son rang d'arrivée ; puis tous les 5 niveaux à partir de 20 (25, 35, 45)
   et à **chaque niveau** à partir de 50.
 - 🎉 **Chaque joueur** qui atteint le **niveau 60** est félicité sur Discord.
-- 📜 Un récapitulatif est publié **à 9 h et à 21 h**.
+- 📜 Un récapitulatif des niveaux pris dans les 12 dernières heures est publié **à 9 h et à 21 h**
+  (seulement si quelqu'un a progressé).
 
 Bonne aventure en Azeroth ! ⚔️

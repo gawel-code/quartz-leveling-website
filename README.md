@@ -5,7 +5,7 @@ Site public de progression de la guilde **Quartz Forever** (Horde, serveur PvE) 
 classement des membres, tableau d'honneur des paliers, classement des morts, fil d'activité, annonces Discord
 et, pour les membres connectés, les métiers et recettes connues de la guilde.
 
-**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.17.0
+**En ligne :** https://quartz.gawel.be — **Version du serveur :** 1.18.0
 
 ## Fonctionnement
 
@@ -78,7 +78,7 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
   complète (envois, persos lus, dernier envoi) est dans `/admin`. La collecte serveur ne compte pas.
 - **Classement** : par niveau puis, à niveau égal, par **ordre d'arrivée** à ce niveau (date réelle de
   l'historique, v1.17.0) : les 60 restent dans l'ordre où ils l'ont atteint. Même ordre pour la place
-  affichée sur la fiche et pour le récap Discord.
+  affichée sur la fiche.
 - **Tableau d'honneur** : les paliers 10, 20, 30, 40, 50 et 60 sont classés **par date
   réelle**. Un envoi tardif ne fait pas perdre son rang : le tableau se remet dans l'ordre.
 
@@ -89,7 +89,7 @@ WoW + addon GuildExport ──► GuildExport.lua (SavedVariables, écrit à la 
 | 10, 20, 30, 40, 50, 60 | pour chaque joueur, avec son rang d'arrivée (🥇🥈🥉 pour le top 3, ⭐ ensuite, 🏆 au 60) |
 | 25, 35, 45 | pour chaque joueur, sans classement |
 | 51 à 59 | chaque niveau, sans classement |
-| récap | 9 h et 21 h : classement, gains sur 12 h, plus grosse progression |
+| récap | 9 h et 21 h : membres, niveau moyen, nombre de 60, puis les membres qui ont pris des niveaux sur 12 h (plus gros gain d'abord) ; aucun message si personne n'a progressé (v1.18.0 : plus de top 15, figé depuis que tout le haut du classement est 60) |
 
 Les annonces d'un même envoi partent en **un seul message** (une ligne par annonce, découpé
 au-delà de 2000 caractères), chacune avec la date réelle du passage de niveau, et se
@@ -127,7 +127,7 @@ Flask + SQLite, servi par gunicorn (1 worker) sur le port 8080.
 | `GET/POST /contribuer` | clé du membre | formulaire d'envoi du fichier `GuildExport.lua` |
 | `POST /envoyer` | en-tête `X-Cle` | envoi du fichier (utilisé par le script PowerShell) |
 | `GET/POST /collecter` | `?token=` | lit le roster sur l'API Blizzard (si configurée), sinon intègre le fichier déposé côté serveur ; renvoie `mises_a_jour`, `source` (`blizzard`, `fichier` ou `null`) et `metiers` (`true` si la lecture quotidienne des métiers vient d'être lancée en tâche de fond) |
-| `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord |
+| `GET/POST /recap` | `?token=` | publie le récapitulatif sur Discord (progressions sur 12 h ; `{"ok": true, "envoye": false}` si personne n'a progressé) |
 | `GET /connexion`, `/auth/discord/callback`, `/deconnexion` | public | connexion Discord (OAuth2, scopes `identify guilds.members.read connections`) ; les boutons pointent directement sur discord.com (ouverture de l'app Discord sur mobile si installée), `/connexion` reste une redirection équivalente |
 | `GET/POST /moi` | session Discord | relier son compte, afficher / régénérer sa clé |
 | `GET/POST /admin` | admin Discord | comptes reliés (délier), clés sans compte, relire les métiers, vider la progression |
@@ -192,6 +192,11 @@ la catégorie « Morts » : total, « Donjons et raids » (total et donjons à 5
 cette catégorie : 0. Un compteur ne baisse jamais (profil publié en retard). L'accueil affiche le
 **classement des morts** (total, une colonne par catégorie, « Autres » = total − catégories, surtout
 les créatures en extérieur ; détail au survol du total), la fiche du perso le détail et sa place.
+Depuis la v1.18.0, les morts en **champs de bataille** (sous-catégorie « Champs de bataille » : goulet,
+Alterac, bassin Arathi, îles des Sombrelances) **ne comptent pas pour le classement** : le chiffre
+affiché et le tri sont hors champs de bataille, suivis de « (+N BG) » ; la colonne « Champs de
+bataille » reste. « Morts causées par Vanndar Foudrepique » (déjà comptées dans Alterac) n'entre pas
+dans les sommes.
 
 **Spécialisations** (v1.15.0) : la collecte lit aussi `/profile/wow/character/{slug}/specializations`
 (une requête de plus par membre au profil publié). Comme sur Classic, l'API donne les arbres de talents
@@ -247,6 +252,7 @@ pytest -q
 
 | Version | Changements |
 |---|---|
+| 1.18.0 | Classement des morts hors champs de bataille (affichées entre parenthèses, colonne gardée ; Vanndar plus compté deux fois) ; récap Discord sans le top 15 (figé) : seulement les progressions des 12 dernières heures, pas de message si personne n'a progressé ; `/recap` renvoie `envoye` |
 | 1.17.0 | Classement à niveau égal par ordre d'arrivée à ce niveau (accueil, place sur la fiche, récap Discord) : les 60 restent dans l'ordre où ils l'ont atteint ; icônes officielles des spés et des classes (lues une fois sur l'API, servies par le site) à la place des icônes dessinées en v1.15.0 |
 | 1.16.0 | Métiers (membres connectés) : lecture quotidienne de `/professions` par l'API (en tâche de fond, première collecte après 5 h ; bouton dans l'admin), page `/metiers` (onglets par métier de fabrication, recettes en français avec icône, qualité, composants, lien et infobulle Wowhead, artisans par compétence, recherche) et bloc « Métiers » sur la fiche ; icônes servies par le site (`/icone/<id>.jpg`) |
 | 1.15.1 | Collecte plus rapide : profil, statistiques et spé de chaque membre lus en parallèle (8 requêtes simultanées) ; à la suite, la collecte dépassait les 10 s du `rest_command` de Home Assistant (erreur, récap de 9 h / 21 h bloqué) ; gunicorn `--timeout 120` |

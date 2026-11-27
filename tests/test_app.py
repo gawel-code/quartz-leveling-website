@@ -694,7 +694,8 @@ def test_exclure_et_reintegrer_un_personnage(discord_client, monkeypatch):
 def test_exclus_hors_recap_et_vides_par_la_remise_a_zero(discord_client, monkeypatch):
     c, connecter = discord_client
     _, bruts = capturer(monkeypatch, c)
-    envoyer(c, LUA2)
+    envoyer(c, LUA1)
+    envoyer(c, LUA2)  # Grommash et Zuljin progressent : le récap part
     connecter(ADMIN_ID, nick="Admin")
     c.post("/admin", data={"action": "desactiver", "nom": "Mok", "motif": "mule"})
     bruts.clear()
@@ -1049,6 +1050,31 @@ def test_morts_lues_par_l_api_et_classees(blizzard, monkeypatch):
         assert [l["nom"] for l in g["classement_morts"](con)[1]] == ["Cart Forsaken"]
     c.post("/admin", data={"action": "reinitialiser"})
     assert c.get("/export.json?token=tok").json["morts"] == []
+
+
+BG = (124, "Champs de bataille", [(56, "Morts dans le goulet des Chanteguerres", 2), (57, "Morts dans la Vallée d'Alterac", 10),
+                                   (593, "Morts causées par Vanndar Foudrepique", 4)])
+
+
+def test_morts_en_champs_de_bataille_hors_classement(blizzard, monkeypatch):
+    """v1.18.0 : les morts en champs de bataille (sous-catégorie 124, vue le 26/11) restent affichées
+    entre parenthèses mais ne comptent pas pour le classement ; Vanndar (⊂ Alterac) pas compté deux fois."""
+    c, etat = blizzard
+    g = c.application.view_functions["index"].__globals__
+    monkeypatch.setitem(g, "BNET_ROYAUME", "")
+    etat["roster"] = [membre_sans_royaume("Olich", "Ier", 21, classe=7), membre_sans_royaume("Cart", "Forsaken", 12)]
+    etat["profils"] = {"Olich-Ier": (21, 0), "Cart-Forsaken": (12, 0)}
+    etat["morts"] = {"olich-ier": stats_morts(20, DONJONS, BG), "cart-forsaken": stats_morts(15, DONJONS)}
+    c.get("/collecter?token=tok")
+    with g["db"]() as con:
+        categories, cl = g["classement_morts"](con)
+    assert categories == ["Donjons et raids", "Champs de bataille", "Autres"]
+    assert [(l["nom"], l["hors_bg"], l["bg"], l["total"]) for l in cl] == [("Cart Forsaken", 15, 0, 15), ("Olich Ier", 8, 12, 20)]
+    assert cl[1]["par_categorie"] == {"Donjons et raids": 8, "Champs de bataille": 12, "Autres": 0}
+    page = c.get("/").text
+    assert "23 morts dans la guilde (+12 en champs de bataille" in page and "(+12 BG)" in page
+    fiche = c.get("/perso/Olich%20Ier").text
+    assert "8 au total (+12 en champs de bataille)" in fiche and "2ᵉ sur 2" in fiche and "Vanndar" in fiche
 
 
 def test_pas_de_classement_des_morts_sans_donnees(client):
@@ -1456,9 +1482,8 @@ def test_metiers_sans_api(client):
 
 # ---------- Ordre d'arrivée à niveau égal (v1.17.0) ----------
 def test_ordre_d_arrivee_a_niveau_egal(client, monkeypatch):
-    """À niveau égal, le premier arrivé à ce niveau passe devant : accueil, place sur la fiche, récap."""
+    """À niveau égal, le premier arrivé à ce niveau passe devant : accueil, place sur la fiche."""
     import datetime
-    recap, _ = capturer(monkeypatch, client)
     base = datetime.datetime.now().replace(microsecond=0) - datetime.timedelta(days=2)
     ts = lambda h: int((base + datetime.timedelta(hours=h)).timestamp())
     # Ordre alphabétique : Aragh, Bolga, Zuljin ; ordre d'arrivée au 60 : Zuljin, Aragh ; Bolga 59
@@ -1470,7 +1495,23 @@ def test_ordre_d_arrivee_a_niveau_egal(client, monkeypatch):
     assert ordre == sorted(ordre)
     assert "1ᵉʳ" in client.get("/perso/Zuljin").text.split("Place au classement")[1][:80]
     assert "2ᵉ" in client.get("/perso/Aragh").text.split("Place au classement")[1][:80]
-    recap.clear()
-    client.get("/recap?token=tok")
-    lignes = [l for l in recap if l.startswith("`")]
-    assert [l.split("**")[1] for l in lignes] == ["Zuljin", "Aragh", "Bolga", "Mok", "Kro"]
+
+
+# ---------- Récap sans top 15 (v1.18.0) ----------
+def test_recap_seulement_les_progressions_sur_12_h(client, monkeypatch):
+    """Le top 15 est figé (tous au 60) : le récap ne liste plus que les membres qui ont progressé sur
+    12 h (plus gros gain d'abord), et ne part pas si personne n'a progressé."""
+    import datetime
+    _, bruts = capturer(monkeypatch, client)
+    vieux = int((datetime.datetime.now() - datetime.timedelta(days=2)).timestamp())
+    envoyer(client, lua_dates([("Aragh", 60), ("Mok", 30), ("Kro", 40)],
+                              {"Aragh": f"60@{vieux}", "Mok": f"30@{vieux}", "Kro": f"40@{vieux}"}))
+    bruts.clear()  # annonces des paliers
+    assert client.get("/recap?token=tok").json == {"ok": True, "envoye": False} and bruts == []
+    envoyer(client, lua_dates([("Aragh", 60), ("Mok", 33), ("Kro", 41)], {}))
+    bruts.clear()
+    assert client.get("/recap?token=tok").json["envoye"] is True
+    lignes = bruts[0].split("\n")
+    assert "3 membres" in lignes[0] and "1 au niveau 60" in lignes[0]
+    assert [l.split("**")[1] for l in lignes if l.startswith("`")] == ["Mok", "Kro"]  # Aragh, figé, absent
+    assert "30 → 33" in bruts[0] and "Aragh" not in bruts[0]
