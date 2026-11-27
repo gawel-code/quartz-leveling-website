@@ -352,10 +352,13 @@ Home Assistant → rest_command → /collecter (toutes les 30 min depuis le 5/11
   `external_hostname` = `ha.gawel.be`). Modifiable via `ha_manage_app(options=…)` en renvoyant
   **toute** la liste `additional_hosts`, puis redémarrage (le connecteur coupe ~1 min, normal).
 
-## État au 27 novembre 2026 (v1.18.0 mergée, déploiement en cours)
-- ⏳ v1.18.0 (mergée le 27/11, PR #48) : classement des morts hors champs de bataille (affichées entre parenthèses) et récap Discord sans
+## État au 27 novembre 2026 (v1.18.0 déployée)
+- ✅ v1.18.0 (mergée le 27/11, PR #48) : classement des morts hors champs de bataille (affichées entre parenthèses) et récap Discord sans
   top 15 (seulement les progressions sur 12 h, rien si personne n'a progressé). Voir *Serveur* (Morts, Récap).
-  Rejouée sur les statistiques réelles de l'API le 26/11 (3 persos avec des morts en BG).
+  Rejouée sur les statistiques réelles de l'API le 26/11 (3 persos avec des morts en BG). **Déployée et vérifiée
+  le 27/11** (`check_updates` + `update`) : pied « v1.18.0 », « 1890 morts dans la guilde (+289 en champs de
+  bataille) », Souledge Forever 49 (+161 BG), Wagyu Steak 26 (+126 BG), Gulthar Flammesang en tête (239).
+  Récap non déclenché à la main (il partirait sur le vrai salon) : premier récap v1.18.0 à 9 h / 21 h.
 - ✅ v1.17.0 (mergée le 16/11, PR #46) : ordre d'arrivée à niveau égal + icônes officielles de spé et de classe (voir
   *Serveur*). Demandé par Gaël le 16/11 (les 60 étaient classés par nom). Les icônes arrivent par la lecture en
   tâche de fond : au déploiement, la 1ʳᵉ `/collecter` la lance (table vide), ou « Relire les métiers » dans l'admin.
